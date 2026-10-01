@@ -377,3 +377,27 @@ func TestAPIEndToEnd(t *testing.T) {
 func int64Str(n int64) string {
 	return strconv.FormatInt(n, 10)
 }
+
+func TestLandingPage(t *testing.T) {
+	s, err := store.Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	defer func() { _ = s.Close() }()
+
+	e := buildRouter(s, &github.AppConfig{}, "test-secret", "*", "")
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET / status = %d, want 200", rec.Code)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{"emergent.feedback", "Hold Alt+Shift", "/feedback-overlay.js", "Self-host"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("landing page missing %q", want)
+		}
+	}
+}

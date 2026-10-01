@@ -9,6 +9,7 @@ import (
 
 	"github.com/emergent-company/feedback-overlay/server/github"
 	"github.com/emergent-company/feedback-overlay/server/handler"
+	"github.com/emergent-company/feedback-overlay/server/landing"
 	authmw "github.com/emergent-company/feedback-overlay/server/middleware"
 	"github.com/emergent-company/feedback-overlay/server/panel"
 	"github.com/emergent-company/feedback-overlay/server/store"
@@ -75,6 +76,12 @@ func buildRouter(s *store.Store, ghCfg *github.AppConfig, jwtSecret, allowedOrig
 	// Panel (public; go-daisy Templ page)
 	e.GET("/panel", func(c echo.Context) error {
 		render.RenderPage(c.Response().Writer, c.Request(), panel.PanelPage())
+		return nil
+	})
+
+	// Landing page (public; commercial one-pager)
+	e.GET("/", func(c echo.Context) error {
+		render.RenderPage(c.Response().Writer, c.Request(), landing.LandingPage())
 		return nil
 	})
 
