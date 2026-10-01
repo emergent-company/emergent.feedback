@@ -14,6 +14,8 @@ import { startRecording, getHistory } from "./history";
 import { getSessionId } from "./session";
 import { captureElement } from "./screenshot";
 import { captureSnapshot } from "./snapshot";
+import { resolveSource, buildFingerprint } from "./source";
+import { scoreExplanation, stampProvenance, TRUST_ORDER, type FeedbackIntent } from "./envelope";
 
 (function bootstrap() {
   if ((window as any).__feedbackOverlayLoaded) return;
@@ -141,14 +143,21 @@ import { captureSnapshot } from "./snapshot";
         closeDialog();
         openFeedbackDialog(rawHierarchy[idx].element);
       },
-      onSubmit: async (comment, type: FeedbackType) => {
+      onSubmit: async (comment, type: FeedbackType, intent: FeedbackIntent) => {
         const screenshot = await captureElement(target);
         const snapshot = captureSnapshot();
+        // intent/explanation are only known at submit time — merge them into
+        // the capture-time context before shipping.
+        const contextWithIntent = {
+          ...context,
+          intent,
+          explanation: scoreExplanation(comment, intent),
+        };
         const result = await api.createFeedback({
           url: window.location.href,
           selector,
           comment,
-          context,
+          context: contextWithIntent,
           repo: config.repo,
           label: config.label,
           feedbackType: type,
@@ -259,15 +268,22 @@ import { captureSnapshot } from "./snapshot";
 
   function gatherContext(el: Element): Record<string, unknown> {
     const rect = el.getBoundingClientRect();
+    const source = resolveSource(el);
+    const outerHTML = redactText(el.outerHTML ?? "").slice(0, 4000);
+    const innerText = redactText((el as HTMLElement).innerText ?? "").slice(0, 200);
     return {
       url: window.location.href,
       viewport: { width: window.innerWidth, height: window.innerHeight },
       devicePixelRatio: window.devicePixelRatio,
       tagName: el.tagName.toLowerCase(),
       dataComponent: buildComponentPath(el) ?? undefined,
-      outerHTML: el.outerHTML?.slice(0, 4000) ?? "",
-      innerText: (el as HTMLElement).innerText?.slice(0, 200) ?? "",
+      outerHTML,
+      innerText,
       attributes: gatherAttributes(el),
+      source,
+      fingerprint: buildFingerprint(el),
+      provenance: stampProvenance(source),
+      trust_order: TRUST_ORDER,
       cssFramework: detectCSSFramework(el),
       computedStyles: gatherComputedStyles(el),
       boundingRect: {
@@ -311,9 +327,50 @@ import { captureSnapshot } from "./snapshot";
   function gatherAttributes(el: Element): Record<string, string> {
     const out: Record<string, string> = {};
     for (const attr of Array.from(el.attributes)) {
-      if (attr.value.length < 200) out[attr.name] = attr.value;
+      const name = attr.name;
+      let value = attr.value;
+      // Redaction pass — mirrors snapshot.ts so gatherContext no longer
+      // bypasses the SENSITIVE_ATTR / TOKEN_VALUE / URL-param rules.
+      if (name === "src" || name === "href" || name === "action") {
+        value = sanitizeURL(value);
+      }
+      if (SENSITIVE_ATTR.test(name) || TOKEN_VALUE.test(value)) {
+        continue; // drop the attribute entirely
+      }
+      if (value.length < 200) out[name] = value;
     }
     return out;
+  }
+
+  // ── Redaction helpers (duplicated from snapshot.ts to avoid drift risk) ────
+  const SENSITIVE_ATTR =
+    /(token|secret|password|passwd|pwd|credential|api[_-]?key|apikey|authorization|jwt|csrf|cookie|sessionid)/i;
+  const TOKEN_VALUE =
+    /(eyJ[a-zA-Z0-9_-]{8,}|gh[pousr]_[A-Za-z0-9]{8,}|sk-[A-Za-z0-9]{8,}|xox[bp]-[A-Za-z0-9-]{8,}|[A-Za-z0-9_-]{40,})/;
+  const TOKEN_VALUE_GLOBAL = new RegExp(TOKEN_VALUE.source, "g");
+
+  function redactText(s: string): string {
+    return s.replace(TOKEN_VALUE_GLOBAL, "[redacted]");
+  }
+
+  function isSensitiveURLParam(key: string): boolean {
+    return /(token|key|secret|sig|signature|auth|credential|password|session|jwt|csrf)/i.test(key);
+  }
+
+  function sanitizeURL(raw: string): string {
+    try {
+      const u = new URL(raw, document.baseURI);
+      let changed = false;
+      for (const key of Array.from(u.searchParams.keys())) {
+        if (isSensitiveURLParam(key)) {
+          u.searchParams.set(key, "[redacted]");
+          changed = true;
+        }
+      }
+      return changed ? u.href : raw;
+    } catch {
+      return "[redacted]";
+    }
   }
 
   // Key computed style properties worth reporting.

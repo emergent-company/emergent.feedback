@@ -5,6 +5,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"sort"
+	"time"
 
 	"github.com/emergent-company/emergent.feedback/server/store"
 	"github.com/modelcontextprotocol/go-sdk/auth"
@@ -34,6 +36,16 @@ func (h *Handler) MCPServer() *mcp.Server {
 		Name:        "feedback_list_for_issue",
 		Description: "Resolve a GitHub issue number to the feedback items it was exported from.",
 	}, h.toolListForIssue)
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "feedback_get",
+		Description: "Return the full feedback envelope (schema, target, intent, provenance, trust order) for a feedback item; requires API-key authentication and repo scope.",
+	}, h.toolFeedbackGet)
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "feedback_list",
+		Description: "List exported feedback items within the key's repo scope, sorted by source confidence (exact first); optional filters for repo, status, type, and since.",
+	}, h.toolFeedbackList)
 
 	return srv
 }
@@ -178,5 +190,100 @@ func (h *Handler) toolListForIssue(ctx context.Context, _ *mcp.CallToolRequest, 
 			HasSnapshot:   len(f.Snapshot) > 0,
 		})
 	}
+	return nil, out, nil
+}
+
+// toolFeedbackGet returns the full envelope for a single feedback item.
+// The output is a dynamic map (Out = any) so the SDK skips schema generation.
+func (h *Handler) toolFeedbackGet(ctx context.Context, _ *mcp.CallToolRequest, in feedbackIDInput) (*mcp.CallToolResult, any, error) {
+	f, err := h.scopedFeedback(ctx, in.FeedbackID)
+	if err != nil {
+		return nil, nil, err
+	}
+	return nil, BuildEnvelope(f), nil
+}
+
+type feedbackListInput struct {
+	Repo   string `json:"repo,omitempty" jsonschema:"optional repo filter"`
+	Status string `json:"status,omitempty" jsonschema:"optional status filter (open|applied|resolved|verified)"`
+	Type   string `json:"type,omitempty" jsonschema:"optional type filter (bug|enhancement|question|task)"`
+	Since  string `json:"since,omitempty" jsonschema:"optional RFC3339 timestamp"`
+}
+
+type feedbackListItem struct {
+	ID               int64  `json:"id"`
+	Summary          string `json:"summary"`
+	Type             string `json:"type"`
+	Status           string `json:"status"`
+	SourceConfidence string `json:"source_confidence"`
+	IssueURL         string `json:"issue_url"`
+}
+
+// toolFeedbackList lists exported feedback for the key's repo scope. It uses
+// the existing ListExported store method (the only repo-scoped list), then
+// hydrates context via Get to compute source confidence and type, and finally
+// sorts by source confidence descending (exact first).
+func (h *Handler) toolFeedbackList(ctx context.Context, _ *mcp.CallToolRequest, in feedbackListInput) (*mcp.CallToolResult, []feedbackListItem, error) {
+	ti := auth.TokenInfoFromContext(ctx)
+	if ti == nil {
+		return nil, nil, fmt.Errorf("unauthenticated")
+	}
+
+	var repos []string
+	if in.Repo != "" {
+		if !repoInScope(in.Repo, ti.Scopes) {
+			return nil, nil, fmt.Errorf("repo %s not in key scope", in.Repo)
+		}
+		repos = []string{in.Repo}
+	} else {
+		repos = ti.Scopes
+	}
+
+	items, err := h.Store.ListExported(ctx, repos)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var since time.Time
+	if in.Since != "" {
+		since, err = time.Parse(time.RFC3339, in.Since)
+		if err != nil {
+			return nil, nil, fmt.Errorf("invalid since: %v", err)
+		}
+	}
+
+	out := make([]feedbackListItem, 0, len(items))
+	for _, f := range items {
+		status := deriveStatus(f)
+		if in.Status != "" && status != in.Status {
+			continue
+		}
+		if !since.IsZero() && f.CreatedAt.Before(since) {
+			continue
+		}
+
+		full, err := h.Store.Get(ctx, f.ID)
+		if err != nil {
+			continue
+		}
+		c := parseContext(full.ContextJSON)
+		typ := deriveType(c, full)
+		if in.Type != "" && typ != in.Type {
+			continue
+		}
+		out = append(out, feedbackListItem{
+			ID:               full.ID,
+			Summary:          deriveSummary(c, full),
+			Type:             typ,
+			Status:           status,
+			SourceConfidence: sourceConfidence(c),
+			IssueURL:         full.IssueURL,
+		})
+	}
+
+	sort.SliceStable(out, func(i, j int) bool {
+		return confidenceRank(out[i].SourceConfidence) > confidenceRank(out[j].SourceConfidence)
+	})
+
 	return nil, out, nil
 }

@@ -1,6 +1,7 @@
 // dialog.ts — element feedback dialog (existing comments + compose) and login dialog.
 
 import type { FeedbackComment } from "./api";
+import type { FeedbackIntent, IntentAction, ScopeBreadth } from "./envelope";
 
 const DIALOG_ID = "__ef_dialog__";
 const STYLE_ID = "__ef_styles__";
@@ -115,6 +116,11 @@ function injectStyles(): void {
       gap: 8px;
       padding: 12px 18px;
       min-height: 0;
+      overflow-y: auto;
+    }
+    @media (max-width: 420px) {
+      #__ef_dialog__ .ef-intent-label { min-width: 0; }
+      #__ef_dialog__ .ef-hint { padding-left: 0; }
     }
 
     #__ef_dialog__ textarea {
@@ -387,6 +393,121 @@ function injectStyles(): void {
       font-family: inherit;
     }
 
+    /* ── Intent micro-form ─────────────────────────────────────────────────── */
+    #__ef_dialog__ .ef-intent {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      flex-shrink: 0;
+    }
+    #__ef_dialog__ .ef-intent-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    #__ef_dialog__ .ef-intent-label {
+      font-size: 10px;
+      font-weight: 700;
+      color: #999;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      min-width: 54px;
+      flex-shrink: 0;
+    }
+    #__ef_dialog__ .ef-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      flex: 1;
+      min-width: 0;
+    }
+    #__ef_dialog__ .ef-chip {
+      padding: 3px 11px;
+      border-radius: 20px;
+      border: 1.5px solid #ddd;
+      background: #fff;
+      color: #555;
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1.4;
+      font-family: inherit;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.1s, border-color 0.1s, color 0.1s;
+    }
+    #__ef_dialog__ .ef-chip:hover { border-color: #bbb; background: #fafafa; }
+    #__ef_dialog__ .ef-chip:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(79,134,247,0.2);
+    }
+    #__ef_dialog__ .ef-chip.ef-chip-on {
+      background: #eef3ff;
+      border-color: #4f86f7;
+      color: #2b5fd0;
+    }
+    #__ef_dialog__ .ef-chip.ef-chip-muted {
+      color: #999;
+      border-style: dashed;
+      font-weight: 400;
+    }
+    #__ef_dialog__ .ef-hint {
+      font-size: 11px;
+      color: #aaa;
+      flex-basis: 100%;
+      padding-left: 62px;
+      line-height: 1.4;
+    }
+
+    /* Current (captured actual) read-out */
+    #__ef_dialog__ .ef-current {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 9px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      background: #fafafa;
+      flex: 1;
+      min-width: 0;
+    }
+    #__ef_dialog__ .ef-swatch {
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+      border: 1px solid rgba(0,0,0,0.15);
+      flex-shrink: 0;
+      overflow: hidden;
+      /* checkerboard shows through translucent colours */
+      background-image:
+        linear-gradient(45deg, #e6e6e6 25%, transparent 25%, transparent 75%, #e6e6e6 75%),
+        linear-gradient(45deg, #e6e6e6 25%, transparent 25%, transparent 75%, #e6e6e6 75%);
+      background-size: 8px 8px;
+      background-position: 0 0, 4px 4px;
+    }
+    #__ef_dialog__ .ef-swatch > span {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    #__ef_dialog__ .ef-current-prop {
+      font-size: 11px;
+      color: #888;
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+    #__ef_dialog__ .ef-current input {
+      flex: 1;
+      min-width: 0;
+      border: none;
+      background: transparent;
+      padding: 2px 0;
+      font-size: 12px;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      color: #111;
+      outline: none;
+    }
+
     /* ── Login card ────────────────────────────────────────────────────────── */
     #__ef_dialog__ .ef-login-card {
       background: #fff;
@@ -440,9 +561,71 @@ export interface SubmitFeedbackOptions {
   componentHierarchy?: { name: string; isChild: boolean }[];
   selectedComponentIdx?: number;
   onComponentChange?: (index: number) => void;
-  onSubmit: (comment: string, type: FeedbackType) => Promise<number>; // returns new feedback ID
+  /** Submits a comment; resolves with the new feedback ID when known. */
+  onSubmit: (comment: string, type: FeedbackType, intent: FeedbackIntent) => Promise<number | void>;
   onExport: (ids: number[], type: FeedbackType, issueTopic: string) => Promise<void>;
   onCancel: () => void;
+}
+
+// ── Intent micro-form helpers ────────────────────────────────────────────────
+
+const INTENT_ACTIONS: { value: IntentAction; label: string }[] = [
+  { value: "change", label: "Change" },
+  { value: "add", label: "Add" },
+  { value: "remove", label: "Remove" },
+  { value: "move", label: "Move" },
+  { value: "fix", label: "Fix" },
+  { value: "refactor", label: "Refactor" },
+  { value: "investigate", label: "Investigate" },
+];
+
+/** Default action verb for a feedback type (bug → fix, enhancement → change). */
+function inferAction(type: FeedbackType): IntentAction {
+  return type === "bug" ? "fix" : "change";
+}
+
+interface ExpectedSuggestion {
+  value: string;
+  label: string;
+  /** Short structured sentence written into intent.expected when tapped. */
+  sentence: string;
+}
+
+/**
+ * Auto-suggest "what did you expect?" chips from captured element signals.
+ * Returns [] when nothing contextual applies — the caller hides the row.
+ */
+function buildExpectedSuggestions(
+  styles: Record<string, string> | undefined,
+  tagName: string
+): ExpectedSuggestion[] {
+  const out: ExpectedSuggestion[] = [];
+  const hasColor = !!styles && !!(styles["color"] || styles["backgroundColor"]);
+  const buttonish = tagName === "button" || tagName === "a" || tagName === "input";
+
+  if (hasColor) {
+    out.push({ value: "contrast", label: "More contrast", sentence: "Higher contrast — meets WCAG AA (≥ 4.5:1)" });
+    out.push({ value: "darker", label: "Darker", sentence: "Darker color" });
+    if (buttonish) out.push({ value: "match", label: "Match other buttons", sentence: "Match the style of other buttons" });
+    out.push({ value: "different-color", label: "Different color", sentence: "A different color" });
+  }
+  if (styles?.["fontSize"]) {
+    out.push({ value: "larger", label: "Larger", sentence: "Larger text" });
+    out.push({ value: "smaller", label: "Smaller", sentence: "Smaller text" });
+  }
+  return out;
+}
+
+/** Pick the single most relevant captured actual value to pre-fill intent.actual. */
+function pickCurrent(
+  styles: Record<string, string> | undefined
+): { label: string; value: string; swatch?: string } | null {
+  if (!styles) return null;
+  if (styles["color"]) return { label: "text color", value: styles["color"], swatch: styles["color"] };
+  if (styles["backgroundColor"]) return { label: "background", value: styles["backgroundColor"], swatch: styles["backgroundColor"] };
+  if (styles["fontSize"]) return { label: "font size", value: styles["fontSize"] };
+  if (styles["fontWeight"]) return { label: "weight", value: styles["fontWeight"] };
+  return null;
 }
 
 /** Shows the element feedback dialog: existing comments + compose area. */
@@ -455,14 +638,14 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   const ctx = opts.context;
 
   const commentsHTML = existing.length === 0 ? "" : `
-    <div class="fo-comments">
+    <div class="ef-comments">
       ${existing.map((c) => `
-        <div class="fo-comment-item">
-          <div class="fo-comment-meta">
-            <span class="fo-comment-author">@${escapeHtml(c.github_user)}</span>
-            <span class="fo-comment-date">${escapeHtml(c.created_at)}</span>
+        <div class="ef-comment-item">
+          <div class="ef-comment-meta">
+            <span class="ef-comment-author">@${escapeHtml(c.github_user)}</span>
+            <span class="ef-comment-date">${escapeHtml(c.created_at)}</span>
           </div>
-          <div class="fo-comment-text">${escapeHtml(c.comment)}</div>
+          <div class="ef-comment-text">${escapeHtml(c.comment)}</div>
         </div>`).join("")}
     </div>`;
 
@@ -471,16 +654,16 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     : "Add feedback";
 
   const chips: string[] = [];
-  if (opts.repo)       chips.push(`<span class="fo-target-chip"><span class="fo-target-chip-label">repo</span>${escapeHtml(opts.repo)}</span>`);
-  if (opts.branch)     chips.push(`<span class="fo-target-chip"><span class="fo-target-chip-label">branch</span>${escapeHtml(opts.branch)}</span>`);
-  if (opts.appVersion) chips.push(`<span class="fo-target-chip"><span class="fo-target-chip-label">version</span>${escapeHtml(opts.appVersion)}</span>`);
-  const targetStripHTML = chips.length > 0 ? `<div class="fo-target-strip">${chips.join("")}</div>` : "";
+  if (opts.repo)       chips.push(`<span class="ef-target-chip"><span class="ef-target-chip-label">repo</span>${escapeHtml(opts.repo)}</span>`);
+  if (opts.branch)     chips.push(`<span class="ef-target-chip"><span class="ef-target-chip-label">branch</span>${escapeHtml(opts.branch)}</span>`);
+  if (opts.appVersion) chips.push(`<span class="ef-target-chip"><span class="ef-target-chip-label">version</span>${escapeHtml(opts.appVersion)}</span>`);
+  const targetStripHTML = chips.length > 0 ? `<div class="ef-target-strip">${chips.join("")}</div>` : "";
 
   const hierarchy = opts.componentHierarchy ?? [];
   const componentPickerHTML = hierarchy.length > 1 ? `
-    <div class="fo-component-row">
-      <span class="fo-component-label">Component</span>
-      <select class="fo-component-select" id="__ef_component__">
+    <div class="ef-component-row">
+      <span class="ef-component-label">Component</span>
+      <select class="ef-component-select" id="__ef_component__">
         ${hierarchy.map((h, i) => `<option value="${i}" ${i === (opts.selectedComponentIdx ?? 0) ? "selected" : ""}>
           ${h.isChild ? "↳ " : ""}${escapeHtml(h.name)}
         </option>`).join("")}
@@ -520,54 +703,94 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   metaRows.push(["user agent", ua]);
 
   const metaHTML = metaRows.map(([k, v]) => `
-    <div class="fo-meta-key">${escapeHtml(k)}</div>
-    <div class="fo-meta-val">${escapeHtml(v)}</div>`).join("");
+    <div class="ef-meta-key">${escapeHtml(k)}</div>
+    <div class="ef-meta-val">${escapeHtml(v)}</div>`).join("");
 
   const outerHTML = ctx["outerHTML"] as string | undefined;
 
+  // ── Intent micro-form pieces ───────────────────────────────────────────────
+  const tagName = String(ctx["tagName"] ?? "").toLowerCase();
+  const suggestions = buildExpectedSuggestions(styles, tagName);
+  const current = pickCurrent(styles);
+
+  const expectedRowHTML = suggestions.length > 0 ? `
+        <div class="ef-intent-row">
+          <span class="ef-intent-label">Expected</span>
+          <div class="ef-chips" id="__ef_expected__">
+            ${suggestions.map((s) => `<button type="button" class="ef-chip${s.value === "__below__" ? " ef-chip-muted" : ""}" data-expected="${s.value}" data-sentence="${escapeHtml(s.sentence)}" aria-pressed="false">${escapeHtml(s.label)}</button>`).join("")}
+          </div>
+        </div>` : "";
+
+  const currentRowHTML = current ? `
+        <div class="ef-intent-row">
+          <span class="ef-intent-label">Current</span>
+          <div class="ef-current">
+            ${current.swatch ? `<span class="ef-swatch"><span style="background:${escapeHtml(current.swatch)}"></span></span>` : ""}
+            <span class="ef-current-prop">${escapeHtml(current.label)}</span>
+            <input id="__ef_actual__" type="text" value="${escapeHtml(current.value)}" spellcheck="false" aria-label="Current value">
+          </div>
+        </div>` : "";
+
   dialog.innerHTML = `
-    <div class="fo-card">
-      <div class="fo-header">
-        <div class="fo-header-top">
+    <div class="ef-card">
+      <div class="ef-header">
+        <div class="ef-header-top">
           <h2>${title}</h2>
-          <div class="fo-user-pill">
+          <div class="ef-user-pill">
             <img src="${escapeHtml(opts.user.avatarUrl)}" alt="">
             <span>${escapeHtml(opts.user.login)}</span>
           </div>
         </div>
-        <details class="fo-meta-toggle">
+        <details class="ef-meta-toggle">
           <summary>Context that will be attached</summary>
-          <div class="fo-meta-grid">${metaHTML}</div>
+          <div class="ef-meta-grid">${metaHTML}</div>
         </details>
         ${outerHTML ? `
-        <details class="fo-meta-toggle">
+        <details class="ef-meta-toggle">
           <summary>Element HTML</summary>
-          <pre class="fo-html-preview">${highlightHTML(outerHTML)}</pre>
+          <pre class="ef-html-preview">${highlightHTML(outerHTML)}</pre>
         </details>` : ""}
         ${buildSessionHistoryHTML(ctx)}
       </div>
       ${componentPickerHTML}
       ${targetStripHTML}
       ${commentsHTML}
-      <div class="fo-compose">
-        <div class="fo-topic-row">
-          <label class="fo-topic-label" for="__ef_topic__">Issue title</label>
-          <input class="fo-topic-input" id="__ef_topic__" type="text" value="${escapeHtml(opts.defaultIssueTopic)}">
+      <div class="ef-compose">
+        <div class="ef-topic-row">
+          <label class="ef-topic-label" for="__ef_topic__">Issue title</label>
+          <input class="ef-topic-input" id="__ef_topic__" type="text" value="${escapeHtml(opts.defaultIssueTopic)}">
         </div>
-        <textarea id="__ef_comment__" placeholder="Add a comment…"></textarea>
-        <div class="fo-type-toggle">
+        <div class="ef-type-toggle">
           <input type="radio" name="__ef_type__" id="__ef_type_bug__" value="bug">
           <label for="__ef_type_bug__">🐛 Bug</label>
           <input type="radio" name="__ef_type__" id="__ef_type_enh__" value="enhancement" checked>
           <label for="__ef_type_enh__">✨ Enhancement</label>
         </div>
-        <div class="fo-error" id="__ef_err__"></div>
+        <div class="ef-intent">
+          <div class="ef-intent-row">
+            <span class="ef-intent-label">Action</span>
+            <div class="ef-chips" id="__ef_action__"></div>
+          </div>
+          ${expectedRowHTML}
+          ${currentRowHTML}
+          <div class="ef-intent-row">
+            <span class="ef-intent-label">Scope</span>
+            <div class="ef-chips" id="__ef_scope__">
+              <button type="button" class="ef-chip ef-chip-on" data-breadth="element" aria-pressed="true">This element</button>
+              <button type="button" class="ef-chip" data-breadth="region" aria-pressed="false">Region</button>
+              <button type="button" class="ef-chip" data-breadth="multi" aria-pressed="false">Multiple</button>
+            </div>
+            <span class="ef-hint" id="__ef_scope_hint__"></span>
+          </div>
+        </div>
+        <textarea id="__ef_comment__" placeholder="Anything else? (optional)"></textarea>
+        <div class="ef-error" id="__ef_err__"></div>
       </div>
-      <div class="fo-footer">
-        <button class="fo-btn-secondary" id="__ef_submit__">Save</button>
-        <div class="fo-footer-spacer"></div>
-        <button class="fo-btn-secondary" id="__ef_cancel__">Cancel</button>
-        <button class="fo-btn-primary" id="__ef_export__">Send to GitHub</button>
+      <div class="ef-footer">
+        <button class="ef-btn-secondary" id="__ef_submit__">Save</button>
+        <div class="ef-footer-spacer"></div>
+        <button class="ef-btn-secondary" id="__ef_cancel__">Cancel</button>
+        <button class="ef-btn-primary" id="__ef_export__">Send to GitHub</button>
       </div>
     </div>
   `;
@@ -595,7 +818,104 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     return input?.value.trim() || opts.defaultIssueTopic;
   };
 
-  textarea.focus();
+  // ── Intent micro-form state + wiring ───────────────────────────────────────
+  const actionWrap = dialog.querySelector<HTMLElement>("#__ef_action__")!;
+  const expectedWrap = dialog.querySelector<HTMLElement>("#__ef_expected__");
+  const scopeWrap = dialog.querySelector<HTMLElement>("#__ef_scope__")!;
+  const scopeHint = dialog.querySelector<HTMLElement>("#__ef_scope_hint__")!;
+  const actualInput = dialog.querySelector<HTMLInputElement>("#__ef_actual__");
+
+  let action: IntentAction = inferAction(getType());
+  let actionTouched = false;
+  let expected = "";
+  let actualTouched = false;
+  let breadth: ScopeBreadth = "element";
+
+  const renderActions = () => {
+    actionWrap.innerHTML = INTENT_ACTIONS.map((a) =>
+      `<button type="button" class="ef-chip${a.value === action ? " ef-chip-on" : ""}" data-action="${a.value}" aria-pressed="${a.value === action}">${a.label}</button>`
+    ).join("");
+  };
+  renderActions();
+
+  actionWrap.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-action]");
+    if (!btn) return;
+    action = btn.dataset.action as IntentAction;
+    actionTouched = true;
+    renderActions();
+  });
+
+  dialog.querySelectorAll<HTMLInputElement>("input[name='__ef_type__']").forEach((inp) => {
+    inp.addEventListener("change", () => {
+      if (!actionTouched) { action = inferAction(getType()); renderActions(); }
+    });
+  });
+
+  if (expectedWrap) {
+    const expBtns = Array.from(expectedWrap.querySelectorAll<HTMLButtonElement>("[data-expected]"));
+    const clearExpected = () => expBtns.forEach((b) => {
+      b.classList.remove("ef-chip-on");
+      b.setAttribute("aria-pressed", "false");
+    });
+    expBtns.forEach((btn) => btn.addEventListener("click", () => {
+      const val = btn.dataset.expected ?? "";
+      if (val === "__below__") { expected = ""; clearExpected(); textarea.focus(); return; }
+      const wasOn = btn.classList.contains("ef-chip-on");
+      clearExpected();
+      if (wasOn) { expected = ""; return; } // tap again to clear
+      btn.classList.add("ef-chip-on");
+      btn.setAttribute("aria-pressed", "true");
+      expected = btn.dataset.sentence ?? "";
+    }));
+  }
+
+  scopeWrap.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-breadth]");
+    if (!btn) return;
+    breadth = (btn.dataset.breadth ?? "element") as ScopeBreadth;
+    scopeWrap.querySelectorAll<HTMLButtonElement>("[data-breadth]").forEach((b) => {
+      const on = b === btn;
+      b.classList.toggle("ef-chip-on", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    // Honest: region/multi selection is not wired up in this build.
+    scopeHint.textContent = breadth === "element"
+      ? ""
+      : "Region/multi selection isn't captured yet — this element is recorded.";
+  });
+
+  actualInput?.addEventListener("input", () => { actualTouched = true; });
+
+  /** Build the structured intent passed to onSubmit as the third argument. */
+  const buildIntent = (): FeedbackIntent => {
+    const actualVal = actualInput?.value.trim();
+    return {
+      kind: getType(),
+      action,
+      expected: expected.trim() || undefined,
+      actual: actualVal ? `${current ? current.label + ": " : ""}${actualVal}` : undefined,
+      scope: { breadth, targets: [opts.selector] },
+    };
+  };
+
+  /**
+   * Comment text for the legacy explanation field. Falls back to a concise
+   * sentence assembled from the structured chips so a chip-only report still
+   * satisfies the server's non-empty comment contract.
+   */
+  const collectComment = (): string => {
+    const raw = textarea.value.trim();
+    if (raw) return raw;
+    const parts: string[] = [];
+    if (expected.trim()) parts.push(expected.trim());
+    const actualVal = actualInput?.value.trim();
+    if (actualTouched && actualVal && current) parts.push(`currently ${current.label}: ${actualVal}`);
+    return parts.join(" — ");
+  };
+
+  // No autofocus: the intent chips are the primary surface, and focusing the
+  // (now last) textarea would scroll them out of view and pop the mobile keyboard.
 
   const onKey = (e: KeyboardEvent) => {
     if (e.key === "Escape") {
@@ -614,13 +934,13 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   });
 
   submitBtn.addEventListener("click", async () => {
-    const comment = textarea.value.trim();
-    if (!comment) { errDiv.textContent = "Please enter a comment."; return; }
+    const comment = collectComment();
+    if (!comment) { errDiv.textContent = "Add a note or choose what you expected."; return; }
     submitBtn.disabled = true;
     submitBtn.textContent = "Submitting…";
     errDiv.textContent = "";
     try {
-      await opts.onSubmit(comment, getType());
+      await opts.onSubmit(comment, getType(), buildIntent());
       removeKey();
       closeDialog();
     } catch (err) {
@@ -636,17 +956,17 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     submitBtn.disabled = true;
     errDiv.textContent = "";
     try {
-      const comment = textarea.value.trim();
+      const comment = collectComment();
       const type = getType();
       const topic = getIssueTopic();
       let ids = [...existingIds];
       if (comment) {
         // Submit the new comment first, then include its ID in the export.
-        const newId = await opts.onSubmit(comment, type);
-        ids = [...ids, newId];
+        const newId = await opts.onSubmit(comment, type, buildIntent());
+        if (typeof newId === "number") ids = [...ids, newId];
       }
       if (ids.length === 0) {
-        errDiv.textContent = "Nothing to export — add a comment first.";
+        errDiv.textContent = "Nothing to export — add a note or choose what you expected.";
         exportBtn.disabled = false;
         exportBtn.textContent = "Send to GitHub";
         submitBtn.disabled = false;
@@ -682,14 +1002,14 @@ export function showLoginDialog(opts: LoginDialogOptions): void {
   const dialog = getOrCreateDialog();
 
   dialog.innerHTML = `
-    <div class="fo-login-card">
+    <div class="ef-login-card">
       <h2>Sign in with GitHub</h2>
       <p>Authentication required to submit feedback.</p>
-      <div class="fo-login-actions">
-        <button class="fo-btn-secondary" id="__ef_cancel__">Cancel</button>
-        <button class="fo-btn-primary" id="__ef_login__">Sign in with GitHub</button>
+      <div class="ef-login-actions">
+        <button class="ef-btn-secondary" id="__ef_cancel__">Cancel</button>
+        <button class="ef-btn-primary" id="__ef_login__">Sign in with GitHub</button>
       </div>
-      <div class="fo-error" id="__ef_err__" style="margin-top:8px"></div>
+      <div class="ef-error" id="__ef_err__" style="margin-top:8px"></div>
     </div>
   `;
 
@@ -763,10 +1083,10 @@ export function showToast(message: string): void {
     document.body.appendChild(el);
   }
   el.textContent = message;
-  el.classList.add("fo-visible");
+  el.classList.add("ef-visible");
   clearTimeout((el as any).__ef_toast_timer);
   (el as any).__ef_toast_timer = setTimeout(() => {
-    el!.classList.remove("fo-visible");
+    el!.classList.remove("ef-visible");
   }, 3000);
 }
 
@@ -807,7 +1127,7 @@ function highlightHTML(raw: string): string {
 
     // Comment / doctype
     if (full.startsWith("<!--") || full.startsWith("<!")) {
-      out.push(pad() + span("fo-hd", e(full)) + "\n");
+      out.push(pad() + span("ef-hd", e(full)) + "\n");
       continue;
     }
 
@@ -824,8 +1144,8 @@ function highlightHTML(raw: string): string {
     if (isClose) indent = Math.max(0, indent - 1);
 
     // Build highlighted tag string.
-    let tag = span("fo-hp", "&lt;") + (isClose ? span("fo-hp", "/") : "");
-    tag += span("fo-ht", e(tagName ?? ""));
+    let tag = span("ef-hp", "&lt;") + (isClose ? span("ef-hp", "/") : "");
+    tag += span("ef-ht", e(tagName ?? ""));
 
     // Highlight attributes.
     const attrStr = match[2] ?? "";
@@ -835,17 +1155,17 @@ function highlightHTML(raw: string): string {
       while ((am = ATTR.exec(attrStr)) !== null) {
         const name = am[1];
         const rest = am[2] ?? ""; // includes the = and value
-        tag += " " + span("fo-ha", e(name));
+        tag += " " + span("ef-ha", e(name));
         if (rest) {
           // split off = and value
           const eqIdx = rest.indexOf("=");
           const val = rest.slice(eqIdx + 1).trim();
-          tag += span("fo-hp", "=") + span("fo-hv", e(val));
+          tag += span("ef-hp", "=") + span("ef-hv", e(val));
         }
       }
     }
 
-    tag += (isSelf && !isClose ? span("fo-hp", " /&gt;") : span("fo-hp", "&gt;"));
+    tag += (isSelf && !isClose ? span("ef-hp", " /&gt;") : span("ef-hp", "&gt;"));
 
     out.push(pad() + tag + "\n");
 
@@ -869,20 +1189,20 @@ function buildSessionHistoryHTML(ctx: Record<string, unknown>): string {
       case "navigation": {
         const prev = shortenURL(t.data.previousUrl);
         const url = shortenURL(t.data.url);
-        lines.push(`<div class="fo-history-line"><span class="fo-history-type">nav</span> ${time} ${escapeHtml(prev)} → ${escapeHtml(url)}</div>`);
+        lines.push(`<div class="ef-history-line"><span class="ef-history-type">nav</span> ${time} ${escapeHtml(prev)} → ${escapeHtml(url)}</div>`);
         break;
       }
       case "input": {
         const comp = t.data.component ? ` [${escapeHtml(t.data.component)}]` : "";
         const val = String(t.data.value ?? "");
         const valDisplay = val.length > 60 ? val.slice(0, 57) + "..." : val;
-        lines.push(`<div class="fo-history-line"><span class="fo-history-type">input</span> ${time} ${escapeHtml(String(t.data.tagName ?? ""))}${comp} = "${escapeHtml(valDisplay)}"</div>`);
+        lines.push(`<div class="ef-history-line"><span class="ef-history-type">input</span> ${time} ${escapeHtml(String(t.data.tagName ?? ""))}${comp} = "${escapeHtml(valDisplay)}"</div>`);
         break;
       }
       case "click": {
         const comp = t.data.component ? ` [${escapeHtml(t.data.component)}]` : "";
         const txt = t.data.text ? ` "${escapeHtml(String(t.data.text))}"` : "";
-        lines.push(`<div class="fo-history-line"><span class="fo-history-type">click</span> ${time} ${escapeHtml(String(t.data.tagName ?? ""))}${comp}${txt}</div>`);
+        lines.push(`<div class="ef-history-line"><span class="ef-history-type">click</span> ${time} ${escapeHtml(String(t.data.tagName ?? ""))}${comp}${txt}</div>`);
         break;
       }
     }
@@ -891,9 +1211,9 @@ function buildSessionHistoryHTML(ctx: Record<string, unknown>): string {
   if (lines.length === 0) return "";
 
   return `
-    <details class="fo-meta-toggle">
+    <details class="ef-meta-toggle">
       <summary>Session history (last ${lines.length} events)</summary>
-      <div class="fo-history-list">${lines.join("")}</div>
+      <div class="ef-history-list">${lines.join("")}</div>
     </details>`;
 }
 
