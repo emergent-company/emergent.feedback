@@ -1,10 +1,10 @@
 services:
 
   # ---------------------------------------------------------------------------
-  # feedback-overlay — element-level feedback tool with GitHub issue export
+  # emergent.feedback — element-level feedback tool with GitHub issue export
   #
   # Exposes:
-  #   /feedback-overlay.js   — embeddable JS bundle (public)
+  #   /emergent-feedback.js   — embeddable JS bundle (public)
   #   /auth/github           — OAuth initiation
   #   /auth/callback         — OAuth callback
   #   /feedback              — CRUD API
@@ -13,8 +13,8 @@ services:
   #
   # Persistent state lives in a named volume mounted at /data.
   # ---------------------------------------------------------------------------
-  feedback-overlay:
-    image: ghcr.io/emergent-company/feedback-overlay:${VERSION:-latest}
+  emergent-feedback:
+    image: ghcr.io/emergent-company/emergent-feedback:${VERSION:-latest}
     restart: unless-stopped
     ports:
       - "3014:8080"

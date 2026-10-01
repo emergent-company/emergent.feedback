@@ -2,15 +2,15 @@
 
 import type { FeedbackComment } from "./api";
 
-const DIALOG_ID = "__fo_dialog__";
-const STYLE_ID = "__fo_styles__";
+const DIALOG_ID = "__ef_dialog__";
+const STYLE_ID = "__ef_styles__";
 
 function injectStyles(): void {
   if (document.getElementById(STYLE_ID)) return;
   const style = document.createElement("style");
   style.id = STYLE_ID;
   style.textContent = `
-    #__fo_dialog__ {
+    #__ef_dialog__ {
       position: fixed;
       inset: 0;
       z-index: 2147483647;
@@ -20,10 +20,10 @@ function injectStyles(): void {
       background: rgba(0,0,0,0.55);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
-    #__fo_dialog__ * { box-sizing: border-box; }
+    #__ef_dialog__ * { box-sizing: border-box; }
 
     /* ── Main card ─────────────────────────────────────────────────────────── */
-    #__fo_dialog__ .fo-card {
+    #__ef_dialog__ .ef-card {
       background: #fff;
       border-radius: 10px;
       width: 520px;
@@ -34,25 +34,25 @@ function injectStyles(): void {
       flex-direction: column;
       overflow: hidden;
     }
-    #__fo_dialog__ .fo-header {
+    #__ef_dialog__ .ef-header {
       padding: 14px 18px 10px;
       border-bottom: 1px solid #e8e8e8;
       flex-shrink: 0;
     }
-    #__fo_dialog__ .fo-header-top {
+    #__ef_dialog__ .ef-header-top {
       display: flex;
       align-items: center;
       gap: 8px;
       margin-bottom: 3px;
     }
-    #__fo_dialog__ .fo-header-top h2 {
+    #__ef_dialog__ .ef-header-top h2 {
       margin: 0;
       font-size: 14px;
       font-weight: 700;
       color: #0f0f0f;
       flex: 1;
     }
-    #__fo_dialog__ .fo-user-pill {
+    #__ef_dialog__ .ef-user-pill {
       display: flex;
       align-items: center;
       gap: 5px;
@@ -61,13 +61,13 @@ function injectStyles(): void {
       font-weight: 500;
       flex-shrink: 0;
     }
-    #__fo_dialog__ .fo-user-pill img {
+    #__ef_dialog__ .ef-user-pill img {
       width: 18px;
       height: 18px;
       border-radius: 50%;
       border: 1px solid #ddd;
     }
-    #__fo_dialog__ .fo-selector {
+    #__ef_dialog__ .ef-selector {
       font-size: 11px;
       color: #555;
       font-family: ui-monospace, "SF Mono", Menlo, monospace;
@@ -75,40 +75,40 @@ function injectStyles(): void {
     }
 
     /* ── Existing comments ─────────────────────────────────────────────────── */
-    #__fo_dialog__ .fo-comments {
+    #__ef_dialog__ .ef-comments {
       flex-shrink: 0;
       max-height: 240px;
       overflow-y: auto;
       border-bottom: 1px solid #e8e8e8;
     }
-    #__fo_dialog__ .fo-comment-item {
+    #__ef_dialog__ .ef-comment-item {
       padding: 10px 18px;
       border-bottom: 1px solid #f2f2f2;
     }
-    #__fo_dialog__ .fo-comment-item:last-child { border-bottom: none; }
-    #__fo_dialog__ .fo-comment-meta {
+    #__ef_dialog__ .ef-comment-item:last-child { border-bottom: none; }
+    #__ef_dialog__ .ef-comment-meta {
       display: flex;
       gap: 6px;
       align-items: baseline;
       margin-bottom: 3px;
     }
-    #__fo_dialog__ .fo-comment-author {
+    #__ef_dialog__ .ef-comment-author {
       font-size: 12px;
       font-weight: 600;
       color: #0f0f0f;
     }
-    #__fo_dialog__ .fo-comment-date {
+    #__ef_dialog__ .ef-comment-date {
       font-size: 11px;
       color: #999;
     }
-    #__fo_dialog__ .fo-comment-text {
+    #__ef_dialog__ .ef-comment-text {
       font-size: 13px;
       color: #222;
       line-height: 1.5;
     }
 
     /* ── Compose area ──────────────────────────────────────────────────────── */
-    #__fo_dialog__ .fo-compose {
+    #__ef_dialog__ .ef-compose {
       flex: 1;
       display: flex;
       flex-direction: column;
@@ -117,7 +117,7 @@ function injectStyles(): void {
       min-height: 0;
     }
 
-    #__fo_dialog__ textarea {
+    #__ef_dialog__ textarea {
       width: 100%;
       border: 1px solid #ccc;
       border-radius: 6px;
@@ -131,24 +131,24 @@ function injectStyles(): void {
       line-height: 1.5;
       flex: 1;
     }
-    #__fo_dialog__ textarea:focus {
+    #__ef_dialog__ textarea:focus {
       border-color: #4f86f7;
       box-shadow: 0 0 0 3px rgba(79,134,247,0.15);
     }
-    #__fo_dialog__ textarea::placeholder { color: #aaa; }
-    #__fo_dialog__ .fo-error {
+    #__ef_dialog__ textarea::placeholder { color: #aaa; }
+    #__ef_dialog__ .ef-error {
       color: #c53030;
       font-size: 12px;
     }
 
     /* ── Type toggle ───────────────────────────────────────────────────────── */
-    #__fo_dialog__ .fo-type-toggle {
+    #__ef_dialog__ .ef-type-toggle {
       display: flex;
       gap: 6px;
       flex-shrink: 0;
     }
-    #__fo_dialog__ .fo-type-toggle input[type="radio"] { display: none; }
-    #__fo_dialog__ .fo-type-toggle label {
+    #__ef_dialog__ .ef-type-toggle input[type="radio"] { display: none; }
+    #__ef_dialog__ .ef-type-toggle label {
       display: inline-flex;
       align-items: center;
       gap: 4px;
@@ -163,19 +163,19 @@ function injectStyles(): void {
       transition: all 0.1s;
       user-select: none;
     }
-    #__fo_dialog__ .fo-type-toggle input[value="bug"]:checked + label {
+    #__ef_dialog__ .ef-type-toggle input[value="bug"]:checked + label {
       background: #fff0f0;
       border-color: #d73a4a;
       color: #d73a4a;
     }
-    #__fo_dialog__ .fo-type-toggle input[value="enhancement"]:checked + label {
+    #__ef_dialog__ .ef-type-toggle input[value="enhancement"]:checked + label {
       background: #f0fbff;
       border-color: #0969da;
       color: #0969da;
     }
 
     /* ── Footer ────────────────────────────────────────────────────────────── */
-    #__fo_dialog__ .fo-footer {
+    #__ef_dialog__ .ef-footer {
       padding: 10px 18px;
       border-top: 1px solid #e8e8e8;
       display: flex;
@@ -184,8 +184,8 @@ function injectStyles(): void {
       background: #fafafa;
       flex-shrink: 0;
     }
-    #__fo_dialog__ .fo-footer-spacer { flex: 1; }
-    #__fo_dialog__ button {
+    #__ef_dialog__ .ef-footer-spacer { flex: 1; }
+    #__ef_dialog__ button {
       padding: 6px 16px;
       border-radius: 6px;
       border: none;
@@ -195,20 +195,20 @@ function injectStyles(): void {
       font-family: inherit;
       transition: background 0.12s;
     }
-    #__fo_dialog__ .fo-btn-primary { background: #4f86f7; color: #fff; }
-    #__fo_dialog__ .fo-btn-primary:hover { background: #3a6fd8; }
-    #__fo_dialog__ .fo-btn-primary:disabled { background: #a0baf7; cursor: default; }
-    #__fo_dialog__ .fo-btn-secondary { background: #efefef; color: #222; }
-    #__fo_dialog__ .fo-btn-secondary:hover { background: #e0e0e0; }
-    #__fo_dialog__ .fo-btn-export { background: #1a1a1a; color: #fff; }
-    #__fo_dialog__ .fo-btn-export:hover { background: #333; }
-    #__fo_dialog__ .fo-btn-export:disabled { background: #888; cursor: default; }
+    #__ef_dialog__ .ef-btn-primary { background: #4f86f7; color: #fff; }
+    #__ef_dialog__ .ef-btn-primary:hover { background: #3a6fd8; }
+    #__ef_dialog__ .ef-btn-primary:disabled { background: #a0baf7; cursor: default; }
+    #__ef_dialog__ .ef-btn-secondary { background: #efefef; color: #222; }
+    #__ef_dialog__ .ef-btn-secondary:hover { background: #e0e0e0; }
+    #__ef_dialog__ .ef-btn-export { background: #1a1a1a; color: #fff; }
+    #__ef_dialog__ .ef-btn-export:hover { background: #333; }
+    #__ef_dialog__ .ef-btn-export:disabled { background: #888; cursor: default; }
 
     /* ── Metadata collapsible ──────────────────────────────────────────────── */
-    #__fo_dialog__ .fo-meta-toggle {
+    #__ef_dialog__ .ef-meta-toggle {
       flex-shrink: 0;
     }
-    #__fo_dialog__ .fo-meta-toggle summary {
+    #__ef_dialog__ .ef-meta-toggle summary {
       font-size: 11px;
       color: #888;
       cursor: pointer;
@@ -218,15 +218,15 @@ function injectStyles(): void {
       align-items: center;
       gap: 4px;
     }
-    #__fo_dialog__ .fo-meta-toggle summary::-webkit-details-marker { display: none; }
-    #__fo_dialog__ .fo-meta-toggle summary::before {
+    #__ef_dialog__ .ef-meta-toggle summary::-webkit-details-marker { display: none; }
+    #__ef_dialog__ .ef-meta-toggle summary::before {
       content: "▶";
       font-size: 8px;
       transition: transform 0.15s;
       display: inline-block;
     }
-    #__fo_dialog__ .fo-meta-toggle[open] summary::before { transform: rotate(90deg); }
-    #__fo_dialog__ .fo-meta-grid {
+    #__ef_dialog__ .ef-meta-toggle[open] summary::before { transform: rotate(90deg); }
+    #__ef_dialog__ .ef-meta-grid {
       margin-top: 6px;
       display: grid;
       grid-template-columns: auto 1fr;
@@ -234,17 +234,17 @@ function injectStyles(): void {
       font-size: 11px;
       line-height: 1.6;
     }
-    #__fo_dialog__ .fo-meta-key {
+    #__ef_dialog__ .ef-meta-key {
       color: #999;
       white-space: nowrap;
     }
-    #__fo_dialog__ .fo-meta-val {
+    #__ef_dialog__ .ef-meta-val {
       color: #222;
       font-family: ui-monospace, "SF Mono", Menlo, monospace;
       word-break: break-all;
       white-space: pre-wrap;
     }
-    #__fo_dialog__ .fo-meta-section-title {
+    #__ef_dialog__ .ef-meta-section-title {
       grid-column: 1 / -1;
       font-weight: 600;
       color: #555;
@@ -256,12 +256,12 @@ function injectStyles(): void {
     }
 
     /* ── Session history ────────────────────────────────────────────────────── */
-    #__fo_dialog__ .fo-history-list {
+    #__ef_dialog__ .ef-history-list {
       margin-top: 6px;
       max-height: 200px;
       overflow-y: auto;
     }
-    #__fo_dialog__ .fo-history-line {
+    #__ef_dialog__ .ef-history-line {
       font-size: 11px;
       font-family: ui-monospace, "SF Mono", Menlo, monospace;
       line-height: 1.7;
@@ -270,7 +270,7 @@ function injectStyles(): void {
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    #__fo_dialog__ .fo-history-type {
+    #__ef_dialog__ .ef-history-type {
       display: inline-block;
       width: 36px;
       font-weight: 600;
@@ -280,7 +280,7 @@ function injectStyles(): void {
     }
 
     /* ── HTML preview ──────────────────────────────────────────────────────── */
-    #__fo_dialog__ .fo-html-preview {
+    #__ef_dialog__ .ef-html-preview {
       font-family: ui-monospace, "SF Mono", Menlo, monospace;
       font-size: 11px;
       line-height: 1.6;
@@ -295,24 +295,24 @@ function injectStyles(): void {
       color: #cdd6f4;
     }
     /* syntax token colours (Catppuccin-ish dark) */
-    #__fo_dialog__ .fo-ht  { color: #89b4fa; }   /* tag name */
-    #__fo_dialog__ .fo-ha  { color: #a6e3a1; }   /* attr name */
-    #__fo_dialog__ .fo-hv  { color: #fab387; }   /* attr value */
-    #__fo_dialog__ .fo-hd  { color: #6c7086; }   /* doctype / comment */
-    #__fo_dialog__ .fo-hp  { color: #89dceb; }   /* punctuation <, >, = */
+    #__ef_dialog__ .ef-ht  { color: #89b4fa; }   /* tag name */
+    #__ef_dialog__ .ef-ha  { color: #a6e3a1; }   /* attr name */
+    #__ef_dialog__ .ef-hv  { color: #fab387; }   /* attr value */
+    #__ef_dialog__ .ef-hd  { color: #6c7086; }   /* doctype / comment */
+    #__ef_dialog__ .ef-hp  { color: #89dceb; }   /* punctuation <, >, = */
 
     /* ── Issue topic override ───────────────────────────────────────────────── */
-    #__fo_dialog__ .fo-topic-row {
+    #__ef_dialog__ .ef-topic-row {
       display: flex;
       flex-direction: column;
       gap: 3px;
       flex-shrink: 0;
     }
-    #__fo_dialog__ .fo-topic-label {
+    #__ef_dialog__ .ef-topic-label {
       font-size: 11px;
       color: #888;
     }
-    #__fo_dialog__ .fo-topic-input {
+    #__ef_dialog__ .ef-topic-input {
       width: 100%;
       border: 1px solid #ddd;
       border-radius: 6px;
@@ -323,14 +323,14 @@ function injectStyles(): void {
       outline: none;
       background: #fafafa;
     }
-    #__fo_dialog__ .fo-topic-input:focus {
+    #__ef_dialog__ .ef-topic-input:focus {
       border-color: #4f86f7;
       background: #fff;
       box-shadow: 0 0 0 3px rgba(79,134,247,0.12);
     }
 
     /* ── Component picker ──────────────────────────────────────────────────── */
-    #__fo_dialog__ .fo-component-row {
+    #__ef_dialog__ .ef-component-row {
       display: flex;
       align-items: center;
       gap: 8px;
@@ -338,13 +338,13 @@ function injectStyles(): void {
       border-bottom: 1px solid #e8e8e8;
       flex-shrink: 0;
     }
-    #__fo_dialog__ .fo-component-label {
+    #__ef_dialog__ .ef-component-label {
       font-size: 11px;
       color: #999;
       white-space: nowrap;
       flex-shrink: 0;
     }
-    #__fo_dialog__ .fo-component-select {
+    #__ef_dialog__ .ef-component-select {
       flex: 1;
       font-size: 12px;
       font-family: ui-monospace, "SF Mono", Menlo, monospace;
@@ -356,13 +356,13 @@ function injectStyles(): void {
       outline: none;
       cursor: pointer;
     }
-    #__fo_dialog__ .fo-component-select:focus {
+    #__ef_dialog__ .ef-component-select:focus {
       border-color: #4f86f7;
       background: #fff;
     }
 
     /* ── Target info strip ─────────────────────────────────────────────────── */
-    #__fo_dialog__ .fo-target-strip {
+    #__ef_dialog__ .ef-target-strip {
       display: flex;
       flex-wrap: wrap;
       gap: 6px;
@@ -370,7 +370,7 @@ function injectStyles(): void {
       border-bottom: 1px solid #e8e8e8;
       flex-shrink: 0;
     }
-    #__fo_dialog__ .fo-target-chip {
+    #__ef_dialog__ .ef-target-chip {
       display: inline-flex;
       align-items: center;
       gap: 4px;
@@ -382,13 +382,13 @@ function injectStyles(): void {
       padding: 2px 7px;
       font-family: ui-monospace, "SF Mono", Menlo, monospace;
     }
-    #__fo_dialog__ .fo-target-chip-label {
+    #__ef_dialog__ .ef-target-chip-label {
       color: #999;
       font-family: inherit;
     }
 
     /* ── Login card ────────────────────────────────────────────────────────── */
-    #__fo_dialog__ .fo-login-card {
+    #__ef_dialog__ .ef-login-card {
       background: #fff;
       border-radius: 10px;
       padding: 28px 24px 20px;
@@ -396,18 +396,18 @@ function injectStyles(): void {
       max-width: calc(100vw - 32px);
       box-shadow: 0 12px 48px rgba(0,0,0,0.28);
     }
-    #__fo_dialog__ .fo-login-card h2 {
+    #__ef_dialog__ .ef-login-card h2 {
       margin: 0 0 6px;
       font-size: 15px;
       font-weight: 700;
       color: #0f0f0f;
     }
-    #__fo_dialog__ .fo-login-card p {
+    #__ef_dialog__ .ef-login-card p {
       margin: 0 0 18px;
       font-size: 13px;
       color: #555;
     }
-    #__fo_dialog__ .fo-login-actions {
+    #__ef_dialog__ .ef-login-actions {
       display: flex;
       justify-content: flex-end;
       gap: 8px;
@@ -480,7 +480,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   const componentPickerHTML = hierarchy.length > 1 ? `
     <div class="fo-component-row">
       <span class="fo-component-label">Component</span>
-      <select class="fo-component-select" id="__fo_component__">
+      <select class="fo-component-select" id="__ef_component__">
         ${hierarchy.map((h, i) => `<option value="${i}" ${i === (opts.selectedComponentIdx ?? 0) ? "selected" : ""}>
           ${h.isChild ? "↳ " : ""}${escapeHtml(h.name)}
         </option>`).join("")}
@@ -551,34 +551,34 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
       ${commentsHTML}
       <div class="fo-compose">
         <div class="fo-topic-row">
-          <label class="fo-topic-label" for="__fo_topic__">Issue title</label>
-          <input class="fo-topic-input" id="__fo_topic__" type="text" value="${escapeHtml(opts.defaultIssueTopic)}">
+          <label class="fo-topic-label" for="__ef_topic__">Issue title</label>
+          <input class="fo-topic-input" id="__ef_topic__" type="text" value="${escapeHtml(opts.defaultIssueTopic)}">
         </div>
-        <textarea id="__fo_comment__" placeholder="Add a comment…"></textarea>
+        <textarea id="__ef_comment__" placeholder="Add a comment…"></textarea>
         <div class="fo-type-toggle">
-          <input type="radio" name="__fo_type__" id="__fo_type_bug__" value="bug">
-          <label for="__fo_type_bug__">🐛 Bug</label>
-          <input type="radio" name="__fo_type__" id="__fo_type_enh__" value="enhancement" checked>
-          <label for="__fo_type_enh__">✨ Enhancement</label>
+          <input type="radio" name="__ef_type__" id="__ef_type_bug__" value="bug">
+          <label for="__ef_type_bug__">🐛 Bug</label>
+          <input type="radio" name="__ef_type__" id="__ef_type_enh__" value="enhancement" checked>
+          <label for="__ef_type_enh__">✨ Enhancement</label>
         </div>
-        <div class="fo-error" id="__fo_err__"></div>
+        <div class="fo-error" id="__ef_err__"></div>
       </div>
       <div class="fo-footer">
-        <button class="fo-btn-secondary" id="__fo_submit__">Save</button>
+        <button class="fo-btn-secondary" id="__ef_submit__">Save</button>
         <div class="fo-footer-spacer"></div>
-        <button class="fo-btn-secondary" id="__fo_cancel__">Cancel</button>
-        <button class="fo-btn-primary" id="__fo_export__">Send to GitHub</button>
+        <button class="fo-btn-secondary" id="__ef_cancel__">Cancel</button>
+        <button class="fo-btn-primary" id="__ef_export__">Send to GitHub</button>
       </div>
     </div>
   `;
 
-  const textarea = dialog.querySelector<HTMLTextAreaElement>("#__fo_comment__")!;
-  const submitBtn = dialog.querySelector<HTMLButtonElement>("#__fo_submit__")!;
-  const cancelBtn = dialog.querySelector<HTMLButtonElement>("#__fo_cancel__")!;
-  const exportBtn = dialog.querySelector<HTMLButtonElement>("#__fo_export__")!;
-  const errDiv = dialog.querySelector<HTMLElement>("#__fo_err__")!;
+  const textarea = dialog.querySelector<HTMLTextAreaElement>("#__ef_comment__")!;
+  const submitBtn = dialog.querySelector<HTMLButtonElement>("#__ef_submit__")!;
+  const cancelBtn = dialog.querySelector<HTMLButtonElement>("#__ef_cancel__")!;
+  const exportBtn = dialog.querySelector<HTMLButtonElement>("#__ef_export__")!;
+  const errDiv = dialog.querySelector<HTMLElement>("#__ef_err__")!;
 
-  const componentSelect = dialog.querySelector<HTMLSelectElement>("#__fo_component__");
+  const componentSelect = dialog.querySelector<HTMLSelectElement>("#__ef_component__");
   if (componentSelect && opts.onComponentChange) {
     componentSelect.addEventListener("change", () => {
       opts.onComponentChange!(parseInt(componentSelect.value, 10));
@@ -586,12 +586,12 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   }
 
   const getType = (): FeedbackType => {
-    const checked = dialog.querySelector<HTMLInputElement>("input[name='__fo_type__']:checked");
+    const checked = dialog.querySelector<HTMLInputElement>("input[name='__ef_type__']:checked");
     return (checked?.value ?? "enhancement") as FeedbackType;
   };
 
   const getIssueTopic = (): string => {
-    const input = dialog.querySelector<HTMLInputElement>("#__fo_topic__");
+    const input = dialog.querySelector<HTMLInputElement>("#__ef_topic__");
     return input?.value.trim() || opts.defaultIssueTopic;
   };
 
@@ -686,16 +686,16 @@ export function showLoginDialog(opts: LoginDialogOptions): void {
       <h2>Sign in with GitHub</h2>
       <p>Authentication required to submit feedback.</p>
       <div class="fo-login-actions">
-        <button class="fo-btn-secondary" id="__fo_cancel__">Cancel</button>
-        <button class="fo-btn-primary" id="__fo_login__">Sign in with GitHub</button>
+        <button class="fo-btn-secondary" id="__ef_cancel__">Cancel</button>
+        <button class="fo-btn-primary" id="__ef_login__">Sign in with GitHub</button>
       </div>
-      <div class="fo-error" id="__fo_err__" style="margin-top:8px"></div>
+      <div class="fo-error" id="__ef_err__" style="margin-top:8px"></div>
     </div>
   `;
 
-  const loginBtn = dialog.querySelector<HTMLButtonElement>("#__fo_login__")!;
-  const cancelBtn = dialog.querySelector<HTMLButtonElement>("#__fo_cancel__")!;
-  const errDiv = dialog.querySelector<HTMLElement>("#__fo_err__")!;
+  const loginBtn = dialog.querySelector<HTMLButtonElement>("#__ef_login__")!;
+  const cancelBtn = dialog.querySelector<HTMLButtonElement>("#__ef_cancel__")!;
+  const errDiv = dialog.querySelector<HTMLElement>("#__ef_err__")!;
 
   loginBtn.addEventListener("click", async () => {
     loginBtn.disabled = true;
@@ -722,7 +722,7 @@ export function closeDialog(): void {
   if (dialog) dialog.remove();
 }
 
-const TOAST_ID = "__fo_toast__";
+const TOAST_ID = "__ef_toast__";
 
 function injectToastStyles(): void {
   if (document.getElementById(TOAST_ID + "_styles")) return;
@@ -747,7 +747,7 @@ function injectToastStyles(): void {
       pointer-events: none;
       max-width: 360px;
     }
-    #${TOAST_ID}.fo-visible {
+    #${TOAST_ID}.ef-visible {
       opacity: 1;
     }
   `;
@@ -764,8 +764,8 @@ export function showToast(message: string): void {
   }
   el.textContent = message;
   el.classList.add("fo-visible");
-  clearTimeout((el as any).__fo_toast_timer);
-  (el as any).__fo_toast_timer = setTimeout(() => {
+  clearTimeout((el as any).__ef_toast_timer);
+  (el as any).__ef_toast_timer = setTimeout(() => {
     el!.classList.remove("fo-visible");
   }, 3000);
 }

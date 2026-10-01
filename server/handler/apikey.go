@@ -10,8 +10,8 @@ import (
 	"regexp"
 	"strconv"
 
-	"github.com/emergent-company/feedback-overlay/server/middleware"
-	"github.com/emergent-company/feedback-overlay/server/store"
+	"github.com/emergent-company/emergent.feedback/server/middleware"
+	"github.com/emergent-company/emergent.feedback/server/store"
 	"github.com/labstack/echo/v4"
 )
 

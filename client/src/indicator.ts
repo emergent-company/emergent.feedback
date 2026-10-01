@@ -2,7 +2,7 @@
 
 import type { OverlayConfig } from "./config";
 
-const BAR_ID = "__fo_indicator__";
+const BAR_ID = "__ef_indicator__";
 
 const STYLES = `
 #${BAR_ID} {
@@ -29,7 +29,7 @@ const STYLES = `
   opacity: 1;
   transition: opacity 1.2s ease;
 }
-#${BAR_ID} .fo-bar-dot {
+#${BAR_ID} .ef-bar-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
@@ -38,7 +38,7 @@ const STYLES = `
   flex-shrink: 0;
   animation: fo-pulse 2s ease-in-out infinite;
 }
-#${BAR_ID} .fo-bar-key {
+#${BAR_ID} .ef-bar-key {
   display: inline-block;
   background: rgba(255,255,255,0.12);
   border: 1px solid rgba(255,255,255,0.22);

@@ -6,14 +6,14 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/emergent-company/feedback-overlay/server/store"
+	"github.com/emergent-company/emergent.feedback/server/store"
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // MCPServer builds the MCP server with all feedback tools registered.
 func (h *Handler) MCPServer() *mcp.Server {
-	srv := mcp.NewServer(&mcp.Implementation{Name: "feedback-overlay", Version: "1.0.0"}, nil)
+	srv := mcp.NewServer(&mcp.Implementation{Name: "emergent-feedback", Version: "1.0.0"}, nil)
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "feedback_get_snapshot",

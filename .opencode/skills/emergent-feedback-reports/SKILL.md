@@ -1,11 +1,11 @@
 ---
-name: feedback-overlay-reports
-description: Access feedback-overlay bug reports exported to GitHub Issues. Use when triaging a feedback-overlay issue, resolving an issue number to feedback items, or pulling the full page snapshot / element screenshot / context for a report via the feedback-overlay MCP server.
+name: emergent-feedback-reports
+description: Access emergent.feedback bug reports exported to GitHub Issues. Use when triaging an emergent.feedback issue, resolving an issue number to feedback items, or pulling the full page snapshot / element screenshot / context for a report via the emergent.feedback MCP server.
 ---
 
-# feedback-overlay — accessing reports
+# emergent.feedback — accessing reports
 
-feedback-overlay is a drop-in feedback widget. Users click an element, leave a
+emergent.feedback is a drop-in feedback widget. Users click an element, leave a
 comment, and the overlay exports it to a GitHub Issue with full CSS context.
 The full-page snapshot, screenshot, and structured context are stored
 server-side and fetched on demand through an MCP server — they are **not**
@@ -46,7 +46,7 @@ opencode (`~/.config/opencode/opencode.json`):
 ```json
 {
   "mcp": {
-    "feedback-overlay": {
+    "emergent-feedback": {
       "type": "remote",
       "url": "https://feedback.emergent-company.ai/mcp",
       "headers": { "Authorization": "Bearer <api-key>" }

@@ -2,8 +2,8 @@
 
 import { buildSelector, elementLabel, nearestComponent } from "./selector";
 
-const OVERLAY_ID = "__fo_highlight__";
-const TOOLTIP_ID = "__fo_tooltip__";
+const OVERLAY_ID = "__ef_highlight__";
+const TOOLTIP_ID = "__ef_tooltip__";
 
 // Colors when the element belongs to a known component.
 const COLOR_COMPONENT = "#22c55e"; // green

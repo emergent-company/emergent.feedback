@@ -1,7 +1,7 @@
 // config.ts — reads configuration from the <script> tag's data-* attributes.
 
 export interface OverlayConfig {
-  /** Base URL of the feedback-overlay API server. */
+  /** Base URL of the emergent.feedback API server. */
   apiBase: string;
   /** GitHub repo in "owner/repo" format. */
   repo: string;
@@ -28,9 +28,9 @@ function getScriptTag(): HTMLScriptElement | null {
   if (document.currentScript instanceof HTMLScriptElement) {
     return document.currentScript;
   }
-  // Fallback: find by src containing "feedback-overlay".
+  // Fallback: find by src containing "emergent-feedback".
   return document.querySelector<HTMLScriptElement>(
-    'script[src*="feedback-overlay"]'
+    'script[src*="emergent-feedback"]'
   );
 }
 
@@ -48,7 +48,7 @@ export function readConfig(): OverlayConfig {
       : "alt+shift";
 
   if (!repo) {
-    console.warn("[feedback-overlay] data-repo is not set on the <script> tag.");
+    console.warn("[emergent.feedback] data-repo is not set on the <script> tag.");
   }
 
   const branch = tag?.dataset.branch?.trim() || undefined;

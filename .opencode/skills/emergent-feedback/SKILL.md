@@ -1,9 +1,9 @@
 ---
-name: feedback-overlay
-description: Drop-in feedback tool for any web app. Users click elements, leave comments, export to GitHub Issues with CSS context. Use when user asks about installing, configuring, self-hosting, or using feedback-overlay. Covers script tag setup, data attributes, data-component, hotkey config, OAuth, Docker deployment.
+name: emergent-feedback
+description: Drop-in feedback tool for any web app. Users click elements, leave comments, export to GitHub Issues with CSS context. Use when user asks about installing, configuring, self-hosting, or using emergent.feedback. Covers script tag setup, data attributes, data-component, hotkey config, OAuth, Docker deployment.
 ---
 
-# feedback-overlay
+# emergent.feedback
 
 Zero-config feedback overlay. One `<script>` tag adds element-level commenting + GitHub Issues export with full CSS context.
 
@@ -11,7 +11,7 @@ Zero-config feedback overlay. One `<script>` tag adds element-level commenting +
 
 ```html
 <script
-  src="https://feedback.emergent-company.ai/feedback-overlay.js"
+  src="https://feedback.emergent-company.ai/emergent-feedback.js"
   data-repo="your-org/your-repo"
   async
 ></script>
@@ -68,8 +68,8 @@ GitHub → Settings → Developer settings → OAuth Apps → New OAuth App
 
 ```yaml
 services:
-  feedback-overlay:
-    image: ghcr.io/emergent-company/feedback-overlay:latest
+  emergent-feedback:
+    image: ghcr.io/emergent-company/emergent-feedback:latest
     ports:
       - "8080:8080"
     volumes:
@@ -104,7 +104,7 @@ docker compose up -d
 
 ```html
 <script
-  src="https://your-domain.com/feedback-overlay.js"
+  src="https://your-domain.com/emergent-feedback.js"
   data-api="https://your-domain.com"
   data-repo="your-org/your-repo"
   async
@@ -144,7 +144,7 @@ task dev
 # Build
 npm run build --prefix client
 go build ./server/...
-docker build -t feedback-overlay .
+docker build -t emergent-feedback .
 ```
 
 Server listens on `http://localhost:8080` by default.

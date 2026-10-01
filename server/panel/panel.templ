@@ -11,7 +11,7 @@ templ PanelPage() {
 	<head>
 		<meta charset="UTF-8"/>
 		<meta name="viewport" content="width=device-width, initial-scale=1"/>
-		<title>feedback-overlay · API keys</title>
+		<title>emergent.feedback · API keys</title>
 		<link rel="stylesheet" href="/static/css/app.css"/>
 	</head>
 	<body class="min-h-screen bg-base-200">
@@ -24,7 +24,7 @@ templ PanelPage() {
 						<span class="grid size-6 place-items-center rounded-md bg-primary" aria-hidden="true">
 							<span class="size-2.5 rounded-[3px] bg-primary-content"></span>
 						</span>
-						<span class="text-sm font-semibold tracking-tight">feedback-overlay</span>
+						<span class="text-sm font-semibold tracking-tight">emergent.feedback</span>
 					</div>
 					<h1 class="mt-5 text-lg font-semibold tracking-tight">API keys</h1>
 					<p class="mt-1 text-sm text-base-content/70">
@@ -52,7 +52,7 @@ templ PanelPage() {
 						<span class="grid size-6 place-items-center rounded-md bg-primary" aria-hidden="true">
 							<span class="size-2.5 rounded-[3px] bg-primary-content"></span>
 						</span>
-						<span class="text-sm font-semibold tracking-tight">feedback-overlay</span>
+						<span class="text-sm font-semibold tracking-tight">emergent.feedback</span>
 					</div>
 					<div class="flex items-center gap-3">
 						@ui.AvatarFull(ui.AvatarProps{Name: "user", Size: ui.AvatarSM, Fallback: ui.AvatarFallbackInitials, Attrs: templ.Attributes{"id": "user-avatar"}})
@@ -169,8 +169,8 @@ templ PanelPage() {
 		(function () {
 			"use strict";
 
-			var TOKEN_KEY = "__fo_token__";
-			var USER_KEY = "__fo_user__";
+			var TOKEN_KEY = "__ef_token__";
+			var USER_KEY = "__ef_user__";
 
 			function byId(id) { return document.getElementById(id); }
 
@@ -214,13 +214,13 @@ templ PanelPage() {
 			var selected = {};
 
 			// ── Cookie fallback: the OAuth callback may redirect to /panel when
-			// the popup opener is lost, setting fo_panel_token instead.
+			// the popup opener is lost, setting ef_panel_token instead.
 			function readCookieToken() {
 				var parts = document.cookie ? document.cookie.split(";") : [];
 				for (var i = 0; i < parts.length; i++) {
 					var p = parts[i].trim();
-					if (p.indexOf("fo_panel_token=") === 0) {
-						return decodeURIComponent(p.slice("fo_panel_token=".length));
+					if (p.indexOf("ef_panel_token=") === 0) {
+						return decodeURIComponent(p.slice("ef_panel_token=".length));
 					}
 				}
 				return "";
@@ -230,7 +230,7 @@ templ PanelPage() {
 				var t = readCookieToken();
 				if (!t) return false;
 				try { localStorage.setItem(TOKEN_KEY, t); } catch (e) {}
-				document.cookie = "fo_panel_token=; Max-Age=0; Path=/; SameSite=Lax";
+				document.cookie = "ef_panel_token=; Max-Age=0; Path=/; SameSite=Lax";
 				return true;
 			}
 
@@ -1060,7 +1060,7 @@ templ PanelPage() {
 				window.addEventListener("message", function (event) {
 					if (event.origin !== location.origin) return;
 					var data = event.data;
-					if (!data || data.type !== "feedback_overlay_auth" || !data.token) return;
+					if (!data || data.type !== "emergent_feedback_auth" || !data.token) return;
 					try {
 						localStorage.setItem(TOKEN_KEY, data.token);
 						localStorage.setItem(USER_KEY, JSON.stringify({ login: data.login || "", avatar: data.avatar || "" }));

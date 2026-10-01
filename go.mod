@@ -1,4 +1,4 @@
-module github.com/emergent-company/feedback-overlay
+module github.com/emergent-company/emergent.feedback
 
 go 1.25.6
 

@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/emergent-company/feedback-overlay/server/github"
-	"github.com/emergent-company/feedback-overlay/server/middleware"
+	"github.com/emergent-company/emergent.feedback/server/github"
+	"github.com/emergent-company/emergent.feedback/server/middleware"
 	"github.com/labstack/echo/v4"
 )
 
@@ -120,10 +120,10 @@ func (h *Handler) HandleGitHubCallback(c echo.Context) error {
 	targetJSON, _ := json.Marshal(targetOrigin)
 	html := `<!DOCTYPE html><html><body><script>
 if(window.opener){
-  window.opener.postMessage({type:'feedback_overlay_auth',token:` + string(tokJSON) + `,login:` + string(loginJSON) + `,avatar:` + string(avatarJSON) + `},` + string(targetJSON) + `);
+  window.opener.postMessage({type:'emergent_feedback_auth',token:` + string(tokJSON) + `,login:` + string(loginJSON) + `,avatar:` + string(avatarJSON) + `},` + string(targetJSON) + `);
   window.close();
 }else{
-  document.cookie = "fo_panel_token=" + encodeURIComponent(` + string(tokJSON) + `) + "; path=/; samesite=lax; max-age=120";
+  document.cookie = "ef_panel_token=" + encodeURIComponent(` + string(tokJSON) + `) + "; path=/; samesite=lax; max-age=120";
   window.location.replace("/panel");
 }
 </script></body></html>`

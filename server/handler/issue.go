@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/emergent-company/feedback-overlay/server/github"
-	"github.com/emergent-company/feedback-overlay/server/middleware"
-	"github.com/emergent-company/feedback-overlay/server/store"
+	"github.com/emergent-company/emergent.feedback/server/github"
+	"github.com/emergent-company/emergent.feedback/server/middleware"
+	"github.com/emergent-company/emergent.feedback/server/store"
 	"github.com/labstack/echo/v4"
 	"golang.org/x/net/html"
 )

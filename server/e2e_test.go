@@ -18,16 +18,16 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/emergent-company/feedback-overlay/server/github"
-	authmw "github.com/emergent-company/feedback-overlay/server/middleware"
-	"github.com/emergent-company/feedback-overlay/server/store"
+	"github.com/emergent-company/emergent.feedback/server/github"
+	authmw "github.com/emergent-company/emergent.feedback/server/middleware"
+	"github.com/emergent-company/emergent.feedback/server/store"
 )
 
 // encryptTokenForTest mirrors handler.encryptToken (AES-GCM under a key derived
 // from the JWT secret) so the e2e test can seed a stored GitHub token without
 // going through the OAuth callback (which hits github.com).
 func encryptTokenForTest(plain, jwtSecret string) []byte {
-	sum := sha256.Sum256([]byte("feedback-overlay:token:" + jwtSecret))
+	sum := sha256.Sum256([]byte("emergent-feedback:token:" + jwtSecret))
 	block, err := aes.NewCipher(sum[:])
 	if err != nil {
 		panic(err)
@@ -148,8 +148,8 @@ func TestAPIEndToEnd(t *testing.T) {
 		}
 	})
 
-	t.Run("03 feedback-overlay.js", func(t *testing.T) {
-		rec := do(http.MethodGet, "/feedback-overlay.js", "", nil)
+	t.Run("03 emergent-feedback.js", func(t *testing.T) {
+		rec := do(http.MethodGet, "/emergent-feedback.js", "", nil)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status = %d, want 200", rec.Code)
 		}
@@ -344,8 +344,8 @@ func TestAPIEndToEnd(t *testing.T) {
 		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 			t.Fatalf("decode mcp response: %v (body=%s)", err, rec.Body.String())
 		}
-		if resp.Result.ServerInfo.Name != "feedback-overlay" {
-			t.Fatalf("serverInfo.name = %q, want feedback-overlay", resp.Result.ServerInfo.Name)
+		if resp.Result.ServerInfo.Name != "emergent-feedback" {
+			t.Fatalf("serverInfo.name = %q, want emergent-feedback", resp.Result.ServerInfo.Name)
 		}
 	})
 
@@ -395,7 +395,7 @@ func TestLandingPage(t *testing.T) {
 		t.Fatalf("GET / status = %d, want 200", rec.Code)
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"emergent.feedback", "Hold Alt+Shift", "/feedback-overlay.js", "Self-host"} {
+	for _, want := range []string{"emergent.feedback", "Hold Alt+Shift", "/emergent-feedback.js", "Self-host"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("landing page missing %q", want)
 		}
