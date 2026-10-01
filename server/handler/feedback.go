@@ -26,8 +26,31 @@ type createFeedbackRequest struct {
 	ContextJSON any    `json:"context"`
 	Screenshot  string `json:"screenshot"` // base64-encoded PNG, may be empty
 	Snapshot    string `json:"snapshot"`
+	Replay      string `json:"replay"` // base64 of gzip(rrweb event JSON), may be empty
 	Repo        string `json:"repo"`
 	Label       string `json:"label"`
+}
+
+// maxReplayBytes bounds the decoded replay blob size (~5MB).
+const maxReplayBytes = 5 * 1024 * 1024
+
+// decodeReplay decodes the base64 replay field (gzip bytes), stripping a data
+// URL prefix. Returns a 413 for oversized payloads.
+func decodeReplay(raw string) ([]byte, error) {
+	if raw == "" {
+		return nil, nil
+	}
+	if idx := strings.Index(raw, ","); idx != -1 {
+		raw = raw[idx+1:]
+	}
+	b, err := base64.StdEncoding.DecodeString(raw)
+	if err != nil {
+		return nil, echo.NewHTTPError(http.StatusBadRequest, "invalid replay encoding")
+	}
+	if len(b) > maxReplayBytes {
+		return nil, echo.NewHTTPError(http.StatusRequestEntityTooLarge, "replay too large")
+	}
+	return b, nil
 }
 
 // HandleCreateFeedback handles POST /feedback.
@@ -73,6 +96,11 @@ func (h *Handler) HandleCreateFeedback(c echo.Context) error {
 		snapshot = buf.Bytes()
 	}
 
+	replay, err := decodeReplay(req.Replay)
+	if err != nil {
+		return err
+	}
+
 	f, err := h.Store.Create(c.Request().Context(), store.CreateParams{
 		URL:         req.URL,
 		Selector:    req.Selector,
@@ -80,6 +108,7 @@ func (h *Handler) HandleCreateFeedback(c echo.Context) error {
 		ContextJSON: ctxJSON,
 		Screenshot:  screenshot,
 		Snapshot:    snapshot,
+		Replay:      replay,
 		GitHubUser:  middleware.GetLogin(c),
 		Repo:        req.Repo,
 		Label:       req.Label,
@@ -396,6 +425,27 @@ func (h *Handler) HandleGetVerify(c echo.Context) error {
 		"last_result": f.VerificationResult,
 		"last_detail": f.VerificationDetail,
 	})
+}
+
+// HandleGetReplay handles GET /feedback/:id/replay — returns the rrweb replay
+// events JSON for the item (owner-only).
+func (h *Handler) HandleGetReplay(c echo.Context) error {
+	id, err := parseFeedbackID(c)
+	if err != nil {
+		return err
+	}
+	f, err := h.ownedFeedback(c, id)
+	if err != nil {
+		return err
+	}
+	if len(f.Replay) == 0 {
+		return echo.NewHTTPError(http.StatusNotFound, "replay not found")
+	}
+	data, err := gunzipOrRaw(f.Replay)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to read replay")
+	}
+	return c.JSONBlob(http.StatusOK, data)
 }
 
 // HandleVerifyPending handles GET /feedback/verify-pending?url=<url>.

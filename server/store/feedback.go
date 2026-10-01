@@ -17,6 +17,7 @@ const (
 	StatusApplied  FeedbackStatus = "applied"
 	StatusVerified FeedbackStatus = "verified"
 	StatusResolved FeedbackStatus = "resolved"
+	StatusExported FeedbackStatus = "exported"
 )
 
 // Feedback is a single user-submitted feedback item.
@@ -41,6 +42,9 @@ type Feedback struct {
 	ResolvedAt         *time.Time
 	VerificationResult string
 	VerificationDetail string
+
+	Replay     []byte
+	ReplaySize int
 }
 
 // URLSummary is a lightweight projection returned for badge rendering.
@@ -59,6 +63,7 @@ type CreateParams struct {
 	ContextJSON string
 	Screenshot  []byte
 	Snapshot    []byte
+	Replay      []byte
 	GitHubUser  string
 	Repo        string
 	Label       string
@@ -80,14 +85,14 @@ func (s *Store) Create(ctx context.Context, p CreateParams) (Feedback, error) {
 	defer tx.Rollback() //nolint:errcheck
 
 	const q = `
-INSERT INTO feedback (url, selector, comment, context_json, screenshot, github_user, repo, label, snapshot, snapshot_size)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO feedback (url, selector, comment, context_json, screenshot, github_user, repo, label, snapshot, snapshot_size, replay, replay_size)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, created_at`
 
 	var f Feedback
 	var createdAt string
 	if err := tx.QueryRowContext(ctx, q,
-		p.URL, p.Selector, p.Comment, p.ContextJSON, p.Screenshot, p.GitHubUser, p.Repo, label, p.Snapshot, len(p.Snapshot),
+		p.URL, p.Selector, p.Comment, p.ContextJSON, p.Screenshot, p.GitHubUser, p.Repo, label, p.Snapshot, len(p.Snapshot), p.Replay, len(p.Replay),
 	).Scan(&f.ID, &createdAt); err != nil {
 		return Feedback{}, fmt.Errorf("store: create feedback: %w", err)
 	}
@@ -107,6 +112,8 @@ RETURNING id, created_at`
 	f.Screenshot = p.Screenshot
 	f.Snapshot = p.Snapshot
 	f.SnapshotSize = len(p.Snapshot)
+	f.Replay = p.Replay
+	f.ReplaySize = len(p.Replay)
 	f.GitHubUser = p.GitHubUser
 	f.Repo = p.Repo
 	f.Label = label
@@ -121,7 +128,8 @@ func (s *Store) Get(ctx context.Context, id int64) (Feedback, error) {
 SELECT id, url, selector, comment, context_json, screenshot, github_user, repo, label, status, COALESCE(issue_url,''), created_at,
        COALESCE(snapshot_size,0), snapshot,
        COALESCE(applied_at,''), COALESCE(verified_at,''), COALESCE(resolved_at,''),
-       COALESCE(verification_result,''), COALESCE(verification_detail,'')
+       COALESCE(verification_result,''), COALESCE(verification_detail,''),
+       COALESCE(replay_size,0), replay
 FROM feedback WHERE id = ?`
 
 	var f Feedback
@@ -132,6 +140,7 @@ FROM feedback WHERE id = ?`
 		&f.SnapshotSize, &f.Snapshot,
 		&appliedAt, &verifiedAt, &resolvedAt,
 		&f.VerificationResult, &f.VerificationDetail,
+		&f.ReplaySize, &f.Replay,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Feedback{}, fmt.Errorf("store: feedback %d not found", id)
@@ -261,7 +270,7 @@ func (s *Store) Delete(ctx context.Context, id int64, githubUser string) error {
 	return nil
 }
 
-// MarkExported sets issue_url and status='resolved' for the given IDs.
+// MarkExported sets issue_url and status='exported' for the given IDs.
 func (s *Store) MarkExported(ctx context.Context, ids []int64, issueURL string) error {
 	if len(ids) == 0 {
 		return nil
@@ -273,7 +282,7 @@ func (s *Store) MarkExported(ctx context.Context, ids []int64, issueURL string) 
 	defer tx.Rollback() //nolint:errcheck
 	const q = `UPDATE feedback SET issue_url = ?, status = ? WHERE id = ?`
 	for _, id := range ids {
-		if _, err := tx.ExecContext(ctx, q, issueURL, StatusResolved, id); err != nil {
+		if _, err := tx.ExecContext(ctx, q, issueURL, StatusExported, id); err != nil {
 			return fmt.Errorf("store: mark exported %d: %w", id, err)
 		}
 	}

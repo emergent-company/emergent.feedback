@@ -72,7 +72,7 @@ func TestBuildEnvelopeFull(t *testing.T) {
 
 	env := BuildEnvelope(f)
 
-	if env["schema"] != "https://feedback-overlay.dev/envelope" {
+	if env["schema"] != "https://feedback.emergent-company.ai/schema/envelope.v1.json" {
 		t.Fatalf("schema = %v", env["schema"])
 	}
 	if env["version"] != "1.0.0" {

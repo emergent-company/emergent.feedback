@@ -122,12 +122,27 @@ const behavioralPreamble = `You are fixing feedback captured from a live page. R
 - Read all notes first; reconcile conflicts; finish with a per-note checklist (done/blocked/covered).
 `
 
-// buildIssueContent formats the GitHub issue title and Markdown body in the
-// fixed order from spec §2.4: Task, What to do, Trust order, Element, Intent,
-// Repro, Environment, Verification, then folded DOM dump, then session history.
+// Detail levels for the Markdown body builder.
+const (
+	levelCompact  = "compact"
+	levelStandard = "standard"
+	levelForensic = "forensic"
+)
+
+// buildIssueContent formats the GitHub issue title and Markdown body at the
+// standard detail level. Kept as a compatibility wrapper for existing callers.
 func buildIssueContent(items []store.Feedback, _ string) (title, body string) {
+	return buildIssueContentLevel(items, levelStandard)
+}
+
+// buildIssueContentLevel formats the GitHub issue title and Markdown body at
+// the requested detail level (compact|standard|forensic).
+func buildIssueContentLevel(items []store.Feedback, level string) (title, body string) {
 	if len(items) == 0 {
 		return "Feedback report", ""
+	}
+	if level == "" {
+		level = levelStandard
 	}
 
 	first := items[0]
@@ -154,10 +169,12 @@ func buildIssueContent(items []store.Feedback, _ string) (title, body string) {
 	fmt.Fprintf(&sb, "**Type:** %s  \n", strVal(env["type"]))
 	fmt.Fprintf(&sb, "**Status:** %s  \n\n", strVal(env["status"]))
 
-	// Comments (preserve single/multi-item behavior).
-	for i, f := range items {
-		fmt.Fprintf(&sb, "### Comment %d\n\n", i+1)
-		fmt.Fprintf(&sb, "**@%s**  \n%s\n\n", f.GitHubUser, f.Comment)
+	// Comments (preserve single/multi-item behavior); compact omits notes.
+	if level != levelCompact {
+		for i, f := range items {
+			fmt.Fprintf(&sb, "### Comment %d\n\n", i+1)
+			fmt.Fprintf(&sb, "**@%s**  \n%s\n\n", f.GitHubUser, f.Comment)
+		}
 	}
 
 	// 3. ## What to do — generated from intent.
@@ -170,34 +187,38 @@ func buildIssueContent(items []store.Feedback, _ string) (title, body string) {
 	writeTrustOrder(&sb, ctx, len(first.Screenshot) > 0)
 	sb.WriteString("\n")
 
-	// 5. ## Element — selector + fingerprint + source.
+	// 5. ## Element — selector + fingerprint + source (compact: selector+source).
 	sb.WriteString("## Element\n\n")
-	writeElement(&sb, ctx, env, first)
+	writeElement(&sb, ctx, env, first, level)
 	sb.WriteString("\n")
 
-	// 6. ## Intent.
-	if intent := getMap(env, "intent"); len(intent) > 0 {
-		sb.WriteString("## Intent\n\n")
-		writeIntent(&sb, ctx, intent)
-		sb.WriteString("\n")
+	if level != levelCompact {
+		// 6. ## Intent.
+		if intent := getMap(env, "intent"); len(intent) > 0 {
+			sb.WriteString("## Intent\n\n")
+			writeIntent(&sb, ctx, intent)
+			sb.WriteString("\n")
+		}
+
+		// 7. ## Repro — steps + console + network.
+		writeRepro(&sb, ctx, level)
+
+		// 8. ## Environment.
+		writeEnvironment(&sb, ctx, first)
 	}
-
-	// 7. ## Repro — steps + console + network (folded).
-	writeRepro(&sb, ctx)
-
-	// 8. ## Environment.
-	writeEnvironment(&sb, ctx, first)
 
 	// 9. ## Verification — explicit "Done when:" line.
 	sb.WriteString("## Verification\n\n")
 	writeVerification(&sb, env)
 
-	// Folded: computed styles + HTML + full context JSON.
-	writeComputedStyles(&sb, ctx)
-	writeFoldedContext(&sb, ctx, first)
+	if level != levelCompact {
+		// Folded (standard) or expanded (forensic): computed styles + HTML + context.
+		writeComputedStyles(&sb, ctx, level)
+		writeFoldedContext(&sb, ctx, first, level)
 
-	// Session history (from client-side ring buffer).
-	writeSessionHistory(&sb, ctx)
+		// Session history (from client-side ring buffer).
+		writeSessionHistory(&sb, ctx, level)
+	}
 
 	return title, sb.String()
 }
@@ -258,7 +279,7 @@ func writeTrustOrder(sb *strings.Builder, ctx map[string]any, hasScreenshot bool
 	}
 }
 
-func writeElement(sb *strings.Builder, ctx map[string]any, env map[string]any, f store.Feedback) {
+func writeElement(sb *strings.Builder, ctx map[string]any, env map[string]any, f store.Feedback, level string) {
 	element := getMap(env, "target", "element")
 	source := getMap(env, "target", "source")
 	hasShot := len(f.Screenshot) > 0
@@ -291,6 +312,10 @@ func writeElement(sb *strings.Builder, ctx map[string]any, env map[string]any, f
 		if s.Len() > 0 {
 			fmt.Fprintf(sb, "- **Source:** `%s` [%s]\n", s.String(), provenanceBadge(ctx, "target.source", hasShot))
 		}
+	}
+
+	if level == levelCompact {
+		return
 	}
 
 	if fp, ok := element["fingerprint"].(map[string]any); ok && len(fp) > 0 {
@@ -333,7 +358,7 @@ func writeIntent(sb *strings.Builder, ctx map[string]any, intent map[string]any)
 	}
 }
 
-func writeRepro(sb *strings.Builder, ctx map[string]any) {
+func writeRepro(sb *strings.Builder, ctx map[string]any, level string) {
 	steps := stringSlice(ctx["steps"])
 	console := ctx["console"]
 	network := ctx["network"]
@@ -348,14 +373,26 @@ func writeRepro(sb *strings.Builder, ctx map[string]any) {
 		sb.WriteString("\n")
 	}
 	if console != nil {
-		sb.WriteString("<details><summary>Console</summary>\n\n```json\n")
-		sb.WriteString(prettyValue(console))
-		sb.WriteString("\n```\n\n</details>\n\n")
+		if level == levelForensic {
+			sb.WriteString("**Console**\n\n```json\n")
+			sb.WriteString(prettyValue(console))
+			sb.WriteString("\n```\n\n")
+		} else {
+			sb.WriteString("<details><summary>Console</summary>\n\n```json\n")
+			sb.WriteString(prettyValue(console))
+			sb.WriteString("\n```\n\n</details>\n\n")
+		}
 	}
 	if network != nil {
-		sb.WriteString("<details><summary>Network</summary>\n\n```json\n")
-		sb.WriteString(prettyValue(network))
-		sb.WriteString("\n```\n\n</details>\n\n")
+		if level == levelForensic {
+			sb.WriteString("**Network**\n\n```json\n")
+			sb.WriteString(prettyValue(network))
+			sb.WriteString("\n```\n\n")
+		} else {
+			sb.WriteString("<details><summary>Network</summary>\n\n```json\n")
+			sb.WriteString(prettyValue(network))
+			sb.WriteString("\n```\n\n</details>\n\n")
+		}
 	}
 }
 
@@ -423,12 +460,16 @@ func writeVerification(sb *strings.Builder, env map[string]any) {
 	fmt.Fprintf(sb, "**Contract:** `%s`\n\n", contractKind)
 }
 
-func writeComputedStyles(sb *strings.Builder, ctx map[string]any) {
+func writeComputedStyles(sb *strings.Builder, ctx map[string]any, level string) {
 	styles, ok := ctx["computedStyles"].(map[string]any)
 	if !ok || len(styles) == 0 {
 		return
 	}
-	sb.WriteString("<details><summary>Computed styles</summary>\n\n```\n")
+	if level == levelForensic {
+		sb.WriteString("## Computed styles\n\n```\n")
+	} else {
+		sb.WriteString("<details><summary>Computed styles</summary>\n\n```\n")
+	}
 	// Stable key order: layout first, then visual.
 	order := []string{
 		"display", "position", "flexDirection", "flexWrap", "alignItems", "justifyContent",
@@ -446,12 +487,28 @@ func writeComputedStyles(sb *strings.Builder, ctx map[string]any) {
 			fmt.Fprintf(sb, "%-24s %s\n", k+":", v)
 		}
 	}
-	sb.WriteString("```\n\n</details>\n\n")
+	if level == levelForensic {
+		sb.WriteString("```\n\n")
+	} else {
+		sb.WriteString("```\n\n</details>\n\n")
+	}
 }
 
-func writeFoldedContext(sb *strings.Builder, ctx map[string]any, f store.Feedback) {
+func writeFoldedContext(sb *strings.Builder, ctx map[string]any, f store.Feedback, level string) {
 	outerHTML, _ := ctx["outerHTML"].(string)
 	prettyCtx := prettyJSON(f.ContextJSON)
+
+	if level == levelForensic {
+		if outerHTML != "" {
+			sb.WriteString("## Element HTML\n\n```html\n")
+			sb.WriteString(prettyHTML(outerHTML))
+			sb.WriteString("\n```\n\n")
+		}
+		sb.WriteString("## Full context\n\n```json\n")
+		sb.WriteString(prettyCtx)
+		sb.WriteString("\n```\n\n")
+		return
+	}
 
 	sb.WriteString("<details><summary>Element HTML &amp; full context</summary>\n\n")
 	if outerHTML != "" {
@@ -465,12 +522,16 @@ func writeFoldedContext(sb *strings.Builder, ctx map[string]any, f store.Feedbac
 	sb.WriteString("</details>\n\n")
 }
 
-func writeSessionHistory(sb *strings.Builder, ctx map[string]any) {
+func writeSessionHistory(sb *strings.Builder, ctx map[string]any, level string) {
 	history, ok := ctx["sessionHistory"].([]any)
 	if !ok || len(history) == 0 {
 		return
 	}
-	sb.WriteString("<details><summary>Session history</summary>\n\n")
+	if level == levelForensic {
+		sb.WriteString("## Session history\n\n")
+	} else {
+		sb.WriteString("<details><summary>Session history</summary>\n\n")
+	}
 	sb.WriteString("| # | Time | Type | Detail |\n")
 	sb.WriteString("|---|------|------|--------|\n")
 	for i, raw := range history {
@@ -484,7 +545,11 @@ func writeSessionHistory(sb *strings.Builder, ctx map[string]any) {
 		detail := formatEventDetail(evType, evData)
 		fmt.Fprintf(sb, "| %d | %s | %s | %s |\n", i+1, evTime, evType, detail)
 	}
-	sb.WriteString("\n</details>\n")
+	if level == levelForensic {
+		sb.WriteString("\n")
+	} else {
+		sb.WriteString("\n</details>\n")
+	}
 }
 
 // prettyValue renders an arbitrary value as indented JSON.

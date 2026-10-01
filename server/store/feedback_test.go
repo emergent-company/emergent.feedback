@@ -196,10 +196,68 @@ func TestListExportedLite(t *testing.T) {
 	if items[0].ContextJSON == "" {
 		t.Fatal("context_json empty")
 	}
-	if items[0].Status != StatusResolved {
-		t.Fatalf("status = %s, want resolved", items[0].Status)
+	if items[0].Status != StatusExported {
+		t.Fatalf("status = %s, want exported", items[0].Status)
 	}
 	if items[0].IssueURL == "" {
 		t.Fatal("issue_url empty")
+	}
+}
+
+func TestExportedExcludedFromBadges(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	// Three items on the same URL: open (badge), exported (excluded), resolved (excluded).
+	openF := createTestFeedback(t, s, ctx)
+	expF := createTestFeedback(t, s, ctx)
+	if err := s.MarkExported(ctx, []int64{expF.ID}, "https://github.com/org/repo/issues/2"); err != nil {
+		t.Fatalf("MarkExported: %v", err)
+	}
+	resF := createTestFeedback(t, s, ctx)
+	if err := s.SetStatus(ctx, resF.ID, StatusResolved, "alice", ""); err != nil {
+		t.Fatalf("SetStatus resolved: %v", err)
+	}
+
+	summaries, err := s.ListByURLSummary(ctx, "https://app.example.com/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []int64
+	for _, sm := range summaries {
+		ids = append(ids, sm.IDs...)
+	}
+	contains := func(list []int64, id int64) bool {
+		for _, x := range list {
+			if x == id {
+				return true
+			}
+		}
+		return false
+	}
+	if !contains(ids, openF.ID) {
+		t.Fatalf("open item %d missing from badges", openF.ID)
+	}
+	if contains(ids, expF.ID) {
+		t.Fatalf("exported item %d should not appear in badges", expF.ID)
+	}
+	if contains(ids, resF.ID) {
+		t.Fatalf("resolved item %d should not appear in badges", resF.ID)
+	}
+
+	// Genuinely resolved item is resolved, not exported.
+	got, err := s.Get(ctx, resF.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != StatusResolved {
+		t.Fatalf("resolved status = %s, want resolved", got.Status)
+	}
+	gotE, err := s.Get(ctx, expF.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotE.Status != StatusExported {
+		t.Fatalf("exported status = %s, want exported", gotE.Status)
 	}
 }

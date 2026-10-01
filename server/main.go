@@ -15,6 +15,9 @@ import (
 //go:embed static/emergent-feedback.js
 var staticFiles embed.FS
 
+//go:embed schema/envelope.v1.json
+var envelopeSchemaJSON []byte
+
 // Version and Commit are injected at build time via -ldflags.
 var (
 	Version = "dev"

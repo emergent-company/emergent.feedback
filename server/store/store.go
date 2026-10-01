@@ -109,6 +109,10 @@ CREATE TABLE IF NOT EXISTS feedback_events (
 );
 CREATE INDEX IF NOT EXISTS feedback_events_feedback_idx ON feedback_events(feedback_id);
 `},
+	{6, "replay", `
+ALTER TABLE feedback ADD COLUMN replay BLOB;
+ALTER TABLE feedback ADD COLUMN replay_size INTEGER;
+`},
 }
 
 // Store wraps the SQLite database connection.

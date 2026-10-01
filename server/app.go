@@ -98,6 +98,11 @@ func buildRouter(s *store.Store, ghCfg *github.AppConfig, jwtSecret, allowedOrig
 		})
 	})
 
+	// Feedback envelope JSON Schema (public).
+	e.GET("/schema/envelope.v1.json", func(c echo.Context) error {
+		return c.Blob(http.StatusOK, "application/json", envelopeSchemaJSON)
+	})
+
 	// Feedback — public read endpoints (counts + public issue refs only, no PII)
 	e.GET("/feedback", h.HandleListFeedback)
 	e.GET("/issues", h.HandleListIssues)
@@ -109,6 +114,7 @@ func buildRouter(s *store.Store, ghCfg *github.AppConfig, jwtSecret, allowedOrig
 	auth.GET("/feedback/verify-pending", h.HandleVerifyPending)
 	auth.GET("/feedback/:id", h.HandleGetFeedback)
 	auth.GET("/feedback/:id/verify", h.HandleGetVerify)
+	auth.GET("/feedback/:id/replay", h.HandleGetReplay)
 	auth.DELETE("/feedback/:id", h.HandleDeleteFeedback)
 	auth.POST("/feedback/:id/applied", h.HandleMarkApplied)
 	auth.POST("/feedback/:id/resolve", h.HandleResolve)

@@ -39,8 +39,13 @@ func (h *Handler) MCPServer() *mcp.Server {
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "feedback_get",
-		Description: "Return the full feedback envelope (schema, target, intent, provenance, trust order) for a feedback item; requires API-key authentication and repo scope.",
+		Description: "Return the feedback envelope for a feedback item (concise by default; set response_format=detailed for full DOM/context); requires API-key authentication and repo scope.",
 	}, h.toolFeedbackGet)
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "feedback_get_replay",
+		Description: "Return the rrweb replay events JSON for a feedback item; requires API-key authentication and repo scope.",
+	}, h.toolGetReplay)
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "feedback_list",
@@ -64,7 +69,7 @@ func (h *Handler) MCPServer() *mcp.Server {
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "feedback_watch",
-		Description: "Long-poll for lifecycle events (applied/verified/resolved/open) since a sequence number; requires API-key authentication and repo scope.",
+		Description: "Long-poll for lifecycle events (created/applied/verified/resolved/open) since a sequence number; requires API-key authentication and repo scope.",
 	}, h.toolFeedbackWatch)
 
 	return srv
@@ -213,19 +218,52 @@ func (h *Handler) toolListForIssue(ctx context.Context, _ *mcp.CallToolRequest, 
 	return nil, out, nil
 }
 
-// toolFeedbackGet returns the full envelope for a single feedback item.
-// The output is a dynamic map (Out = any) so the SDK skips schema generation.
-func (h *Handler) toolFeedbackGet(ctx context.Context, _ *mcp.CallToolRequest, in feedbackIDInput) (*mcp.CallToolResult, any, error) {
+// feedbackGetInput is the input for feedback_get (feedback_id + optional
+// response_format).
+type feedbackGetInput struct {
+	FeedbackID     int64  `json:"feedback_id" jsonschema:"the feedback row id"`
+	ResponseFormat string `json:"response_format,omitempty" jsonschema:"concise or detailed (default concise)"`
+}
+
+// toolFeedbackGet returns the envelope for a single feedback item. It defaults
+// to the concise envelope; response_format=detailed returns the full envelope.
+func (h *Handler) toolFeedbackGet(ctx context.Context, _ *mcp.CallToolRequest, in feedbackGetInput) (*mcp.CallToolResult, any, error) {
 	f, err := h.scopedFeedback(ctx, in.FeedbackID)
 	if err != nil {
 		return nil, nil, err
 	}
-	return nil, BuildEnvelope(f), nil
+	if in.ResponseFormat == "detailed" {
+		return nil, BuildEnvelope(f), nil
+	}
+	return nil, BuildConciseEnvelope(f), nil
+}
+
+type replayOutput struct {
+	Events any `json:"events"`
+}
+
+func (h *Handler) toolGetReplay(ctx context.Context, _ *mcp.CallToolRequest, in feedbackIDInput) (*mcp.CallToolResult, replayOutput, error) {
+	f, err := h.scopedFeedback(ctx, in.FeedbackID)
+	if err != nil {
+		return nil, replayOutput{}, err
+	}
+	if len(f.Replay) == 0 {
+		return nil, replayOutput{}, fmt.Errorf("no replay for feedback %d", in.FeedbackID)
+	}
+	data, err := gunzipOrRaw(f.Replay)
+	if err != nil {
+		return nil, replayOutput{}, err
+	}
+	var events any
+	if err := json.Unmarshal(data, &events); err != nil {
+		events = string(data)
+	}
+	return nil, replayOutput{Events: events}, nil
 }
 
 type feedbackListInput struct {
 	Repo   string `json:"repo,omitempty" jsonschema:"optional repo filter"`
-	Status string `json:"status,omitempty" jsonschema:"optional status filter (open|applied|resolved|verified)"`
+	Status string `json:"status,omitempty" jsonschema:"optional status filter (open|applied|resolved|verified|exported)"`
 	Type   string `json:"type,omitempty" jsonschema:"optional type filter (bug|enhancement|question|task)"`
 	Since  string `json:"since,omitempty" jsonschema:"optional RFC3339 timestamp"`
 }

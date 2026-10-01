@@ -1,7 +1,10 @@
 package handler
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -34,12 +37,27 @@ func newLifecycleHandler(t *testing.T) (*Handler, *store.Store, *echo.Echo) {
 			return next(c)
 		}
 	})
+	e.POST("/feedback", h.HandleCreateFeedback)
 	e.POST("/feedback/:id/applied", h.HandleMarkApplied)
 	e.POST("/feedback/:id/resolve", h.HandleResolve)
 	e.POST("/feedback/:id/verify-result", h.HandleVerifyResult)
 	e.GET("/feedback/:id/verify", h.HandleGetVerify)
+	e.GET("/feedback/:id/replay", h.HandleGetReplay)
 	e.GET("/feedback/verify-pending", h.HandleVerifyPending)
 	return h, s, e
+}
+
+func gzipBase64(t *testing.T, s string) string {
+	t.Helper()
+	var buf bytes.Buffer
+	gw := gzip.NewWriter(&buf)
+	if _, err := gw.Write([]byte(s)); err != nil {
+		t.Fatalf("gzip write: %v", err)
+	}
+	if err := gw.Close(); err != nil {
+		t.Fatalf("gzip close: %v", err)
+	}
+	return base64.StdEncoding.EncodeToString(buf.Bytes())
 }
 
 func TestLifecycleEndpoints(t *testing.T) {
@@ -190,5 +208,67 @@ func TestVerifyPending(t *testing.T) {
 	}
 	if items[0].Contract["kind"] != "style_assertion" {
 		t.Fatalf("contract = %v", items[0].Contract)
+	}
+}
+
+func TestReplayCreateAndGet(t *testing.T) {
+	_, s, e := newLifecycleHandler(t)
+	ctx := context.Background()
+
+	events := `[{"type":2,"data":{"x":1}},{"type":3,"data":{"y":2}}]`
+	body := `{"url":"https://app.example.com/","selector":"button","comment":"broken","repo":"owner/repo","replay":"` + gzipBase64(t, events) + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/feedback", strings.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	req.Header.Set("X-Test-Login", "alice")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var out struct {
+		ID int64 `json:"id"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode create: %v", err)
+	}
+
+	// Stored blob is non-empty.
+	f, err := s.Get(ctx, out.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(f.Replay) == 0 {
+		t.Fatal("replay not stored")
+	}
+
+	// GET replay returns the decompressed events JSON.
+	req2 := httptest.NewRequest(http.MethodGet, "/feedback/"+strconv.FormatInt(out.ID, 10)+"/replay", nil)
+	req2.Header.Set("X-Test-Login", "alice")
+	rec2 := httptest.NewRecorder()
+	e.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("get replay status = %d: %s", rec2.Code, rec2.Body.String())
+	}
+	var eventsOut []map[string]any
+	if err := json.Unmarshal(rec2.Body.Bytes(), &eventsOut); err != nil {
+		t.Fatalf("decode replay: %v", err)
+	}
+	if len(eventsOut) != 2 {
+		t.Fatalf("events = %d, want 2", len(eventsOut))
+	}
+}
+
+func TestReplayRejectOversize(t *testing.T) {
+	_, _, e := newLifecycleHandler(t)
+
+	big := base64.StdEncoding.EncodeToString(make([]byte, maxReplayBytes+1))
+	body := `{"url":"https://app.example.com/","selector":"button","comment":"broken","repo":"owner/repo","replay":"` + big + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/feedback", strings.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	req.Header.Set("X-Test-Login", "alice")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want 413", rec.Code)
 	}
 }

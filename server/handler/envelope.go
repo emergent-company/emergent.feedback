@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	envelopeSchema  = "https://feedback-overlay.dev/envelope"
+	envelopeSchema  = "https://feedback.emergent-company.ai/schema/envelope.v1.json"
 	envelopeVersion = "1.0.0"
 )
 
@@ -98,12 +98,78 @@ func BuildEnvelope(f store.Feedback) map[string]any {
 	return env
 }
 
+// BuildConciseEnvelope returns the compact envelope used for feedback_get's
+// default "concise" response_format. It carries only the high-signal fields
+// (identity, source, intent, verification, trust order, provenance) and omits
+// DOM dumps, styles, replay/snapshot refs, session history and console/network.
+func BuildConciseEnvelope(f store.Feedback) map[string]any {
+	ctx := parseContext(f.ContextJSON)
+
+	env := map[string]any{
+		"schema":     envelopeSchema,
+		"version":    envelopeVersion,
+		"id":         f.ID,
+		"status":     deriveStatus(f),
+		"type":       deriveType(ctx, f),
+		"summary":    deriveSummary(ctx, f),
+	}
+
+	el := map[string]any{}
+	if v := asString(ctx["tagName"]); v != "" {
+		el["tag"] = v
+	}
+	if v := asString(ctx["label"]); v != "" {
+		el["label"] = v
+	}
+	if f.Selector != "" {
+		el["selector"] = f.Selector
+	}
+	if v := asString(ctx["dataComponent"]); v != "" {
+		el["data_component"] = v
+	}
+	target := map[string]any{}
+	if len(el) > 0 {
+		target["element"] = el
+	}
+	if s := buildSource(ctx); s != nil {
+		target["source"] = s
+	}
+	if len(target) > 0 {
+		env["target"] = target
+	}
+
+	if intent := buildIntent(ctx); intent != nil {
+		env["intent"] = intent
+	}
+
+	verification := buildVerification(ctx)
+	if f.VerificationResult != "" || f.VerificationDetail != "" {
+		if verification == nil {
+			verification = map[string]any{}
+		}
+		if f.VerificationResult != "" {
+			verification["result"] = f.VerificationResult
+		}
+		if f.VerificationDetail != "" {
+			verification["detail"] = f.VerificationDetail
+		}
+	}
+	if verification != nil {
+		env["verification"] = verification
+	}
+
+	env["trust_order"] = trustOrder
+	env["provenance"] = buildProvenance(ctx)
+
+	return env
+}
+
 // deriveStatus maps store lifecycle state onto the envelope status enum.
-// New lifecycle values (applied/verified/resolved) pass through; legacy rows
-// fall back to the exported/open signal.
+// New lifecycle values (applied/verified/resolved/exported) pass through;
+// legacy rows fall back to the exported/open signal.
 func deriveStatus(f store.Feedback) string {
 	switch f.Status {
-	case store.StatusApplied, store.StatusVerified, store.StatusResolved:
+	case store.StatusApplied, store.StatusVerified, store.StatusResolved, store.StatusExported:
 		return string(f.Status)
 	}
 	if f.IssueURL != "" {
@@ -374,6 +440,9 @@ func buildVisual(f store.Feedback) map[string]any {
 	}
 	if len(f.Snapshot) > 0 {
 		out["snapshot_ref"] = fmt.Sprintf("feedback://%d/snapshot", f.ID)
+	}
+	if len(f.Replay) > 0 {
+		out["replay_ref"] = fmt.Sprintf("feedback://%d/replay", f.ID)
 	}
 	if len(out) == 0 {
 		return nil

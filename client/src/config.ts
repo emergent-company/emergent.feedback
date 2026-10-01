@@ -21,6 +21,13 @@ export interface OverlayConfig {
   sessionId?: string;
   /** CSS selector to read a trace ID from the DOM via data-session-id-selector. */
   sessionIdSelector?: string;
+  /**
+   * Opt-in buffered session replay. Set via data-replay on the <script> tag.
+   * Defaults to false (no recording).
+   */
+  replay: boolean;
+  /** Replay buffer window in ms. Set via data-replay-buffer-ms (default 60000). */
+  replayBufferMs?: number;
 }
 
 function getScriptTag(): HTMLScriptElement | null {
@@ -56,5 +63,25 @@ export function readConfig(): OverlayConfig {
   const sessionId = tag?.dataset.sessionId?.trim() || undefined;
   const sessionIdSelector = tag?.dataset.sessionIdSelector?.trim() || undefined;
 
-  return { apiBase, repo, label, hotkey, branch, version, sessionId, sessionIdSelector };
+  // Opt-in replay: presence of data-replay enables it; data-replay="false" disables.
+  const replay = tag?.dataset.replay !== undefined && tag?.dataset.replay !== "false";
+  const rawReplayBufferMs = tag?.dataset.replayBufferMs?.trim();
+  const parsedReplayBufferMs = rawReplayBufferMs ? parseInt(rawReplayBufferMs, 10) : NaN;
+  const replayBufferMs =
+    Number.isFinite(parsedReplayBufferMs) && parsedReplayBufferMs > 0
+      ? parsedReplayBufferMs
+      : undefined;
+
+  return {
+    apiBase,
+    repo,
+    label,
+    hotkey,
+    branch,
+    version,
+    sessionId,
+    sessionIdSelector,
+    replay,
+    ...(replayBufferMs !== undefined ? { replayBufferMs } : {}),
+  };
 }
