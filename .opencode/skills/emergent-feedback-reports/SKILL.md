@@ -55,9 +55,9 @@ opencode (`~/.config/opencode/opencode.json`):
 }
 ```
 
-The api-key is a `fo_`-prefixed token (e.g. from `FEEDBACK_OVERLAY_API_KEY` in
-the consuming app's `.env`). Generate/revoke keys in the panel at
-`https://feedback.emergent-company.ai/panel`.
+The api-key is an `ef_`-prefixed token created in the panel at
+`https://feedback.emergent-company.ai/panel`. The server-side bootstrap key
+comes from the `MCP_API_KEY` environment variable.
 
 ## Notes
 

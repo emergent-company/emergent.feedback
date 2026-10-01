@@ -455,14 +455,14 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   const ctx = opts.context;
 
   const commentsHTML = existing.length === 0 ? "" : `
-    <div class="fo-comments">
+    <div class="ef-comments">
       ${existing.map((c) => `
-        <div class="fo-comment-item">
-          <div class="fo-comment-meta">
-            <span class="fo-comment-author">@${escapeHtml(c.github_user)}</span>
-            <span class="fo-comment-date">${escapeHtml(c.created_at)}</span>
+        <div class="ef-comment-item">
+          <div class="ef-comment-meta">
+            <span class="ef-comment-author">@${escapeHtml(c.github_user)}</span>
+            <span class="ef-comment-date">${escapeHtml(c.created_at)}</span>
           </div>
-          <div class="fo-comment-text">${escapeHtml(c.comment)}</div>
+          <div class="ef-comment-text">${escapeHtml(c.comment)}</div>
         </div>`).join("")}
     </div>`;
 
@@ -471,16 +471,16 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     : "Add feedback";
 
   const chips: string[] = [];
-  if (opts.repo)       chips.push(`<span class="fo-target-chip"><span class="fo-target-chip-label">repo</span>${escapeHtml(opts.repo)}</span>`);
-  if (opts.branch)     chips.push(`<span class="fo-target-chip"><span class="fo-target-chip-label">branch</span>${escapeHtml(opts.branch)}</span>`);
-  if (opts.appVersion) chips.push(`<span class="fo-target-chip"><span class="fo-target-chip-label">version</span>${escapeHtml(opts.appVersion)}</span>`);
-  const targetStripHTML = chips.length > 0 ? `<div class="fo-target-strip">${chips.join("")}</div>` : "";
+  if (opts.repo)       chips.push(`<span class="ef-target-chip"><span class="ef-target-chip-label">repo</span>${escapeHtml(opts.repo)}</span>`);
+  if (opts.branch)     chips.push(`<span class="ef-target-chip"><span class="ef-target-chip-label">branch</span>${escapeHtml(opts.branch)}</span>`);
+  if (opts.appVersion) chips.push(`<span class="ef-target-chip"><span class="ef-target-chip-label">version</span>${escapeHtml(opts.appVersion)}</span>`);
+  const targetStripHTML = chips.length > 0 ? `<div class="ef-target-strip">${chips.join("")}</div>` : "";
 
   const hierarchy = opts.componentHierarchy ?? [];
   const componentPickerHTML = hierarchy.length > 1 ? `
-    <div class="fo-component-row">
-      <span class="fo-component-label">Component</span>
-      <select class="fo-component-select" id="__ef_component__">
+    <div class="ef-component-row">
+      <span class="ef-component-label">Component</span>
+      <select class="ef-component-select" id="__ef_component__">
         ${hierarchy.map((h, i) => `<option value="${i}" ${i === (opts.selectedComponentIdx ?? 0) ? "selected" : ""}>
           ${h.isChild ? "↳ " : ""}${escapeHtml(h.name)}
         </option>`).join("")}
@@ -520,54 +520,54 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   metaRows.push(["user agent", ua]);
 
   const metaHTML = metaRows.map(([k, v]) => `
-    <div class="fo-meta-key">${escapeHtml(k)}</div>
-    <div class="fo-meta-val">${escapeHtml(v)}</div>`).join("");
+    <div class="ef-meta-key">${escapeHtml(k)}</div>
+    <div class="ef-meta-val">${escapeHtml(v)}</div>`).join("");
 
   const outerHTML = ctx["outerHTML"] as string | undefined;
 
   dialog.innerHTML = `
-    <div class="fo-card">
-      <div class="fo-header">
-        <div class="fo-header-top">
+    <div class="ef-card">
+      <div class="ef-header">
+        <div class="ef-header-top">
           <h2>${title}</h2>
-          <div class="fo-user-pill">
+          <div class="ef-user-pill">
             <img src="${escapeHtml(opts.user.avatarUrl)}" alt="">
             <span>${escapeHtml(opts.user.login)}</span>
           </div>
         </div>
-        <details class="fo-meta-toggle">
+        <details class="ef-meta-toggle">
           <summary>Context that will be attached</summary>
-          <div class="fo-meta-grid">${metaHTML}</div>
+          <div class="ef-meta-grid">${metaHTML}</div>
         </details>
         ${outerHTML ? `
-        <details class="fo-meta-toggle">
+        <details class="ef-meta-toggle">
           <summary>Element HTML</summary>
-          <pre class="fo-html-preview">${highlightHTML(outerHTML)}</pre>
+          <pre class="ef-html-preview">${highlightHTML(outerHTML)}</pre>
         </details>` : ""}
         ${buildSessionHistoryHTML(ctx)}
       </div>
       ${componentPickerHTML}
       ${targetStripHTML}
       ${commentsHTML}
-      <div class="fo-compose">
-        <div class="fo-topic-row">
-          <label class="fo-topic-label" for="__ef_topic__">Issue title</label>
-          <input class="fo-topic-input" id="__ef_topic__" type="text" value="${escapeHtml(opts.defaultIssueTopic)}">
+      <div class="ef-compose">
+        <div class="ef-topic-row">
+          <label class="ef-topic-label" for="__ef_topic__">Issue title</label>
+          <input class="ef-topic-input" id="__ef_topic__" type="text" value="${escapeHtml(opts.defaultIssueTopic)}">
         </div>
         <textarea id="__ef_comment__" placeholder="Add a comment…"></textarea>
-        <div class="fo-type-toggle">
+        <div class="ef-type-toggle">
           <input type="radio" name="__ef_type__" id="__ef_type_bug__" value="bug">
           <label for="__ef_type_bug__">🐛 Bug</label>
           <input type="radio" name="__ef_type__" id="__ef_type_enh__" value="enhancement" checked>
           <label for="__ef_type_enh__">✨ Enhancement</label>
         </div>
-        <div class="fo-error" id="__ef_err__"></div>
+        <div class="ef-error" id="__ef_err__"></div>
       </div>
-      <div class="fo-footer">
-        <button class="fo-btn-secondary" id="__ef_submit__">Save</button>
-        <div class="fo-footer-spacer"></div>
-        <button class="fo-btn-secondary" id="__ef_cancel__">Cancel</button>
-        <button class="fo-btn-primary" id="__ef_export__">Send to GitHub</button>
+      <div class="ef-footer">
+        <button class="ef-btn-secondary" id="__ef_submit__">Save</button>
+        <div class="ef-footer-spacer"></div>
+        <button class="ef-btn-secondary" id="__ef_cancel__">Cancel</button>
+        <button class="ef-btn-primary" id="__ef_export__">Send to GitHub</button>
       </div>
     </div>
   `;
@@ -682,14 +682,14 @@ export function showLoginDialog(opts: LoginDialogOptions): void {
   const dialog = getOrCreateDialog();
 
   dialog.innerHTML = `
-    <div class="fo-login-card">
+    <div class="ef-login-card">
       <h2>Sign in with GitHub</h2>
       <p>Authentication required to submit feedback.</p>
-      <div class="fo-login-actions">
-        <button class="fo-btn-secondary" id="__ef_cancel__">Cancel</button>
-        <button class="fo-btn-primary" id="__ef_login__">Sign in with GitHub</button>
+      <div class="ef-login-actions">
+        <button class="ef-btn-secondary" id="__ef_cancel__">Cancel</button>
+        <button class="ef-btn-primary" id="__ef_login__">Sign in with GitHub</button>
       </div>
-      <div class="fo-error" id="__ef_err__" style="margin-top:8px"></div>
+      <div class="ef-error" id="__ef_err__" style="margin-top:8px"></div>
     </div>
   `;
 
@@ -763,10 +763,10 @@ export function showToast(message: string): void {
     document.body.appendChild(el);
   }
   el.textContent = message;
-  el.classList.add("fo-visible");
+  el.classList.add("ef-visible");
   clearTimeout((el as any).__ef_toast_timer);
   (el as any).__ef_toast_timer = setTimeout(() => {
-    el!.classList.remove("fo-visible");
+    el!.classList.remove("ef-visible");
   }, 3000);
 }
 
@@ -807,7 +807,7 @@ function highlightHTML(raw: string): string {
 
     // Comment / doctype
     if (full.startsWith("<!--") || full.startsWith("<!")) {
-      out.push(pad() + span("fo-hd", e(full)) + "\n");
+      out.push(pad() + span("ef-hd", e(full)) + "\n");
       continue;
     }
 
@@ -824,8 +824,8 @@ function highlightHTML(raw: string): string {
     if (isClose) indent = Math.max(0, indent - 1);
 
     // Build highlighted tag string.
-    let tag = span("fo-hp", "&lt;") + (isClose ? span("fo-hp", "/") : "");
-    tag += span("fo-ht", e(tagName ?? ""));
+    let tag = span("ef-hp", "&lt;") + (isClose ? span("ef-hp", "/") : "");
+    tag += span("ef-ht", e(tagName ?? ""));
 
     // Highlight attributes.
     const attrStr = match[2] ?? "";
@@ -835,17 +835,17 @@ function highlightHTML(raw: string): string {
       while ((am = ATTR.exec(attrStr)) !== null) {
         const name = am[1];
         const rest = am[2] ?? ""; // includes the = and value
-        tag += " " + span("fo-ha", e(name));
+        tag += " " + span("ef-ha", e(name));
         if (rest) {
           // split off = and value
           const eqIdx = rest.indexOf("=");
           const val = rest.slice(eqIdx + 1).trim();
-          tag += span("fo-hp", "=") + span("fo-hv", e(val));
+          tag += span("ef-hp", "=") + span("ef-hv", e(val));
         }
       }
     }
 
-    tag += (isSelf && !isClose ? span("fo-hp", " /&gt;") : span("fo-hp", "&gt;"));
+    tag += (isSelf && !isClose ? span("ef-hp", " /&gt;") : span("ef-hp", "&gt;"));
 
     out.push(pad() + tag + "\n");
 
@@ -869,20 +869,20 @@ function buildSessionHistoryHTML(ctx: Record<string, unknown>): string {
       case "navigation": {
         const prev = shortenURL(t.data.previousUrl);
         const url = shortenURL(t.data.url);
-        lines.push(`<div class="fo-history-line"><span class="fo-history-type">nav</span> ${time} ${escapeHtml(prev)} → ${escapeHtml(url)}</div>`);
+        lines.push(`<div class="ef-history-line"><span class="ef-history-type">nav</span> ${time} ${escapeHtml(prev)} → ${escapeHtml(url)}</div>`);
         break;
       }
       case "input": {
         const comp = t.data.component ? ` [${escapeHtml(t.data.component)}]` : "";
         const val = String(t.data.value ?? "");
         const valDisplay = val.length > 60 ? val.slice(0, 57) + "..." : val;
-        lines.push(`<div class="fo-history-line"><span class="fo-history-type">input</span> ${time} ${escapeHtml(String(t.data.tagName ?? ""))}${comp} = "${escapeHtml(valDisplay)}"</div>`);
+        lines.push(`<div class="ef-history-line"><span class="ef-history-type">input</span> ${time} ${escapeHtml(String(t.data.tagName ?? ""))}${comp} = "${escapeHtml(valDisplay)}"</div>`);
         break;
       }
       case "click": {
         const comp = t.data.component ? ` [${escapeHtml(t.data.component)}]` : "";
         const txt = t.data.text ? ` "${escapeHtml(String(t.data.text))}"` : "";
-        lines.push(`<div class="fo-history-line"><span class="fo-history-type">click</span> ${time} ${escapeHtml(String(t.data.tagName ?? ""))}${comp}${txt}</div>`);
+        lines.push(`<div class="ef-history-line"><span class="ef-history-type">click</span> ${time} ${escapeHtml(String(t.data.tagName ?? ""))}${comp}${txt}</div>`);
         break;
       }
     }
@@ -891,9 +891,9 @@ function buildSessionHistoryHTML(ctx: Record<string, unknown>): string {
   if (lines.length === 0) return "";
 
   return `
-    <details class="fo-meta-toggle">
+    <details class="ef-meta-toggle">
       <summary>Session history (last ${lines.length} events)</summary>
-      <div class="fo-history-list">${lines.join("")}</div>
+      <div class="ef-history-list">${lines.join("")}</div>
     </details>`;
 }
 
