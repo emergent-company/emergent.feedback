@@ -15,13 +15,24 @@ import { getSessionId } from "./session";
 import { captureElement } from "./screenshot";
 import { captureSnapshot } from "./snapshot";
 import { resolveSource, buildFingerprint } from "./source";
-import { scoreExplanation, stampProvenance, TRUST_ORDER, type FeedbackIntent } from "./envelope";
+import {
+  scoreExplanation,
+  stampProvenance,
+  TRUST_ORDER,
+  type FeedbackIntent,
+  type Verification,
+  type ElementFingerprint,
+} from "./envelope";
+import { redactText, redactAttributes } from "./redact";
+import { startConsoleCapture, getConsoleErrors } from "./console";
+import { startVerifyLoop, stopVerifyLoop } from "./verify";
 
 (function bootstrap() {
   if ((window as any).__feedbackOverlayLoaded) return;
   (window as any).__feedbackOverlayLoaded = true;
 
   startRecording();
+  startConsoleCapture();
 
   const config = readConfig();
   const api = new APIClient(config);
@@ -36,9 +47,11 @@ import { scoreExplanation, stampProvenance, TRUST_ORDER, type FeedbackIntent } f
     if (mode === "active") {
       showIndicator(config.hotkey);
       activateOverlay();
+      startVerifyLoop(api);
     } else if (mode === "idle") {
       hideIndicator();
       deactivateOverlay();
+      stopVerifyLoop();
     } else if (mode === "capturing" || mode === "commenting") {
       hideIndicator();
     }
@@ -152,6 +165,12 @@ import { scoreExplanation, stampProvenance, TRUST_ORDER, type FeedbackIntent } f
           ...context,
           intent,
           explanation: scoreExplanation(comment, intent),
+          verification: buildVerification(
+            selector,
+            context["fingerprint"] as ElementFingerprint | undefined,
+            intent,
+            context["computedStyles"] as Record<string, string> | undefined
+          ),
         };
         const result = await api.createFeedback({
           url: window.location.href,
@@ -266,6 +285,82 @@ import { scoreExplanation, stampProvenance, TRUST_ORDER, type FeedbackIntent } f
     return undefined;
   }
 
+  // ── Verification contract ────────────────────────────────────────────────────
+  // Maps the intent micro-form's "actual" labels (dialog.ts) to CSS props.
+  const STYLE_PROP_LABELS: [string, string][] = [
+    ["text color", "color"],
+    ["background", "backgroundColor"],
+    ["font size", "fontSize"],
+    ["weight", "fontWeight"],
+  ];
+
+  // Detect which style prop `intent.actual` was captured from, if any.
+  function detectStyleProp(
+    actual: string,
+    computedStyles: Record<string, string> | undefined
+  ): string | undefined {
+    const lower = actual.toLowerCase();
+    for (const [label, prop] of STYLE_PROP_LABELS) {
+      if (lower.startsWith(label + ":")) return prop;
+    }
+    // Fallback: exact match against a captured computed style value.
+    if (computedStyles) {
+      for (const prop of ["color", "backgroundColor", "fontSize", "fontWeight"]) {
+        if (computedStyles[prop] && computedStyles[prop] === actual) return prop;
+      }
+    }
+    return undefined;
+  }
+
+  // Extract the value after a "<label>: " prefix (defensive fallback for `before`).
+  function extractBefore(actual: string): string | undefined {
+    const idx = actual.indexOf(":");
+    if (idx >= 0) return actual.slice(idx + 1).trim();
+    return undefined;
+  }
+
+  function buildVerification(
+    selector: string,
+    fingerprint: ElementFingerprint | undefined,
+    intent: FeedbackIntent,
+    computedStyles: Record<string, string> | undefined
+  ): Verification {
+    const expected = intent.expected?.trim();
+    const actual = intent.actual?.trim();
+
+    // 1. style_assertion when `actual` was captured from a style prop.
+    if (actual) {
+      const prop = detectStyleProp(actual, computedStyles);
+      if (prop) {
+        const before = computedStyles?.[prop] ?? extractBefore(actual) ?? "";
+        return {
+          contract: {
+            kind: "style_assertion",
+            check: { selector, prop, before, operator: "changed" },
+          },
+          criteria: expected || `Change ${prop} of the selected element`,
+        };
+      }
+    }
+
+    // 2. anchor_stable when a fingerprint path exists.
+    if (fingerprint?.path) {
+      return {
+        contract: {
+          kind: "anchor_stable",
+          check: { selector, path: fingerprint.path },
+        },
+        criteria: expected || "Element stays findable via its selector and fingerprint",
+      };
+    }
+
+    // 3. human fallback.
+    return {
+      contract: { kind: "human" },
+      criteria: expected || "Human confirmation that the change is correct",
+    };
+  }
+
   function gatherContext(el: Element): Record<string, unknown> {
     const rect = el.getBoundingClientRect();
     const source = resolveSource(el);
@@ -299,6 +394,11 @@ import { scoreExplanation, stampProvenance, TRUST_ORDER, type FeedbackIntent } f
       ...(config.branch  ? { branch: config.branch }   : {}),
       ...(config.version ? { appVersion: config.version } : {}),
       sessionHistory: getHistory(),
+      repro: {
+        steps: [],
+        console: getConsoleErrors(),
+        network: [],
+      },
     };
   }
 
@@ -326,51 +426,13 @@ import { scoreExplanation, stampProvenance, TRUST_ORDER, type FeedbackIntent } f
 
   function gatherAttributes(el: Element): Record<string, string> {
     const out: Record<string, string> = {};
-    for (const attr of Array.from(el.attributes)) {
-      const name = attr.name;
-      let value = attr.value;
-      // Redaction pass — mirrors snapshot.ts so gatherContext no longer
-      // bypasses the SENSITIVE_ATTR / TOKEN_VALUE / URL-param rules.
-      if (name === "src" || name === "href" || name === "action") {
-        value = sanitizeURL(value);
-      }
-      if (SENSITIVE_ATTR.test(name) || TOKEN_VALUE.test(value)) {
-        continue; // drop the attribute entirely
-      }
+    const kept = redactAttributes(
+      Array.from(el.attributes).map((a) => ({ name: a.name, value: a.value }))
+    );
+    for (const { name, value } of kept) {
       if (value.length < 200) out[name] = value;
     }
     return out;
-  }
-
-  // ── Redaction helpers (duplicated from snapshot.ts to avoid drift risk) ────
-  const SENSITIVE_ATTR =
-    /(token|secret|password|passwd|pwd|credential|api[_-]?key|apikey|authorization|jwt|csrf|cookie|sessionid)/i;
-  const TOKEN_VALUE =
-    /(eyJ[a-zA-Z0-9_-]{8,}|gh[pousr]_[A-Za-z0-9]{8,}|sk-[A-Za-z0-9]{8,}|xox[bp]-[A-Za-z0-9-]{8,}|[A-Za-z0-9_-]{40,})/;
-  const TOKEN_VALUE_GLOBAL = new RegExp(TOKEN_VALUE.source, "g");
-
-  function redactText(s: string): string {
-    return s.replace(TOKEN_VALUE_GLOBAL, "[redacted]");
-  }
-
-  function isSensitiveURLParam(key: string): boolean {
-    return /(token|key|secret|sig|signature|auth|credential|password|session|jwt|csrf)/i.test(key);
-  }
-
-  function sanitizeURL(raw: string): string {
-    try {
-      const u = new URL(raw, document.baseURI);
-      let changed = false;
-      for (const key of Array.from(u.searchParams.keys())) {
-        if (isSensitiveURLParam(key)) {
-          u.searchParams.set(key, "[redacted]");
-          changed = true;
-        }
-      }
-      return changed ? u.href : raw;
-    } catch {
-      return "[redacted]";
-    }
   }
 
   // Key computed style properties worth reporting.

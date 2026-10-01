@@ -62,8 +62,34 @@ func BuildEnvelope(f store.Feedback) map[string]any {
 	if v := buildVisual(f); v != nil {
 		env["visual"] = v
 	}
-	if v := buildVerification(ctx); v != nil {
-		env["verification"] = v
+
+	// Verification: contract/criteria come from context JSON; the store-recorded
+	// verification result and detail are layered in as verification.result/detail.
+	verification := buildVerification(ctx)
+	if f.VerificationResult != "" || f.VerificationDetail != "" {
+		if verification == nil {
+			verification = map[string]any{}
+		}
+		if f.VerificationResult != "" {
+			verification["result"] = f.VerificationResult
+		}
+		if f.VerificationDetail != "" {
+			verification["detail"] = f.VerificationDetail
+		}
+	}
+	if verification != nil {
+		env["verification"] = verification
+	}
+
+	// Lifecycle timestamps (only when recorded).
+	if f.AppliedAt != nil {
+		env["applied_at"] = f.AppliedAt.UTC().Format(time.RFC3339)
+	}
+	if f.VerifiedAt != nil {
+		env["verified_at"] = f.VerifiedAt.UTC().Format(time.RFC3339)
+	}
+	if f.ResolvedAt != nil {
+		env["resolved_at"] = f.ResolvedAt.UTC().Format(time.RFC3339)
 	}
 
 	env["provenance"] = buildProvenance(ctx)
@@ -73,9 +99,13 @@ func BuildEnvelope(f store.Feedback) map[string]any {
 }
 
 // deriveStatus maps store lifecycle state onto the envelope status enum.
-// The store only records open/resolved today; export (issue_url set) is the
-// closest existing signal for "applied".
+// New lifecycle values (applied/verified/resolved) pass through; legacy rows
+// fall back to the exported/open signal.
 func deriveStatus(f store.Feedback) string {
+	switch f.Status {
+	case store.StatusApplied, store.StatusVerified, store.StatusResolved:
+		return string(f.Status)
+	}
 	if f.IssueURL != "" {
 		return "applied"
 	}

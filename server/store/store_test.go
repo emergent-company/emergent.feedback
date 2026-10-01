@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"path/filepath"
 	"testing"
 )
@@ -14,7 +15,7 @@ func TestMigrateCreatesSchema(t *testing.T) {
 		t.Fatalf("Open: %v", err)
 	}
 
-	for _, table := range []string{"feedback", "github_issues", "schema_migrations"} {
+	for _, table := range []string{"feedback", "github_issues", "schema_migrations", "feedback_events"} {
 		var n int
 		if err := s.db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`, table).Scan(&n); err != nil {
 			t.Fatalf("query %s: %v", table, err)
@@ -28,12 +29,64 @@ func TestMigrateCreatesSchema(t *testing.T) {
 	if err := s.db.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&v); err != nil {
 		t.Fatal(err)
 	}
-	if v != 4 {
-		t.Fatalf("schema version = %d, want 4", v)
+	if v != 5 {
+		t.Fatalf("schema version = %d, want 5", v)
+	}
+
+	for _, col := range []string{"applied_at", "verified_at", "resolved_at", "verification_result", "verification_detail"} {
+		var n int
+		if err := s.db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('feedback') WHERE name=?`, col).Scan(&n); err != nil {
+			t.Fatalf("column %s: %v", col, err)
+		}
+		if n != 1 {
+			t.Fatalf("feedback column %s missing", col)
+		}
 	}
 
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestMigrateUpgradeFromV4(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "test.db")
+
+	// Build a database at schema version 4 (all migrations except the new one).
+	db, err := sql.Open("sqlite", dsnWithPragmas(path))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	ctx := context.Background()
+	if _, err := db.ExecContext(ctx, schemaMigrations); err != nil {
+		t.Fatalf("schema_migrations: %v", err)
+	}
+	for _, m := range migrations[:4] {
+		if err := applyMigration(ctx, db, m); err != nil {
+			t.Fatalf("migration %d: %v", m.version, err)
+		}
+	}
+	_ = db.Close()
+
+	// Reopen via Open, which applies migration 5.
+	s, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer func() { _ = s.Close() }()
+
+	var v int
+	if err := s.db.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&v); err != nil {
+		t.Fatal(err)
+	}
+	if v != 5 {
+		t.Fatalf("schema version = %d, want 5", v)
+	}
+	var n int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='feedback_events'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatal("feedback_events table missing after upgrade")
 	}
 }
 
@@ -58,8 +111,8 @@ func TestMigrateIdempotent(t *testing.T) {
 	if err := s2.db.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&v); err != nil {
 		t.Fatal(err)
 	}
-	if v != 4 {
-		t.Fatalf("schema version = %d, want 4", v)
+	if v != 5 {
+		t.Fatalf("schema version = %d, want 5", v)
 	}
 }
 

@@ -14,6 +14,8 @@ type FeedbackStatus string
 
 const (
 	StatusOpen     FeedbackStatus = "open"
+	StatusApplied  FeedbackStatus = "applied"
+	StatusVerified FeedbackStatus = "verified"
 	StatusResolved FeedbackStatus = "resolved"
 )
 
@@ -33,6 +35,12 @@ type Feedback struct {
 	Status       FeedbackStatus
 	IssueURL     string
 	CreatedAt    time.Time
+
+	AppliedAt          *time.Time
+	VerifiedAt         *time.Time
+	ResolvedAt         *time.Time
+	VerificationResult string
+	VerificationDetail string
 }
 
 // URLSummary is a lightweight projection returned for badge rendering.
@@ -56,12 +64,21 @@ type CreateParams struct {
 	Label       string
 }
 
-// Create inserts a new feedback item and returns it with the generated ID and timestamp.
+// Create inserts a new feedback item and returns it with the generated ID and
+// timestamp. It also records a "created" lifecycle event so new items surface
+// in feedback_watch / ListEventsSince.
 func (s *Store) Create(ctx context.Context, p CreateParams) (Feedback, error) {
 	label := p.Label
 	if label == "" {
 		label = "feedback"
 	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Feedback{}, err
+	}
+	defer tx.Rollback() //nolint:errcheck
+
 	const q = `
 INSERT INTO feedback (url, selector, comment, context_json, screenshot, github_user, repo, label, snapshot, snapshot_size)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -69,12 +86,20 @@ RETURNING id, created_at`
 
 	var f Feedback
 	var createdAt string
-	err := s.db.QueryRowContext(ctx, q,
+	if err := tx.QueryRowContext(ctx, q,
 		p.URL, p.Selector, p.Comment, p.ContextJSON, p.Screenshot, p.GitHubUser, p.Repo, label, p.Snapshot, len(p.Snapshot),
-	).Scan(&f.ID, &createdAt)
-	if err != nil {
+	).Scan(&f.ID, &createdAt); err != nil {
 		return Feedback{}, fmt.Errorf("store: create feedback: %w", err)
 	}
+
+	if _, err := tx.ExecContext(ctx, `INSERT INTO feedback_events (feedback_id, type, actor, detail) VALUES (?, 'created', ?, '')`, f.ID, p.GitHubUser); err != nil {
+		return Feedback{}, fmt.Errorf("store: create event: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return Feedback{}, err
+	}
+
 	f.URL = p.URL
 	f.Selector = p.Selector
 	f.Comment = p.Comment
@@ -94,15 +119,19 @@ RETURNING id, created_at`
 func (s *Store) Get(ctx context.Context, id int64) (Feedback, error) {
 	const q = `
 SELECT id, url, selector, comment, context_json, screenshot, github_user, repo, label, status, COALESCE(issue_url,''), created_at,
-       COALESCE(snapshot_size,0), snapshot
+       COALESCE(snapshot_size,0), snapshot,
+       COALESCE(applied_at,''), COALESCE(verified_at,''), COALESCE(resolved_at,''),
+       COALESCE(verification_result,''), COALESCE(verification_detail,'')
 FROM feedback WHERE id = ?`
 
 	var f Feedback
-	var createdAt string
+	var createdAt, appliedAt, verifiedAt, resolvedAt string
 	err := s.db.QueryRowContext(ctx, q, id).Scan(
 		&f.ID, &f.URL, &f.Selector, &f.Comment, &f.ContextJSON,
 		&f.Screenshot, &f.GitHubUser, &f.Repo, &f.Label, &f.Status, &f.IssueURL, &createdAt,
 		&f.SnapshotSize, &f.Snapshot,
+		&appliedAt, &verifiedAt, &resolvedAt,
+		&f.VerificationResult, &f.VerificationDetail,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Feedback{}, fmt.Errorf("store: feedback %d not found", id)
@@ -111,6 +140,9 @@ FROM feedback WHERE id = ?`
 		return Feedback{}, fmt.Errorf("store: get feedback: %w", err)
 	}
 	f.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+	f.AppliedAt = optionalTime(appliedAt)
+	f.VerifiedAt = optionalTime(verifiedAt)
+	f.ResolvedAt = optionalTime(resolvedAt)
 	return f, nil
 }
 
@@ -246,6 +278,205 @@ func (s *Store) MarkExported(ctx context.Context, ids []int64, issueURL string) 
 		}
 	}
 	return tx.Commit()
+}
+
+// FeedbackEvent is a single lifecycle transition recorded in feedback_events.
+type FeedbackEvent struct {
+	Seq        int64
+	FeedbackID int64
+	Type       string
+	Actor      string
+	Detail     string
+	CreatedAt  time.Time
+}
+
+// ExportedLite is a lightweight projection of exported feedback — enough to
+// render the feedback_list tool without loading screenshot/snapshot blobs.
+type ExportedLite struct {
+	ID          int64
+	Comment     string
+	ContextJSON string
+	Label       string
+	Status      FeedbackStatus
+	IssueURL    string
+	CreatedAt   time.Time
+}
+
+// VerifyPendingItem is a feedback item awaiting verification on a page.
+type VerifyPendingItem struct {
+	ID          int64
+	Selector    string
+	ContextJSON string
+}
+
+// optionalTime parses an RFC3339 timestamp string into *time.Time (nil if empty).
+func optionalTime(s string) *time.Time {
+	if s == "" {
+		return nil
+	}
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return nil
+	}
+	return &t
+}
+
+// SetStatus updates a feedback item's status plus the matching *_at timestamp
+// and records a feedback_events row (type applied|verified|resolved|open).
+func (s *Store) SetStatus(ctx context.Context, id int64, status FeedbackStatus, actor, detail string) error {
+	var tsCol string
+	switch status {
+	case StatusApplied:
+		tsCol = "applied_at"
+	case StatusVerified:
+		tsCol = "verified_at"
+	case StatusResolved:
+		tsCol = "resolved_at"
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	if tsCol != "" {
+		q := fmt.Sprintf(`UPDATE feedback SET status = ?, %s = strftime('%%Y-%%m-%%dT%%H:%%M:%%SZ','now') WHERE id = ?`, tsCol)
+		if _, err := tx.ExecContext(ctx, q, status, id); err != nil {
+			return fmt.Errorf("store: set status %s: %w", status, err)
+		}
+	} else {
+		if _, err := tx.ExecContext(ctx, `UPDATE feedback SET status = ? WHERE id = ?`, status, id); err != nil {
+			return fmt.Errorf("store: set status %s: %w", status, err)
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO feedback_events (feedback_id, type, actor, detail) VALUES (?, ?, ?, ?)`, id, string(status), actor, detail); err != nil {
+		return fmt.Errorf("store: insert event: %w", err)
+	}
+	return tx.Commit()
+}
+
+// SetVerificationResult records a verification outcome and sets verified_at.
+// It does NOT emit an event: event emission is owned by SetStatus, so a green
+// transition (SetVerificationResult + SetStatus(verified)) produces exactly one
+// "verified" event.
+func (s *Store) SetVerificationResult(ctx context.Context, id int64, result, detail string) error {
+	if _, err := s.db.ExecContext(ctx, `UPDATE feedback SET verification_result = ?, verification_detail = ?, verified_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?`, result, detail, id); err != nil {
+		return fmt.Errorf("store: set verification result: %w", err)
+	}
+	return nil
+}
+
+// ListEventsSince returns lifecycle events with seq > sinceSeq, ascending.
+func (s *Store) ListEventsSince(ctx context.Context, sinceSeq int64, limit int) ([]FeedbackEvent, error) {
+	return s.listEvents(ctx, sinceSeq, limit, nil)
+}
+
+// ListEventsSinceForRepos is ListEventsSince restricted to feedback whose repo
+// is in repos (used to scope feedback_watch to an API key).
+func (s *Store) ListEventsSinceForRepos(ctx context.Context, sinceSeq int64, limit int, repos []string) ([]FeedbackEvent, error) {
+	return s.listEvents(ctx, sinceSeq, limit, repos)
+}
+
+func (s *Store) listEvents(ctx context.Context, sinceSeq int64, limit int, repos []string) ([]FeedbackEvent, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	q := `SELECT e.seq, e.feedback_id, e.type, COALESCE(e.actor,''), COALESCE(e.detail,''), e.created_at
+FROM feedback_events e`
+	args := make([]any, 0, len(repos)+2)
+	if len(repos) > 0 {
+		ph := strings.TrimSuffix(strings.Repeat("?,", len(repos)), ",")
+		q += fmt.Sprintf(` JOIN feedback f ON f.id = e.feedback_id WHERE e.seq > ? AND f.repo IN (%s)`, ph)
+		args = append(args, sinceSeq)
+		for _, r := range repos {
+			args = append(args, r)
+		}
+	} else {
+		q += ` WHERE e.seq > ?`
+		args = append(args, sinceSeq)
+	}
+	q += ` ORDER BY e.seq ASC LIMIT ?`
+	args = append(args, limit)
+
+	rows, err := s.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("store: list events: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []FeedbackEvent
+	for rows.Next() {
+		var e FeedbackEvent
+		var createdAt string
+		if err := rows.Scan(&e.Seq, &e.FeedbackID, &e.Type, &e.Actor, &e.Detail, &createdAt); err != nil {
+			return nil, fmt.Errorf("store: scan event: %w", err)
+		}
+		e.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// ListExportedLite returns exported feedback (issue_url set) within repos,
+// without loading screenshot/snapshot blobs.
+func (s *Store) ListExportedLite(ctx context.Context, repos []string) ([]ExportedLite, error) {
+	if len(repos) == 0 {
+		return nil, nil
+	}
+	ph := strings.TrimSuffix(strings.Repeat("?,", len(repos)), ",")
+	args := make([]any, 0, len(repos))
+	for _, r := range repos {
+		args = append(args, r)
+	}
+	q := fmt.Sprintf(`
+SELECT id, comment, context_json, label, status, COALESCE(issue_url,''), created_at
+FROM feedback
+WHERE issue_url != '' AND repo IN (%s)
+ORDER BY id DESC LIMIT 500`, ph)
+	rows, err := s.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("store: list exported lite: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []ExportedLite
+	for rows.Next() {
+		var e ExportedLite
+		var createdAt string
+		if err := rows.Scan(&e.ID, &e.Comment, &e.ContextJSON, &e.Label, &e.Status, &e.IssueURL, &createdAt); err != nil {
+			return nil, fmt.Errorf("store: scan exported lite: %w", err)
+		}
+		e.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// ListVerifyPending returns items on a URL that are open or applied and have
+// no green verification result yet.
+func (s *Store) ListVerifyPending(ctx context.Context, url string) ([]VerifyPendingItem, error) {
+	const q = `
+SELECT id, selector, context_json
+FROM feedback
+WHERE url = ? AND status IN ('open','applied')
+  AND (verification_result IS NULL OR verification_result != 'green')
+ORDER BY created_at DESC`
+	rows, err := s.db.QueryContext(ctx, q, url)
+	if err != nil {
+		return nil, fmt.Errorf("store: list verify pending: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []VerifyPendingItem
+	for rows.Next() {
+		var v VerifyPendingItem
+		if err := rows.Scan(&v.ID, &v.Selector, &v.ContextJSON); err != nil {
+			return nil, fmt.Errorf("store: scan verify pending: %w", err)
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
 }
 
 func splitCSV(s string) []string {

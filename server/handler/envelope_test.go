@@ -190,6 +190,47 @@ func TestBuildEnvelopeLegacy(t *testing.T) {
 	_ = BuildEnvelope(store.Feedback{ContextJSON: "{bad json"})
 }
 
+func TestBuildEnvelopeLifecycle(t *testing.T) {
+	at := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	vt := at.Add(time.Minute)
+	rt := at.Add(2 * time.Minute)
+	f := store.Feedback{
+		ID:                 1,
+		URL:                "https://app.example.com/",
+		Selector:           "button",
+		Comment:            "c",
+		Status:             store.StatusVerified,
+		VerificationResult: "green",
+		VerificationDetail: "passed",
+		AppliedAt:          &at,
+		VerifiedAt:         &vt,
+		ResolvedAt:         &rt,
+		CreatedAt:          at,
+	}
+
+	env := BuildEnvelope(f)
+
+	if env["status"] != "verified" {
+		t.Fatalf("status = %v, want verified", env["status"])
+	}
+	if env["applied_at"] != "2026-10-01T12:00:00Z" {
+		t.Fatalf("applied_at = %v", env["applied_at"])
+	}
+	if env["verified_at"] != "2026-10-01T12:01:00Z" {
+		t.Fatalf("verified_at = %v", env["verified_at"])
+	}
+	if env["resolved_at"] != "2026-10-01T12:02:00Z" {
+		t.Fatalf("resolved_at = %v", env["resolved_at"])
+	}
+	ver, _ := env["verification"].(map[string]any)
+	if ver["result"] != "green" {
+		t.Fatalf("verification.result = %v", ver["result"])
+	}
+	if ver["detail"] != "passed" {
+		t.Fatalf("verification.detail = %v", ver["detail"])
+	}
+}
+
 func TestBuildIssueContentSections(t *testing.T) {
 	ctx := map[string]any{
 		"url":    "https://app.example.com/",

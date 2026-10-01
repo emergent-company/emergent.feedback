@@ -3,12 +3,16 @@ package handler
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
+	"github.com/emergent-company/emergent.feedback/server/github"
 	"github.com/emergent-company/emergent.feedback/server/middleware"
 	"github.com/emergent-company/emergent.feedback/server/store"
 	"github.com/labstack/echo/v4"
@@ -198,4 +202,231 @@ func (h *Handler) HandleDeleteFeedback(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "feedback not found or not owned by you")
 	}
 	return c.NoContent(http.StatusNoContent)
+}
+
+// parseFeedbackID extracts and validates the :id path param.
+func parseFeedbackID(c echo.Context) (int64, error) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return 0, echo.NewHTTPError(http.StatusBadRequest, "invalid feedback id")
+	}
+	return id, nil
+}
+
+// ownedFeedback loads a feedback item and enforces ownership.
+func (h *Handler) ownedFeedback(c echo.Context, id int64) (store.Feedback, error) {
+	f, err := h.Store.Get(c.Request().Context(), id)
+	if err != nil {
+		return store.Feedback{}, echo.NewHTTPError(http.StatusNotFound, "feedback not found")
+	}
+	if f.GitHubUser != middleware.GetLogin(c) {
+		return store.Feedback{}, echo.NewHTTPError(http.StatusForbidden, "feedback not found")
+	}
+	return f, nil
+}
+
+// issueNumberFromURL extracts the issue number from a GitHub issue URL.
+func issueNumberFromURL(issueURL string) (int64, bool) {
+	u, err := url.Parse(issueURL)
+	if err != nil {
+		return 0, false
+	}
+	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
+	if len(parts) == 0 {
+		return 0, false
+	}
+	n, err := strconv.ParseInt(parts[len(parts)-1], 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	return n, true
+}
+
+// commentOnIssue posts a best-effort comment to the item's GitHub issue.
+func (h *Handler) commentOnIssue(ctx context.Context, f store.Feedback, body string) error {
+	if f.IssueURL == "" {
+		return nil
+	}
+	num, ok := issueNumberFromURL(f.IssueURL)
+	if !ok {
+		return fmt.Errorf("cannot parse issue number from %q", f.IssueURL)
+	}
+	token, err := h.GHConfig.InstallationToken(ctx)
+	if err != nil {
+		return err
+	}
+	return github.CommentIssue(ctx, token, f.Repo, num, body)
+}
+
+// closeIssue closes the item's GitHub issue and updates local state.
+func (h *Handler) closeIssue(ctx context.Context, f store.Feedback) error {
+	if f.IssueURL == "" {
+		return nil
+	}
+	num, ok := issueNumberFromURL(f.IssueURL)
+	if !ok {
+		return fmt.Errorf("cannot parse issue number from %q", f.IssueURL)
+	}
+	token, err := h.GHConfig.InstallationToken(ctx)
+	if err != nil {
+		return err
+	}
+	if err := github.UpdateIssueState(ctx, token, f.Repo, num, "closed"); err != nil {
+		return err
+	}
+	_ = h.Store.SetGitHubIssueState(ctx, num, f.Repo, "closed")
+	return nil
+}
+
+func statusComment(action, summary string) string {
+	if summary == "" {
+		return fmt.Sprintf("Feedback %s.", action)
+	}
+	return fmt.Sprintf("Feedback %s: %s", action, summary)
+}
+
+// HandleMarkApplied handles POST /feedback/:id/applied.
+func (h *Handler) HandleMarkApplied(c echo.Context) error {
+	id, err := parseFeedbackID(c)
+	if err != nil {
+		return err
+	}
+	f, err := h.ownedFeedback(c, id)
+	if err != nil {
+		return err
+	}
+	var req struct {
+		Summary string `json:"summary"`
+	}
+	_ = c.Bind(&req)
+
+	ctx := c.Request().Context()
+	if err := h.Store.SetStatus(ctx, id, store.StatusApplied, middleware.GetLogin(c), req.Summary); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to mark applied")
+	}
+	if err := h.commentOnIssue(ctx, f, statusComment("applied", req.Summary)); err != nil {
+		c.Logger().Warnf("mark applied: github comment: %v", err)
+	}
+	return c.JSON(http.StatusOK, map[string]any{"id": id, "status": "applied"})
+}
+
+// HandleResolve handles POST /feedback/:id/resolve.
+func (h *Handler) HandleResolve(c echo.Context) error {
+	id, err := parseFeedbackID(c)
+	if err != nil {
+		return err
+	}
+	f, err := h.ownedFeedback(c, id)
+	if err != nil {
+		return err
+	}
+	var req struct {
+		Summary string `json:"summary"`
+	}
+	_ = c.Bind(&req)
+
+	ctx := c.Request().Context()
+	if err := h.Store.SetStatus(ctx, id, store.StatusResolved, middleware.GetLogin(c), req.Summary); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to resolve")
+	}
+	if err := h.commentOnIssue(ctx, f, statusComment("resolved", req.Summary)); err != nil {
+		c.Logger().Warnf("resolve: github comment: %v", err)
+	}
+	if err := h.closeIssue(ctx, f); err != nil {
+		c.Logger().Warnf("resolve: github close: %v", err)
+	}
+	return c.JSON(http.StatusOK, map[string]any{"id": id, "status": "resolved"})
+}
+
+// HandleVerifyResult handles POST /feedback/:id/verify-result.
+func (h *Handler) HandleVerifyResult(c echo.Context) error {
+	id, err := parseFeedbackID(c)
+	if err != nil {
+		return err
+	}
+	if _, err := h.ownedFeedback(c, id); err != nil {
+		return err
+	}
+	var req struct {
+		Result string `json:"result"`
+		Detail string `json:"detail"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+	if req.Result != "green" && req.Result != "amber" && req.Result != "red" {
+		return echo.NewHTTPError(http.StatusBadRequest, "result must be green, amber, or red")
+	}
+
+	ctx := c.Request().Context()
+	if err := h.Store.SetVerificationResult(ctx, id, req.Result, req.Detail); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to record verification")
+	}
+	if req.Result == "green" {
+		if err := h.Store.SetStatus(ctx, id, store.StatusVerified, middleware.GetLogin(c), ""); err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to mark verified")
+		}
+	}
+	return c.JSON(http.StatusOK, map[string]any{"id": id, "result": req.Result})
+}
+
+// HandleGetVerify handles GET /feedback/:id/verify.
+func (h *Handler) HandleGetVerify(c echo.Context) error {
+	id, err := parseFeedbackID(c)
+	if err != nil {
+		return err
+	}
+	f, err := h.ownedFeedback(c, id)
+	if err != nil {
+		return err
+	}
+
+	ctx := parseContext(f.ContextJSON)
+	var contract any
+	criteria := ""
+	if v, ok := ctx["verification"].(map[string]any); ok {
+		contract = v["contract"]
+		criteria = asString(v["criteria"])
+	}
+	return c.JSON(http.StatusOK, map[string]any{
+		"id":          f.ID,
+		"status":      string(f.Status),
+		"contract":    contract,
+		"criteria":    criteria,
+		"last_result": f.VerificationResult,
+		"last_detail": f.VerificationDetail,
+	})
+}
+
+// HandleVerifyPending handles GET /feedback/verify-pending?url=<url>.
+func (h *Handler) HandleVerifyPending(c echo.Context) error {
+	pageURL := c.QueryParam("url")
+	if pageURL == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "url query parameter is required")
+	}
+
+	items, err := h.Store.ListVerifyPending(c.Request().Context(), pageURL)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to list pending")
+	}
+
+	type pendingItem struct {
+		ID       int64  `json:"id"`
+		Selector string `json:"selector"`
+		Contract any    `json:"contract"`
+	}
+	out := make([]pendingItem, 0, len(items))
+	for _, it := range items {
+		ctx := parseContext(it.ContextJSON)
+		v, ok := ctx["verification"].(map[string]any)
+		if !ok {
+			continue
+		}
+		contract, has := v["contract"]
+		if !has || contract == nil {
+			continue
+		}
+		out = append(out, pendingItem{ID: it.ID, Selector: it.Selector, Contract: contract})
+	}
+	return c.JSON(http.StatusOK, out)
 }

@@ -93,6 +93,22 @@ CREATE TABLE IF NOT EXISTS user_tokens (
   updated_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
 );
 `},
+	{5, "feedback_lifecycle", `
+ALTER TABLE feedback ADD COLUMN applied_at TEXT;
+ALTER TABLE feedback ADD COLUMN verified_at TEXT;
+ALTER TABLE feedback ADD COLUMN resolved_at TEXT;
+ALTER TABLE feedback ADD COLUMN verification_result TEXT;
+ALTER TABLE feedback ADD COLUMN verification_detail TEXT;
+CREATE TABLE IF NOT EXISTS feedback_events (
+  seq INTEGER PRIMARY KEY AUTOINCREMENT,
+  feedback_id INTEGER NOT NULL,
+  type TEXT NOT NULL,
+  actor TEXT,
+  detail TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+);
+CREATE INDEX IF NOT EXISTS feedback_events_feedback_idx ON feedback_events(feedback_id);
+`},
 }
 
 // Store wraps the SQLite database connection.

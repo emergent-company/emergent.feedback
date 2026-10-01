@@ -47,6 +47,26 @@ func (h *Handler) MCPServer() *mcp.Server {
 		Description: "List exported feedback items within the key's repo scope, sorted by source confidence (exact first); optional filters for repo, status, type, and since.",
 	}, h.toolFeedbackList)
 
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "feedback_mark_applied",
+		Description: "Record that a fix was applied to a feedback item; requires API-key authentication and repo scope.",
+	}, h.toolMarkApplied)
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "feedback_mark_resolved",
+		Description: "Record that a feedback item is resolved; requires API-key authentication and repo scope.",
+	}, h.toolMarkResolved)
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "feedback_verify",
+		Description: "Return the verification contract and last result for a feedback item; requires API-key authentication and repo scope.",
+	}, h.toolFeedbackVerify)
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "feedback_watch",
+		Description: "Long-poll for lifecycle events (applied/verified/resolved/open) since a sequence number; requires API-key authentication and repo scope.",
+	}, h.toolFeedbackWatch)
+
 	return srv
 }
 
@@ -219,10 +239,9 @@ type feedbackListItem struct {
 	IssueURL         string `json:"issue_url"`
 }
 
-// toolFeedbackList lists exported feedback for the key's repo scope. It uses
-// the existing ListExported store method (the only repo-scoped list), then
-// hydrates context via Get to compute source confidence and type, and finally
-// sorts by source confidence descending (exact first).
+// toolFeedbackList lists exported feedback for the key's repo scope via a
+// lightweight store query (no screenshot/snapshot blobs), then sorts by source
+// confidence descending (exact first).
 func (h *Handler) toolFeedbackList(ctx context.Context, _ *mcp.CallToolRequest, in feedbackListInput) (*mcp.CallToolResult, []feedbackListItem, error) {
 	ti := auth.TokenInfoFromContext(ctx)
 	if ti == nil {
@@ -239,7 +258,7 @@ func (h *Handler) toolFeedbackList(ctx context.Context, _ *mcp.CallToolRequest, 
 		repos = ti.Scopes
 	}
 
-	items, err := h.Store.ListExported(ctx, repos)
+	items, err := h.Store.ListExportedLite(ctx, repos)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -253,31 +272,27 @@ func (h *Handler) toolFeedbackList(ctx context.Context, _ *mcp.CallToolRequest, 
 	}
 
 	out := make([]feedbackListItem, 0, len(items))
-	for _, f := range items {
+	for _, it := range items {
+		f := store.Feedback{Status: it.Status, IssueURL: it.IssueURL, Label: it.Label, Comment: it.Comment}
 		status := deriveStatus(f)
 		if in.Status != "" && status != in.Status {
 			continue
 		}
-		if !since.IsZero() && f.CreatedAt.Before(since) {
+		if !since.IsZero() && it.CreatedAt.Before(since) {
 			continue
 		}
-
-		full, err := h.Store.Get(ctx, f.ID)
-		if err != nil {
-			continue
-		}
-		c := parseContext(full.ContextJSON)
-		typ := deriveType(c, full)
+		c := parseContext(it.ContextJSON)
+		typ := deriveType(c, f)
 		if in.Type != "" && typ != in.Type {
 			continue
 		}
 		out = append(out, feedbackListItem{
-			ID:               full.ID,
-			Summary:          deriveSummary(c, full),
+			ID:               it.ID,
+			Summary:          deriveSummary(c, f),
 			Type:             typ,
 			Status:           status,
 			SourceConfidence: sourceConfidence(c),
-			IssueURL:         full.IssueURL,
+			IssueURL:         it.IssueURL,
 		})
 	}
 
@@ -286,4 +301,151 @@ func (h *Handler) toolFeedbackList(ctx context.Context, _ *mcp.CallToolRequest, 
 	})
 
 	return nil, out, nil
+}
+
+type markInput struct {
+	FeedbackID int64  `json:"feedback_id" jsonschema:"the feedback row id"`
+	Summary    string `json:"summary,omitempty" jsonschema:"optional summary to record"`
+}
+
+type markOutput struct {
+	ID     int64  `json:"id"`
+	Status string `json:"status"`
+}
+
+func (h *Handler) toolMarkApplied(ctx context.Context, _ *mcp.CallToolRequest, in markInput) (*mcp.CallToolResult, markOutput, error) {
+	if _, err := h.scopedFeedback(ctx, in.FeedbackID); err != nil {
+		return nil, markOutput{}, err
+	}
+	if err := h.Store.SetStatus(ctx, in.FeedbackID, store.StatusApplied, "", in.Summary); err != nil {
+		return nil, markOutput{}, err
+	}
+	return nil, markOutput{ID: in.FeedbackID, Status: string(store.StatusApplied)}, nil
+}
+
+func (h *Handler) toolMarkResolved(ctx context.Context, _ *mcp.CallToolRequest, in markInput) (*mcp.CallToolResult, markOutput, error) {
+	if _, err := h.scopedFeedback(ctx, in.FeedbackID); err != nil {
+		return nil, markOutput{}, err
+	}
+	if err := h.Store.SetStatus(ctx, in.FeedbackID, store.StatusResolved, "", in.Summary); err != nil {
+		return nil, markOutput{}, err
+	}
+	return nil, markOutput{ID: in.FeedbackID, Status: string(store.StatusResolved)}, nil
+}
+
+type feedbackVerifyOutput struct {
+	Status     string `json:"status"`
+	Contract   any    `json:"contract"`
+	LastResult string `json:"last_result"`
+	LastDetail string `json:"last_detail"`
+}
+
+func (h *Handler) toolFeedbackVerify(ctx context.Context, _ *mcp.CallToolRequest, in feedbackIDInput) (*mcp.CallToolResult, feedbackVerifyOutput, error) {
+	f, err := h.scopedFeedback(ctx, in.FeedbackID)
+	if err != nil {
+		return nil, feedbackVerifyOutput{}, err
+	}
+
+	c := parseContext(f.ContextJSON)
+	var contract any
+	if v, ok := c["verification"].(map[string]any); ok {
+		contract = v["contract"]
+	}
+	out := feedbackVerifyOutput{
+		Status:     string(f.Status),
+		Contract:   contract,
+		LastResult: f.VerificationResult,
+		LastDetail: f.VerificationDetail,
+	}
+
+	if isHumanContract(contract) {
+		instruction := "This feedback's verification contract is `human`: ask the reporter to confirm the fix, then call feedback_mark_resolved (or POST /feedback/:id/verify-result with result=green)."
+		res := &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: instruction}}}
+		return res, out, nil
+	}
+	return nil, out, nil
+}
+
+func isHumanContract(contract any) bool {
+	m, ok := contract.(map[string]any)
+	if !ok {
+		return false
+	}
+	return asString(m["kind"]) == "human"
+}
+
+type feedbackWatchInput struct {
+	SinceSeq    int64 `json:"since_seq,omitempty" jsonschema:"resume from this event sequence (0 = from the beginning)"`
+	WaitSeconds int   `json:"wait_seconds,omitempty" jsonschema:"max seconds to wait for events (capped at 25)"`
+}
+
+type feedbackEventOutput struct {
+	Seq        int64  `json:"seq"`
+	FeedbackID int64  `json:"feedback_id"`
+	Type       string `json:"type"`
+	Actor      string `json:"actor"`
+	Detail     string `json:"detail"`
+	CreatedAt  string `json:"created_at"`
+}
+
+type feedbackWatchOutput struct {
+	Events  []feedbackEventOutput `json:"events"`
+	NextSeq int64                 `json:"next_seq"`
+}
+
+func (h *Handler) toolFeedbackWatch(ctx context.Context, _ *mcp.CallToolRequest, in feedbackWatchInput) (*mcp.CallToolResult, feedbackWatchOutput, error) {
+	ti := auth.TokenInfoFromContext(ctx)
+	if ti == nil {
+		return nil, feedbackWatchOutput{}, fmt.Errorf("unauthenticated")
+	}
+
+	wait := in.WaitSeconds
+	if wait < 0 {
+		wait = 0
+	}
+	if wait > 25 {
+		wait = 25
+	}
+	since := in.SinceSeq
+	deadline := time.Now().Add(time.Duration(wait) * time.Second)
+
+	for {
+		var events []store.FeedbackEvent
+		var err error
+		if repoInScope("*", ti.Scopes) {
+			events, err = h.Store.ListEventsSince(ctx, since, 200)
+		} else {
+			events, err = h.Store.ListEventsSinceForRepos(ctx, since, 200, ti.Scopes)
+		}
+		if err != nil {
+			return nil, feedbackWatchOutput{}, err
+		}
+		if len(events) > 0 {
+			return nil, watchOutput(events), nil
+		}
+		if time.Now().After(deadline) {
+			return nil, feedbackWatchOutput{Events: []feedbackEventOutput{}, NextSeq: since}, nil
+		}
+		select {
+		case <-ctx.Done():
+			return nil, feedbackWatchOutput{}, ctx.Err()
+		case <-time.After(400 * time.Millisecond):
+		}
+	}
+}
+
+func watchOutput(events []store.FeedbackEvent) feedbackWatchOutput {
+	out := feedbackWatchOutput{Events: make([]feedbackEventOutput, 0, len(events))}
+	for _, e := range events {
+		out.Events = append(out.Events, feedbackEventOutput{
+			Seq:        e.Seq,
+			FeedbackID: e.FeedbackID,
+			Type:       e.Type,
+			Actor:      e.Actor,
+			Detail:     e.Detail,
+			CreatedAt:  e.CreatedAt.UTC().Format(time.RFC3339),
+		})
+		out.NextSeq = e.Seq
+	}
+	return out
 }
