@@ -4,13 +4,16 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/emergent-company/emergent.feedback/server/github"
 	"github.com/emergent-company/emergent.feedback/server/middleware"
@@ -101,6 +104,8 @@ func (h *Handler) HandleCreateFeedback(c echo.Context) error {
 		return err
 	}
 
+	dedupeKey := computeDedupeKey(req.Repo, req.Selector, ctxJSON, req.Comment)
+
 	f, err := h.Store.Create(c.Request().Context(), store.CreateParams{
 		URL:         req.URL,
 		Selector:    req.Selector,
@@ -109,6 +114,7 @@ func (h *Handler) HandleCreateFeedback(c echo.Context) error {
 		Screenshot:  screenshot,
 		Snapshot:    snapshot,
 		Replay:      replay,
+		DedupeKey:   dedupeKey,
 		GitHubUser:  middleware.GetLogin(c),
 		Repo:        req.Repo,
 		Label:       req.Label,
@@ -117,10 +123,48 @@ func (h *Handler) HandleCreateFeedback(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to save feedback")
 	}
 
+	// Optional async autotitle (LLM → heuristic); never blocks the response.
+	if llmEnabled() {
+		go h.persistAutoTitle(f.ID, req.Comment, req.Selector, ctxJSON)
+	}
+
 	return c.JSON(http.StatusCreated, map[string]any{
 		"id":         f.ID,
 		"created_at": f.CreatedAt,
 	})
+}
+
+// computeDedupeKey returns a stable sha256 key from repo + selector +
+// fingerprint.path + normalized comment.
+func computeDedupeKey(repo, selector, contextJSON, comment string) string {
+	fpPath := ""
+	if m := parseContext(contextJSON); m != nil {
+		if fp, ok := m["fingerprint"].(map[string]any); ok {
+			fpPath = asString(fp["path"])
+		}
+	}
+	normalized := normalizeComment(comment)
+	sum := sha256.Sum256([]byte(repo + "\x00" + selector + "\x00" + fpPath + "\x00" + normalized))
+	return hex.EncodeToString(sum[:])
+}
+
+// normalizeComment lowercases and collapses whitespace for stable comparison.
+func normalizeComment(s string) string {
+	return strings.Join(strings.Fields(strings.ToLower(s)), " ")
+}
+
+// persistAutoTitle computes a summary (LLM → heuristic) and stores it into the
+// item's context JSON `summary` field.
+func (h *Handler) persistAutoTitle(id int64, comment, selector, contextJSON string) {
+	ctx := parseContext(contextJSON)
+	f := store.Feedback{Selector: selector, Comment: comment}
+	summary := generateSummary(ctx, f)
+	if summary == "" {
+		return
+	}
+	persistCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_ = h.Store.SetContextSummary(persistCtx, id, summary)
 }
 
 // badgeSummary is the response shape for GET /feedback?url=...
@@ -364,6 +408,7 @@ func (h *Handler) HandleResolve(c echo.Context) error {
 	if err := h.closeIssue(ctx, f); err != nil {
 		c.Logger().Warnf("resolve: github close: %v", err)
 	}
+	h.fireNotify("resolved", "resolved", f)
 	return c.JSON(http.StatusOK, map[string]any{"id": id, "status": "resolved"})
 }
 
@@ -373,7 +418,8 @@ func (h *Handler) HandleVerifyResult(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	if _, err := h.ownedFeedback(c, id); err != nil {
+	f, err := h.ownedFeedback(c, id)
+	if err != nil {
 		return err
 	}
 	var req struct {
@@ -395,6 +441,7 @@ func (h *Handler) HandleVerifyResult(c echo.Context) error {
 		if err := h.Store.SetStatus(ctx, id, store.StatusVerified, middleware.GetLogin(c), ""); err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to mark verified")
 		}
+		h.fireNotify("verified", "verified", f)
 	}
 	return c.JSON(http.StatusOK, map[string]any{"id": id, "result": req.Result})
 }
@@ -477,6 +524,37 @@ func (h *Handler) HandleVerifyPending(c echo.Context) error {
 			continue
 		}
 		out = append(out, pendingItem{ID: it.ID, Selector: it.Selector, Contract: contract})
+	}
+	return c.JSON(http.StatusOK, out)
+}
+
+// HandleFeedbackStatus handles GET /feedback/status?url=<url> — returns the
+// caller's own items' status on a page (for reporter notification).
+func (h *Handler) HandleFeedbackStatus(c echo.Context) error {
+	pageURL := c.QueryParam("url")
+	if pageURL == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "url query parameter is required")
+	}
+
+	items, err := h.Store.ListStatusByURLAndUser(c.Request().Context(), pageURL, middleware.GetLogin(c))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to list status")
+	}
+
+	type statusItem struct {
+		ID       int64  `json:"id"`
+		Selector string `json:"selector"`
+		Status   string `json:"status"`
+		IssueURL string `json:"issue_url"`
+	}
+	out := make([]statusItem, 0, len(items))
+	for _, it := range items {
+		out = append(out, statusItem{
+			ID:       it.ID,
+			Selector: it.Selector,
+			Status:   string(it.Status),
+			IssueURL: it.IssueURL,
+		})
 	}
 	return c.JSON(http.StatusOK, out)
 }

@@ -27,6 +27,7 @@ import { redactText, redactAttributes } from "./redact";
 import { startConsoleCapture, getConsoleErrors } from "./console";
 import { startVerifyLoop, stopVerifyLoop } from "./verify";
 import { startReplay, getReplayPayloadAsync } from "./replay";
+import { startReporterNotify, stopReporterNotify } from "./notify";
 
 (function bootstrap() {
   if ((window as any).__feedbackOverlayLoaded) return;
@@ -53,10 +54,12 @@ import { startReplay, getReplayPayloadAsync } from "./replay";
       showIndicator(config.hotkey);
       activateOverlay();
       startVerifyLoop(api);
+      startReporterNotify(api);
     } else if (mode === "idle") {
       hideIndicator();
       deactivateOverlay();
       stopVerifyLoop();
+      stopReporterNotify();
     } else if (mode === "capturing" || mode === "commenting") {
       hideIndicator();
     }

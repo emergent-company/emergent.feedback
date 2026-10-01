@@ -95,6 +95,18 @@ func BuildEnvelope(f store.Feedback) map[string]any {
 	env["provenance"] = buildProvenance(ctx)
 	env["trust_order"] = trustOrder
 
+	// Dedupe (only when a key exists).
+	if f.DedupeKey != "" {
+		dedupe := map[string]any{"key": f.DedupeKey}
+		if f.DuplicateOf != 0 {
+			dedupe["duplicate_of"] = f.DuplicateOf
+		}
+		if len(f.PossibleDuplicates) > 0 {
+			dedupe["possible_duplicates"] = f.PossibleDuplicates
+		}
+		env["dedupe"] = dedupe
+	}
+
 	return env
 }
 
@@ -204,10 +216,14 @@ func validFeedbackType(v string) bool {
 }
 
 // deriveSummary returns a one-line summary, preferring an explicit context
-// summary and falling back to a truncated comment.
+// summary, then a deterministic heuristic (intent + element), then a truncated
+// comment.
 func deriveSummary(ctx map[string]any, f store.Feedback) string {
 	if v := asString(ctx["summary"]); v != "" {
 		return v
+	}
+	if s := heuristicSummary(ctx, f); s != "" {
+		return s
 	}
 	return truncate(f.Comment, 140)
 }

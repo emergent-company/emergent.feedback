@@ -90,7 +90,7 @@ func TestBuildEnvelopeFull(t *testing.T) {
 	if env["type"] != "bug" {
 		t.Fatalf("type = %v", env["type"])
 	}
-	if env["summary"] != "Button is unreadable in light mode." {
+	if env["summary"] != "Change text/icon passes WCAG AA (contrast >= 4.5:1) on UpgradeButton" {
 		t.Fatalf("summary = %v", env["summary"])
 	}
 	actor, _ := env["actor"].(map[string]any)

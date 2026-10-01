@@ -66,6 +66,13 @@ export interface ExportIssueResult {
   issue_number: number;
 }
 
+export interface FeedbackStatus {
+  id: number;
+  selector: string;
+  status: string;
+  issue_url: string;
+}
+
 export class APIClient {
   private base: string;
   private token: string | null = null;
@@ -211,6 +218,13 @@ export class APIClient {
   /** Fetch a single feedback item's verification contract and last result. */
   async getVerify(id: number): Promise<VerifyInfo> {
     return this.fetchJSON<VerifyInfo>(`/feedback/${id}/verify`);
+  }
+
+  /** List feedback items + statuses for a page URL. */
+  async listStatus(url: string): Promise<FeedbackStatus[]> {
+    return this.fetchJSON<FeedbackStatus[]>(
+      `/feedback/status?url=${encodeURIComponent(url)}`
+    );
   }
 
 }

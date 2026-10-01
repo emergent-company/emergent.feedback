@@ -233,6 +233,7 @@ func (h *Handler) toolFeedbackGet(ctx context.Context, _ *mcp.CallToolRequest, i
 		return nil, nil, err
 	}
 	if in.ResponseFormat == "detailed" {
+		f.ContextJSON = h.unmapContextConsole(ctx, f.Repo, f.ContextJSON)
 		return nil, BuildEnvelope(f), nil
 	}
 	return nil, BuildConciseEnvelope(f), nil

@@ -11,10 +11,12 @@ export interface ConsoleEntry {
   level: "error" | "warning";
   message: string;
   at: string; // ISO timestamp
+  stack?: string; // capture-time stack trace (redacted, ≤4000 chars)
 }
 
 const MAX_ENTRIES = 20;
 const MAX_MESSAGE = 1000;
+const MAX_STACK = 4000;
 
 let entries: ConsoleEntry[] = [];
 let started = false;
@@ -38,9 +40,24 @@ function sanitizeMessage(raw: string): string {
   return redacted.replace(/https?:\/\/[^\s"'<>)]+/g, (url) => sanitizeURL(url));
 }
 
-function push(level: ConsoleEntry["level"], message: string): void {
+/** Read a `.stack` off an arbitrary thrown value, if it is a string. */
+function errorStack(v: unknown): string | undefined {
+  if (v && typeof v === "object" && typeof (v as { stack?: unknown }).stack === "string") {
+    return (v as { stack: string }).stack;
+  }
+  return undefined;
+}
+
+/** Redact + truncate a stack trace. Server unmaps it against source maps. */
+function redactStack(stack: string): string {
+  return redactText(stack).slice(0, MAX_STACK);
+}
+
+function push(level: ConsoleEntry["level"], message: string, stack?: string): void {
   const trimmed = sanitizeMessage(message).slice(0, MAX_MESSAGE);
-  entries.push({ level, message: trimmed, at: new Date().toISOString() });
+  const entry: ConsoleEntry = { level, message: trimmed, at: new Date().toISOString() };
+  if (stack) entry.stack = redactStack(stack);
+  entries.push(entry);
   if (entries.length > MAX_ENTRIES) entries.shift();
 }
 
@@ -54,7 +71,7 @@ export function startConsoleCapture(): void {
   const origWarn = console.warn.bind(console);
 
   console.error = (...args: unknown[]) => {
-    push("error", args.map(stringify).join(" "));
+    push("error", args.map(stringify).join(" "), new Error().stack);
     origError(...args);
   };
   console.warn = (...args: unknown[]) => {
@@ -63,11 +80,11 @@ export function startConsoleCapture(): void {
   };
 
   window.addEventListener("error", (e: ErrorEvent) => {
-    push("error", stringify(e.error ?? e.message));
+    push("error", stringify(e.error ?? e.message), errorStack(e.error) ?? new Error().stack);
   });
 
   window.addEventListener("unhandledrejection", (e: PromiseRejectionEvent) => {
-    push("error", stringify(e.reason));
+    push("error", stringify(e.reason), errorStack(e.reason));
   });
 }
 

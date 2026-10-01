@@ -261,3 +261,47 @@ func TestExportedExcludedFromBadges(t *testing.T) {
 		t.Fatalf("exported status = %s, want exported", gotE.Status)
 	}
 }
+
+func TestDedupeDuplicateLink(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	key := "deadbeef-key"
+	f1, err := s.Create(ctx, CreateParams{URL: "https://app.example.com/", Selector: "button", Comment: "broken", GitHubUser: "alice", Repo: "org/repo", DedupeKey: key})
+	if err != nil {
+		t.Fatalf("Create first: %v", err)
+	}
+	if f1.DuplicateOf != 0 {
+		t.Fatalf("first item should not be a duplicate, got %d", f1.DuplicateOf)
+	}
+
+	f2, err := s.Create(ctx, CreateParams{URL: "https://app.example.com/", Selector: "button", Comment: "broken", GitHubUser: "bob", Repo: "org/repo", DedupeKey: key})
+	if err != nil {
+		t.Fatalf("Create duplicate: %v", err)
+	}
+	if f2.DuplicateOf != f1.ID {
+		t.Fatalf("duplicate_of = %d, want %d", f2.DuplicateOf, f1.ID)
+	}
+
+	events, err := s.ListEventsSince(ctx, 0, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dupCount := 0
+	for _, e := range events {
+		if e.Type == "duplicate" {
+			dupCount++
+		}
+	}
+	if dupCount != 1 {
+		t.Fatalf("duplicate events = %d, want 1", dupCount)
+	}
+
+	got, err := s.Get(ctx, f2.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.PossibleDuplicates) != 1 || got.PossibleDuplicates[0] != f1.ID {
+		t.Fatalf("possible_duplicates = %v, want [%d]", got.PossibleDuplicates, f1.ID)
+	}
+}

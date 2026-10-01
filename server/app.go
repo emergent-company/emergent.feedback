@@ -112,6 +112,7 @@ func buildRouter(s *store.Store, ghCfg *github.AppConfig, jwtSecret, allowedOrig
 	auth.GET("/me", h.HandleMe)
 	auth.GET("/feedback/list", h.HandleListFeedbackByURL)
 	auth.GET("/feedback/verify-pending", h.HandleVerifyPending)
+	auth.GET("/feedback/status", h.HandleFeedbackStatus)
 	auth.GET("/feedback/:id", h.HandleGetFeedback)
 	auth.GET("/feedback/:id/verify", h.HandleGetVerify)
 	auth.GET("/feedback/:id/replay", h.HandleGetReplay)
@@ -135,6 +136,7 @@ func buildRouter(s *store.Store, ghCfg *github.AppConfig, jwtSecret, allowedOrig
 
 	auth.POST("/feedback", h.HandleCreateFeedback, feedbackLimiter)
 	auth.POST("/issue/export", h.HandleExportIssue, exportLimiter)
+	auth.POST("/sourcemaps", h.HandleUploadSourcemaps)
 
 	// ── MCP server (API-key auth: DB keys scoped to repos, plus MCP_API_KEY bootstrap) ──
 	mcpSrv := h.MCPServer()

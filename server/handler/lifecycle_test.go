@@ -44,6 +44,7 @@ func newLifecycleHandler(t *testing.T) (*Handler, *store.Store, *echo.Echo) {
 	e.GET("/feedback/:id/verify", h.HandleGetVerify)
 	e.GET("/feedback/:id/replay", h.HandleGetReplay)
 	e.GET("/feedback/verify-pending", h.HandleVerifyPending)
+	e.GET("/feedback/status", h.HandleFeedbackStatus)
 	return h, s, e
 }
 

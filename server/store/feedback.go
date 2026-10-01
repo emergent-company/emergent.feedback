@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -45,6 +46,10 @@ type Feedback struct {
 
 	Replay     []byte
 	ReplaySize int
+
+	DedupeKey          string
+	DuplicateOf        int64
+	PossibleDuplicates []int64
 }
 
 // URLSummary is a lightweight projection returned for badge rendering.
@@ -64,6 +69,7 @@ type CreateParams struct {
 	Screenshot  []byte
 	Snapshot    []byte
 	Replay      []byte
+	DedupeKey   string
 	GitHubUser  string
 	Repo        string
 	Label       string
@@ -71,7 +77,8 @@ type CreateParams struct {
 
 // Create inserts a new feedback item and returns it with the generated ID and
 // timestamp. It also records a "created" lifecycle event so new items surface
-// in feedback_watch / ListEventsSince.
+// in feedback_watch / ListEventsSince, and links duplicates when a dedupe key
+// matches an existing open/applied item.
 func (s *Store) Create(ctx context.Context, p CreateParams) (Feedback, error) {
 	label := p.Label
 	if label == "" {
@@ -84,21 +91,35 @@ func (s *Store) Create(ctx context.Context, p CreateParams) (Feedback, error) {
 	}
 	defer tx.Rollback() //nolint:errcheck
 
+	// Dedupe: find an existing open/applied item sharing the dedupe key.
+	var duplicateOf int64
+	if p.DedupeKey != "" {
+		err := tx.QueryRowContext(ctx, `SELECT id FROM feedback WHERE repo = ? AND dedupe_key = ? AND status IN ('open','applied') ORDER BY id LIMIT 1`, p.Repo, p.DedupeKey).Scan(&duplicateOf)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return Feedback{}, fmt.Errorf("store: dedupe lookup: %w", err)
+		}
+	}
+
 	const q = `
-INSERT INTO feedback (url, selector, comment, context_json, screenshot, github_user, repo, label, snapshot, snapshot_size, replay, replay_size)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO feedback (url, selector, comment, context_json, screenshot, github_user, repo, label, snapshot, snapshot_size, replay, replay_size, dedupe_key, duplicate_of)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, created_at`
 
 	var f Feedback
 	var createdAt string
 	if err := tx.QueryRowContext(ctx, q,
-		p.URL, p.Selector, p.Comment, p.ContextJSON, p.Screenshot, p.GitHubUser, p.Repo, label, p.Snapshot, len(p.Snapshot), p.Replay, len(p.Replay),
+		p.URL, p.Selector, p.Comment, p.ContextJSON, p.Screenshot, p.GitHubUser, p.Repo, label, p.Snapshot, len(p.Snapshot), p.Replay, len(p.Replay), p.DedupeKey, duplicateOf,
 	).Scan(&f.ID, &createdAt); err != nil {
 		return Feedback{}, fmt.Errorf("store: create feedback: %w", err)
 	}
 
 	if _, err := tx.ExecContext(ctx, `INSERT INTO feedback_events (feedback_id, type, actor, detail) VALUES (?, 'created', ?, '')`, f.ID, p.GitHubUser); err != nil {
 		return Feedback{}, fmt.Errorf("store: create event: %w", err)
+	}
+	if duplicateOf != 0 {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO feedback_events (feedback_id, type, actor, detail) VALUES (?, 'duplicate', ?, ?)`, f.ID, p.GitHubUser, fmt.Sprintf("%d", duplicateOf)); err != nil {
+			return Feedback{}, fmt.Errorf("store: duplicate event: %w", err)
+		}
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -114,6 +135,8 @@ RETURNING id, created_at`
 	f.SnapshotSize = len(p.Snapshot)
 	f.Replay = p.Replay
 	f.ReplaySize = len(p.Replay)
+	f.DedupeKey = p.DedupeKey
+	f.DuplicateOf = duplicateOf
 	f.GitHubUser = p.GitHubUser
 	f.Repo = p.Repo
 	f.Label = label
@@ -129,7 +152,8 @@ SELECT id, url, selector, comment, context_json, screenshot, github_user, repo, 
        COALESCE(snapshot_size,0), snapshot,
        COALESCE(applied_at,''), COALESCE(verified_at,''), COALESCE(resolved_at,''),
        COALESCE(verification_result,''), COALESCE(verification_detail,''),
-       COALESCE(replay_size,0), replay
+       COALESCE(replay_size,0), replay,
+       COALESCE(dedupe_key,''), COALESCE(duplicate_of,0)
 FROM feedback WHERE id = ?`
 
 	var f Feedback
@@ -141,6 +165,7 @@ FROM feedback WHERE id = ?`
 		&appliedAt, &verifiedAt, &resolvedAt,
 		&f.VerificationResult, &f.VerificationDetail,
 		&f.ReplaySize, &f.Replay,
+		&f.DedupeKey, &f.DuplicateOf,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Feedback{}, fmt.Errorf("store: feedback %d not found", id)
@@ -152,6 +177,9 @@ FROM feedback WHERE id = ?`
 	f.AppliedAt = optionalTime(appliedAt)
 	f.VerifiedAt = optionalTime(verifiedAt)
 	f.ResolvedAt = optionalTime(resolvedAt)
+	if f.DedupeKey != "" {
+		f.PossibleDuplicates, _ = s.ListDedupeCandidates(ctx, f.Repo, f.DedupeKey, f.ID)
+	}
 	return f, nil
 }
 
@@ -484,6 +512,77 @@ ORDER BY created_at DESC`
 			return nil, fmt.Errorf("store: scan verify pending: %w", err)
 		}
 		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+// ListDedupeCandidates returns the IDs of other feedback items in repo sharing
+// a dedupe key (excluding excludeID), ordered by id.
+func (s *Store) ListDedupeCandidates(ctx context.Context, repo, key string, excludeID int64) ([]int64, error) {
+	const q = `SELECT id FROM feedback WHERE repo = ? AND dedupe_key = ? AND id != ? ORDER BY id`
+	rows, err := s.db.QueryContext(ctx, q, repo, key, excludeID)
+	if err != nil {
+		return nil, fmt.Errorf("store: list dedupe candidates: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("store: scan dedupe candidate: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// SetContextSummary sets the `summary` key inside a feedback item's context JSON
+// (best-effort autotitle persistence).
+func (s *Store) SetContextSummary(ctx context.Context, id int64, summary string) error {
+	var raw string
+	if err := s.db.QueryRowContext(ctx, `SELECT context_json FROM feedback WHERE id = ?`, id).Scan(&raw); err != nil {
+		return fmt.Errorf("store: read context for summary: %w", err)
+	}
+	m := map[string]any{}
+	if raw != "" && raw != "{}" {
+		_ = json.Unmarshal([]byte(raw), &m)
+	}
+	m["summary"] = summary
+	b, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	if _, err := s.db.ExecContext(ctx, `UPDATE feedback SET context_json = ? WHERE id = ?`, string(b), id); err != nil {
+		return fmt.Errorf("store: set summary: %w", err)
+	}
+	return nil
+}
+
+// FeedbackStatusItem is a lightweight status projection for a page.
+type FeedbackStatusItem struct {
+	ID       int64
+	Selector string
+	Status   FeedbackStatus
+	IssueURL string
+}
+
+// ListStatusByURLAndUser returns status info for the given user's items on a URL.
+func (s *Store) ListStatusByURLAndUser(ctx context.Context, url, githubUser string) ([]FeedbackStatusItem, error) {
+	const q = `SELECT id, selector, status, COALESCE(issue_url,'') FROM feedback WHERE url = ? AND github_user = ? ORDER BY id`
+	rows, err := s.db.QueryContext(ctx, q, url, githubUser)
+	if err != nil {
+		return nil, fmt.Errorf("store: list status: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []FeedbackStatusItem
+	for rows.Next() {
+		var it FeedbackStatusItem
+		if err := rows.Scan(&it.ID, &it.Selector, &it.Status, &it.IssueURL); err != nil {
+			return nil, fmt.Errorf("store: scan status: %w", err)
+		}
+		out = append(out, it)
 	}
 	return out, rows.Err()
 }
