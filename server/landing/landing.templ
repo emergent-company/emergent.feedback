@@ -65,7 +65,7 @@ templ LandingPage() {
 				<div>
 					<p class="mb-2 font-mono text-xs uppercase tracking-widest text-base-content/50">Install</p>
 					<div class="mockup-code w-full text-sm shadow-xl">
-						<pre data-prefix="&lt;/&gt;"><code>{ "<script src=\"/feedback-overlay.js\" data-repo=\"owner/repo\" async></script>" }</code></pre>
+						<pre data-prefix="&lt;/&gt;"><code>{ "<script src=\"https://feedback.emergent-company.ai/feedback-overlay.js\" data-api=\"https://feedback.emergent-company.ai\" data-repo=\"owner/repo\" async></script>" }</code></pre>
 					</div>
 					<div class="stats mt-6 w-full border border-base-300 bg-base-200/50">
 						<div class="stat">
@@ -340,8 +340,8 @@ templ LandingPage() {
 							<li>Email support</li>
 						</ul>
 						<div class="card-actions mt-6">
-							@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/feedback-overlay", Variant: ui.ButtonOutline, Block: true, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}) {
-								Contact us
+							@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/feedback-overlay/issues/new", Variant: ui.ButtonOutline, Block: true, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}) {
+								Talk to us
 							}
 						</div>
 					}
@@ -357,8 +357,8 @@ templ LandingPage() {
 							<li>Priority support</li>
 						</ul>
 						<div class="card-actions mt-6">
-							@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/feedback-overlay", Variant: ui.ButtonOutline, Block: true, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}) {
-								Contact us
+							@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/feedback-overlay/issues/new", Variant: ui.ButtonOutline, Block: true, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}) {
+								Talk to us
 							}
 						</div>
 					}
@@ -384,7 +384,7 @@ templ LandingPage() {
 					<div>
 						<p class="mb-2 font-mono text-xs uppercase tracking-widest text-base-content/50">Client</p>
 						<div class="mockup-code w-full text-sm">
-							<pre data-prefix="&lt;/&gt;"><code>{ "<script src=\"/feedback-overlay.js\" data-repo=\"owner/repo\" async></script>" }</code></pre>
+							<pre data-prefix="&lt;/&gt;"><code>{ "<script src=\"https://feedback.your-domain.com/feedback-overlay.js\" data-api=\"https://feedback.your-domain.com\" data-repo=\"owner/repo\" async></script>" }</code></pre>
 						</div>
 						<p class="mb-2 mt-6 font-mono text-xs uppercase tracking-widest text-base-content/50">Server</p>
 						<div class="mockup-code w-full text-sm">
@@ -404,21 +404,21 @@ templ LandingPage() {
 				</div>
 				<div class="mt-8 flex flex-col gap-3">
 					<div class="collapse collapse-arrow border border-base-300 bg-base-100">
-						<input type="radio" name="faq" checked="checked"/>
+						<input type="radio" name="faq" checked="checked" aria-label="What happens to my data, and what gets redacted?"/>
 						<div class="collapse-title font-medium">What happens to my data, and what gets redacted?</div>
 						<div class="collapse-content text-sm text-base-content/75">
-							<p>Captures are redacted before they leave the page. Password fields and anything marked with a data attribute are stripped from the DOM snapshot, and screenshots can be masked. Data lives in the store you configure — self-hosted deploys keep it entirely on your infrastructure.</p>
+							<p>Captures are redacted on the way out: sensitive attributes and query parameters are stripped from the DOM snapshot, and sensitive input values (passwords, tokens, keys) are removed from session history. The selected element's HTML and its screenshot are captured as-is, so check them before you file.</p>
 						</div>
 					</div>
 					<div class="collapse collapse-arrow border border-base-300 bg-base-100">
-						<input type="radio" name="faq"/>
+						<input type="radio" name="faq" aria-label="Can I change the hotkey?"/>
 						<div class="collapse-title font-medium">Can I change the hotkey?</div>
 						<div class="collapse-content text-sm text-base-content/75">
 							<p>Yes. The default is Alt+Shift, and you can override it with a data attribute on the script tag so it never collides with your own shortcuts.</p>
 						</div>
 					</div>
 					<div class="collapse collapse-arrow border border-base-300 bg-base-100">
-						<input type="radio" name="faq"/>
+						<input type="radio" name="faq" aria-label="Which auth providers are supported today?"/>
 						<div class="collapse-title font-medium">Which auth providers are supported today?</div>
 						<div class="collapse-content text-sm text-base-content/75">
 							<p>GitHub only, for now. Sign-in and issue filing share the same GitHub App, so there is nothing else to configure. More providers are on the roadmap.</p>
