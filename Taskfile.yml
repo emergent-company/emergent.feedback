@@ -102,8 +102,15 @@ tasks:
 
   # ── Testing ───────────────────────────────────────────────────────────────────
 
+  test:client:
+    desc: "Run client JS unit tests"
+    dir: client
+    cmds:
+      - npm test
+
   test:
-    desc: "Run Go tests"
+    desc: "Run Go and client tests"
+    deps: [test:client]
     cmds:
       - go test ./...
 

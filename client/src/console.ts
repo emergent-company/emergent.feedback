@@ -56,7 +56,7 @@ function errorStack(v: unknown): string | undefined {
 }
 
 /** Shorten an absolute filesystem path to its last 3 path segments. */
-function shortenFramePath(path: string): string {
+export function shortenFramePath(path: string): string {
   // URL / scheme (http:, https:, webpack:, file:) — keep as-is.
   if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(path)) return path;
   // Windows absolute path (C:\... or C:/...).
@@ -116,7 +116,7 @@ function parseStackLine(line: string): StackFrame | undefined {
 }
 
 /** Split a raw stack trace into frames, dropping unparseable lines. */
-function parseStack(raw: string): StackFrame[] {
+export function parseStack(raw: string): StackFrame[] {
   const frames: StackFrame[] = [];
   for (const line of raw.split(/\r?\n/)) {
     const frame = parseStackLine(line);
@@ -126,7 +126,7 @@ function parseStack(raw: string): StackFrame[] {
 }
 
 /** Redact + truncate the raw stack string for humans. */
-function redactStack(stack: string): string {
+export function redactStack(stack: string): string {
   return redactText(stack).slice(0, MAX_STACK);
 }
 
