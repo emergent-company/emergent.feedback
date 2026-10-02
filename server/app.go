@@ -66,6 +66,7 @@ func buildRouter(s *store.Store, ghCfg *github.AppConfig, jwtSecret, allowedOrig
 	// ── Static: serve embedded emergent-feedback.js ────────────────────────────
 	staticFS, _ := fs.Sub(staticFiles, "static")
 	e.GET("/emergent-feedback.js", echo.WrapHandler(http.FileServer(http.FS(staticFS))))
+	e.GET("/emergent-feedback-replay.js", echo.WrapHandler(http.FileServer(http.FS(staticFS))))
 
 	// ── go-daisy static assets (CSS/JS) ───────────────────────────────────────
 	e.GET("/static/*", echo.WrapHandler(staticfs.Handler("/static/")))

@@ -3,8 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --minify --format=iife --global-name=EmergentFeedback --outfile=../server/static/emergent-feedback.js",
-    "build:dev": "esbuild src/index.ts --bundle --format=iife --global-name=EmergentFeedback --outfile=../server/static/emergent-feedback.js --sourcemap",
+    "build": "esbuild src/index.ts --bundle --minify --format=iife --global-name=EmergentFeedback --outfile=../server/static/emergent-feedback.js && esbuild replay.entry.ts --bundle --minify --format=iife --global-name=EmergentFeedbackReplay --outfile=../server/static/emergent-feedback-replay.js",
+    "build:replay": "esbuild replay.entry.ts --bundle --minify --format=iife --global-name=EmergentFeedbackReplay --outfile=../server/static/emergent-feedback-replay.js",
+    "build:dev": "esbuild src/index.ts --bundle --format=iife --global-name=EmergentFeedback --outfile=../server/static/emergent-feedback.js --sourcemap && esbuild replay.entry.ts --bundle --format=iife --global-name=EmergentFeedbackReplay --outfile=../server/static/emergent-feedback-replay.js --sourcemap",
     "watch": "esbuild src/index.ts --bundle --format=iife --global-name=EmergentFeedback --outfile=../server/static/emergent-feedback.js --sourcemap --watch"
   },
   "dependencies": {

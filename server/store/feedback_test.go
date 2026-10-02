@@ -341,3 +341,149 @@ func TestListExportedLiteAll(t *testing.T) {
 		t.Fatalf("scoped = %v, want only org/a item %d", scoped, f1.ID)
 	}
 }
+
+func TestSetContextSummaryNoClobberOnMalformed(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	raw := `{"source":{"confidence":"exact"},"intent":{"action":"fix"}`
+	f, err := s.Create(ctx, CreateParams{
+		URL:         "https://app.example.com/",
+		Selector:    "button",
+		Comment:     "broken",
+		ContextJSON: raw,
+		GitHubUser:  "alice",
+		Repo:        "org/repo",
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	if err := s.SetContextSummary(ctx, f.ID, "my summary"); err == nil {
+		t.Fatal("expected error on malformed context, got nil")
+	}
+
+	got, err := s.Get(ctx, f.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ContextJSON != raw {
+		t.Fatalf("context was clobbered:\n got %q\nwant %q", got.ContextJSON, raw)
+	}
+}
+
+func TestSetContextSummaryPreservesExisting(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	raw := `{"source":{"confidence":"exact"},"intent":{"action":"fix"}}`
+	f, err := s.Create(ctx, CreateParams{
+		URL:         "https://app.example.com/",
+		Selector:    "button",
+		Comment:     "broken",
+		ContextJSON: raw,
+		GitHubUser:  "alice",
+		Repo:        "org/repo",
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	if err := s.SetContextSummary(ctx, f.ID, "my summary"); err != nil {
+		t.Fatalf("SetContextSummary: %v", err)
+	}
+	got, err := s.Get(ctx, f.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ContextJSON != `{"intent":{"action":"fix"},"source":{"confidence":"exact"},"summary":"my summary"}` {
+		t.Fatalf("unexpected context:\n%s", got.ContextJSON)
+	}
+}
+
+func TestSetVerificationResultAmberRedNoVerifiedAt(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+	f := createTestFeedback(t, s, ctx)
+
+	for _, result := range []string{"amber", "red"} {
+		if err := s.SetVerificationResult(ctx, f.ID, result, "still broken"); err != nil {
+			t.Fatalf("SetVerificationResult(%s): %v", result, err)
+		}
+		got, err := s.Get(ctx, f.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.VerificationResult != result {
+			t.Fatalf("verification_result = %q, want %q", got.VerificationResult, result)
+		}
+		if got.VerifiedAt != nil {
+			t.Fatalf("verified_at should be nil for %s, got %v", result, got.VerifiedAt)
+		}
+	}
+
+	// green still records verified_at.
+	if err := s.SetVerificationResult(ctx, f.ID, "green", "passed"); err != nil {
+		t.Fatalf("SetVerificationResult(green): %v", err)
+	}
+	got, err := s.Get(ctx, f.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.VerifiedAt == nil {
+		t.Fatal("verified_at not set for green")
+	}
+}
+
+func TestDeleteCascadesEvents(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+	f := createTestFeedback(t, s, ctx)
+
+	// One created event exists before delete.
+	events, err := s.ListEventsSince(ctx, 0, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("events before delete = %d, want 1", len(events))
+	}
+
+	if err := s.Delete(ctx, f.ID, "alice"); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+
+	events, err = s.ListEventsSince(ctx, 0, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 0 {
+		t.Fatalf("events after delete = %d, want 0 (orphaned events)", len(events))
+	}
+}
+
+func TestDeleteWrongOwnerPreservesEvents(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+	f := createTestFeedback(t, s, ctx)
+
+	if err := s.Delete(ctx, f.ID, "bob"); err == nil {
+		t.Fatal("expected error deleting item not owned by bob")
+	}
+
+	// The item and its event must remain.
+	got, err := s.Get(ctx, f.ID)
+	if err != nil {
+		t.Fatalf("item should still exist: %v", err)
+	}
+	if got.ID != f.ID {
+		t.Fatalf("id = %d, want %d", got.ID, f.ID)
+	}
+	events, err := s.ListEventsSince(ctx, 0, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("events = %d, want 1 (event must not be orphaned)", len(events))
+	}
+}

@@ -28,6 +28,8 @@ export interface OverlayConfig {
   replay: boolean;
   /** Replay buffer window in ms. Set via data-replay-buffer-ms (default 60000). */
   replayBufferMs?: number;
+  /** Explicit URL for the lazy replay bundle. Set via data-replay-src. */
+  replaySrc?: string;
 }
 
 function getScriptTag(): HTMLScriptElement | null {
@@ -71,6 +73,7 @@ export function readConfig(): OverlayConfig {
     Number.isFinite(parsedReplayBufferMs) && parsedReplayBufferMs > 0
       ? parsedReplayBufferMs
       : undefined;
+  const replaySrc = tag?.dataset.replaySrc?.trim() || undefined;
 
   return {
     apiBase,
@@ -83,5 +86,6 @@ export function readConfig(): OverlayConfig {
     sessionIdSelector,
     replay,
     ...(replayBufferMs !== undefined ? { replayBufferMs } : {}),
+    ...(replaySrc !== undefined ? { replaySrc } : {}),
   };
 }

@@ -167,7 +167,7 @@ func llmTitle(ctx map[string]any, f store.Feedback) (string, bool) {
 func titlePrompt(ctx map[string]any, f store.Feedback) string {
 	var b strings.Builder
 	if f.Comment != "" {
-		b.WriteString("Comment: " + f.Comment + "\n")
+		b.WriteString("Comment: " + redactSecrets(f.Comment) + "\n")
 	}
 	intent := getMap(ctx, "intent")
 	if action := strVal(intent["action"]); action != "" {

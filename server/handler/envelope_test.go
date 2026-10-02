@@ -190,6 +190,63 @@ func TestBuildEnvelopeLegacy(t *testing.T) {
 	_ = BuildEnvelope(store.Feedback{ContextJSON: "{bad json"})
 }
 
+func TestBuildEnvelopeNestedRepro(t *testing.T) {
+	ctx := map[string]any{
+		"repro": map[string]any{
+			"steps":   []any{"Open page", "Click button"},
+			"console": []any{map[string]any{"level": "error", "message": "boom"}},
+			"network": []any{map[string]any{"method": "GET", "url": "/x"}},
+		},
+	}
+	ctxJSON, _ := json.Marshal(ctx)
+	f := store.Feedback{ID: 7, ContextJSON: string(ctxJSON), Selector: "button", Comment: "x"}
+
+	env := BuildEnvelope(f)
+	repro, ok := env["repro"].(map[string]any)
+	if !ok {
+		t.Fatalf("repro missing: %v", env)
+	}
+	if steps := stringSlice(repro["steps"]); len(steps) != 2 {
+		t.Fatalf("repro.steps = %v, want 2", repro["steps"])
+	}
+	if repro["console"] == nil || repro["network"] == nil {
+		t.Fatalf("repro.console/network missing: %v", repro)
+	}
+}
+
+func TestBuildEnvelopeReproTopLevelFallback(t *testing.T) {
+	ctx := map[string]any{
+		"steps":   []any{"Legacy step"},
+		"console": []any{map[string]any{"level": "warning"}},
+	}
+	ctxJSON, _ := json.Marshal(ctx)
+	f := store.Feedback{ID: 8, ContextJSON: string(ctxJSON), Selector: "button", Comment: "x"}
+
+	env := BuildEnvelope(f)
+	repro, ok := env["repro"].(map[string]any)
+	if !ok {
+		t.Fatalf("repro missing (top-level fallback): %v", env)
+	}
+	if repro["steps"] == nil || repro["console"] == nil {
+		t.Fatalf("top-level repro fields missing: %v", repro)
+	}
+}
+
+func TestBuildEnvelopeReplayRef(t *testing.T) {
+	f := store.Feedback{
+		ID:          9,
+		ContextJSON: `{"repro":{"steps":["a"]}}`,
+		Selector:    "button",
+		Comment:     "x",
+		Replay:      []byte{0x1f, 0x8b},
+	}
+	env := BuildEnvelope(f)
+	repro, _ := env["repro"].(map[string]any)
+	if repro["replay"] != "feedback://9/replay" {
+		t.Fatalf("repro.replay = %v, want feedback://9/replay", repro["replay"])
+	}
+}
+
 func TestBuildEnvelopeLifecycle(t *testing.T) {
 	at := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
 	vt := at.Add(time.Minute)

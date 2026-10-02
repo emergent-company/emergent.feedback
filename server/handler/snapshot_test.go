@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"compress/gzip"
+	"errors"
 	"testing"
 )
 
@@ -30,5 +31,35 @@ func TestDecodeSnapshotRoundTrip(t *testing.T) {
 func TestDecodeSnapshotInvalid(t *testing.T) {
 	if _, err := decodeSnapshot([]byte("not gzip")); err == nil {
 		t.Fatal("expected error for non-gzip input, got nil")
+	}
+}
+
+func TestGunzipOrRawRejectsOversize(t *testing.T) {
+	// ~20MB + 1 of data compresses tiny, so this exercises the decompression cap
+	// rather than the (already capped) compressed-size path.
+	var buf bytes.Buffer
+	gw := gzip.NewWriter(&buf)
+	big := make([]byte, maxDecompressedBytes+1)
+	if _, err := gw.Write(big); err != nil {
+		t.Fatalf("gzip write: %v", err)
+	}
+	if err := gw.Close(); err != nil {
+		t.Fatalf("gzip close: %v", err)
+	}
+
+	_, err := gunzipOrRaw(buf.Bytes())
+	if !errors.Is(err, errReplayTooLarge) {
+		t.Fatalf("expected errReplayTooLarge, got %v", err)
+	}
+}
+
+func TestGunzipOrRawPassthroughNonGzip(t *testing.T) {
+	raw := []byte("not gzip data")
+	got, err := gunzipOrRaw(raw)
+	if err != nil {
+		t.Fatalf("non-gzip should not error: %v", err)
+	}
+	if !bytes.Equal(got, raw) {
+		t.Fatalf("non-gzip passthrough = %q, want %q", got, raw)
 	}
 }

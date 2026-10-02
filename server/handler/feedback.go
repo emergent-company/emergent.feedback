@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -490,6 +491,9 @@ func (h *Handler) HandleGetReplay(c echo.Context) error {
 	}
 	data, err := gunzipOrRaw(f.Replay)
 	if err != nil {
+		if errors.Is(err, errReplayTooLarge) {
+			return echo.NewHTTPError(http.StatusRequestEntityTooLarge, "replay too large")
+		}
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to read replay")
 	}
 	return c.JSONBlob(http.StatusOK, data)

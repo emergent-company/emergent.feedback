@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/emergent-company/emergent.feedback/server/store"
 )
@@ -20,6 +21,44 @@ func TestSelectorShort(t *testing.T) {
 		if got := selectorShort(c.in); got != c.want {
 			t.Fatalf("selectorShort(%q) = %q, want %q", c.in, got, c.want)
 		}
+	}
+}
+
+func TestRuneTruncate(t *testing.T) {
+	if got := runeTruncate("hello", 10); got != "hello" {
+		t.Fatalf("short = %q", got)
+	}
+	if got := runeTruncate("abcdefgh", 3); got != "abc" {
+		t.Fatalf("truncate = %q, want abc", got)
+	}
+	// Multi-byte runes must not be split mid-sequence.
+	s := "héllo wörld"
+	if got := runeTruncate(s, 5); got != "héllo" {
+		t.Fatalf("rune truncate = %q, want %q", got, "héllo")
+	}
+	// Valid UTF-8 output even when a byte-boundary slice would break.
+	if !utf8.ValidString(runeTruncate("日本語のテキスト", 3)) {
+		t.Fatal("runeTruncate produced invalid UTF-8")
+	}
+}
+
+func TestSelectorShortRuneSafe(t *testing.T) {
+	// 60 multi-byte runes must not produce invalid UTF-8 or a split rune.
+	sel := "main > " + strings.Repeat("é", 80)
+	got := selectorShort(sel)
+	if !utf8.ValidString(got) {
+		t.Fatal("selectorShort produced invalid UTF-8")
+	}
+	if len([]rune(got)) != 58 { // 57 runes + "…"
+		t.Fatalf("selectorShort rune len = %d, want 58", len([]rune(got)))
+	}
+}
+
+func TestFormatEventDetailRuneSafe(t *testing.T) {
+	long := strings.Repeat("é", 80)
+	got := formatEventDetail("input", map[string]any{"tagName": "input", "value": long})
+	if !utf8.ValidString(got) {
+		t.Fatal("formatEventDetail produced invalid UTF-8")
 	}
 }
 

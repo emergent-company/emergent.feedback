@@ -1,6 +1,6 @@
 // snapshot.ts — full-page DOM snapshot capture with PII redaction.
 
-import { SENSITIVE_ATTR, TOKEN_VALUE, sanitizeURL } from "./redact";
+import { SENSITIVE_ATTR, TOKEN_VALUE, sanitizeURL, redactText } from "./redact";
 
 const MAX_BYTES = 2_000_000; // skip if redacted HTML exceeds this
 
@@ -44,7 +44,9 @@ export function captureSnapshot(): string | undefined {
 
     const html = root.outerHTML;
     if (html.length > MAX_BYTES) return undefined;
-    return html;
+    const redacted = redactText(html);
+    if (redacted.length > MAX_BYTES) return undefined;
+    return redacted;
   } catch {
     return undefined;
   }

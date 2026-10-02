@@ -7,11 +7,18 @@
 
 import { redactText, sanitizeURL } from "./redact";
 
+export interface StackFrame {
+  path: string;
+  line: number;
+  column: number;
+}
+
 export interface ConsoleEntry {
   level: "error" | "warning";
   message: string;
   at: string; // ISO timestamp
-  stack?: string; // capture-time stack trace (redacted, ≤4000 chars)
+  stack?: StackFrame[]; // parsed frames [{path,line,column}]
+  stack_text?: string; // redacted raw stack (≤4000 chars) for humans
 }
 
 const MAX_ENTRIES = 20;
@@ -48,7 +55,77 @@ function errorStack(v: unknown): string | undefined {
   return undefined;
 }
 
-/** Redact + truncate a stack trace. Server unmaps it against source maps. */
+/** Shorten an absolute filesystem path to its last 3 path segments. */
+function shortenFramePath(path: string): string {
+  // URL / scheme (http:, https:, webpack:, file:) — keep as-is.
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(path)) return path;
+  // Windows absolute path (C:\... or C:/...).
+  const win = /^([a-zA-Z]):[\\/](.*)$/.exec(path);
+  if (win) {
+    const parts = win[2].split(/[\\/]/).filter(Boolean);
+    if (parts.length <= 3) return path;
+    return win[1] + ":\\" + parts.slice(-3).join("\\");
+  }
+  // Unix absolute path.
+  if (path.startsWith("/")) {
+    const parts = path.split("/").filter(Boolean);
+    if (parts.length <= 3) return path;
+    return "/" + parts.slice(-3).join("/");
+  }
+  return path;
+}
+
+/** Parse `path:line:col` into a frame, shortening absolute paths. */
+function parseLocation(loc: string): StackFrame | undefined {
+  const m = /^(.*?):(\d+):(\d+)$/.exec(loc.trim());
+  if (!m) return undefined;
+  const path = m[1].trim();
+  if (!path) return undefined;
+  return {
+    path: shortenFramePath(path),
+    line: parseInt(m[2], 10),
+    column: parseInt(m[3], 10),
+  };
+}
+
+/** Parse one stack line (V8 `at fn (path:l:c)` / `at path:l:c`, Firefox `fn@path:l:c`). */
+function parseStackLine(line: string): StackFrame | undefined {
+  const trimmed = line.trim();
+  if (!trimmed) return undefined;
+
+  // Firefox: fn@path:line:col
+  const atIdx = trimmed.lastIndexOf("@");
+  if (atIdx >= 0) {
+    const parsed = parseLocation(trimmed.slice(atIdx + 1));
+    if (parsed) return parsed;
+  }
+
+  let rest = trimmed;
+  const mAt = /^at\s+/.exec(rest);
+  if (mAt) rest = rest.slice(mAt[0].length);
+
+  // V8: at fn (path:line:col)
+  const paren = rest.match(/\(([^()]*:\d+:\d+)\)$/);
+  if (paren) {
+    const parsed = parseLocation(paren[1]);
+    if (parsed) return parsed;
+  }
+
+  // V8: at path:line:col (anonymous / module top-level)
+  return parseLocation(rest);
+}
+
+/** Split a raw stack trace into frames, dropping unparseable lines. */
+function parseStack(raw: string): StackFrame[] {
+  const frames: StackFrame[] = [];
+  for (const line of raw.split(/\r?\n/)) {
+    const frame = parseStackLine(line);
+    if (frame) frames.push(frame);
+  }
+  return frames;
+}
+
+/** Redact + truncate the raw stack string for humans. */
 function redactStack(stack: string): string {
   return redactText(stack).slice(0, MAX_STACK);
 }
@@ -56,7 +133,12 @@ function redactStack(stack: string): string {
 function push(level: ConsoleEntry["level"], message: string, stack?: string): void {
   const trimmed = sanitizeMessage(message).slice(0, MAX_MESSAGE);
   const entry: ConsoleEntry = { level, message: trimmed, at: new Date().toISOString() };
-  if (stack) entry.stack = redactStack(stack);
+  if (stack) {
+    const frames = parseStack(stack);
+    if (frames.length > 0) entry.stack = frames;
+    const stackText = redactStack(stack);
+    if (stackText) entry.stack_text = stackText;
+  }
   entries.push(entry);
   if (entries.length > MAX_ENTRIES) entries.shift();
 }

@@ -1,140 +1,113 @@
-// replay.ts — opt-in buffered session replay via rrweb.
+// replay.ts — thin lazy loader for the rrweb replay bundle.
 //
-// Records DOM/input events into a bounded sliding buffer (~last 60s) and, on
-// submit, serializes them to base64(gzip(JSON)). Privacy is on by default:
-// all input values are masked, `[data-fo-redact]` text is masked, and
-// `.fo-block` subtrees are excluded entirely. If rrweb fails to load/init it
-// degrades to a no-op and never breaks the page.
+// The main bundle imports this loader instead of rrweb directly. When replay
+// is enabled, `startReplay` injects a <script> tag for the SECOND bundle
+// (`emergent-feedback-replay.js`), awaits its load, then delegates to
+// `window.__EF_REPLAY__`. rrweb is therefore only fetched/executed when replay
+// is enabled, keeping it out of the main overlay bundle entirely.
 
-import { record, EventType } from "rrweb";
-import type { eventWithTime } from "rrweb";
+type ReplayAPI = {
+  start: (bufferMs?: number) => void;
+  stop: () => void;
+  getPayloadAsync: () => Promise<string | undefined>;
+};
 
-const DEFAULT_BUFFER_MS = 60_000;
-const DEFAULT_MAX_EVENTS = 5000;
-const CHECKOUT_EVERY_NMS = 30_000; // force a full snapshot every 30s → replay baseline
+/** Main bundle URL captured at module init (currentScript is still valid here). */
+const MAIN_SRC = (() => {
+  try {
+    const cs = document.currentScript as HTMLScriptElement | null;
+    return cs?.src || "";
+  } catch {
+    return "";
+  }
+})();
 
-let started = false;
-let stopFn: (() => void) | undefined;
-let buffer: eventWithTime[] = [];
-let metaEvent: eventWithTime | null = null;
-let bufferMs = DEFAULT_BUFFER_MS;
+let loaded = false;
+let loading: Promise<boolean> | null = null;
+let warned = false;
+
+/** Swap `emergent-feedback.js` → `emergent-feedback-replay.js`, preserving query/hash. */
+function deriveReplaySrc(mainSrc: string): string {
+  if (!mainSrc) return "";
+  const next = mainSrc.replace(
+    /emergent-feedback\.js([?#].*)?$/,
+    "emergent-feedback-replay.js$1"
+  );
+  return next === mainSrc ? "" : next;
+}
+
+function api(): ReplayAPI | undefined {
+  return (window as unknown as { __EF_REPLAY__?: ReplayAPI }).__EF_REPLAY__;
+}
+
+/** Ensure the replay bundle is loaded; resolves true on success, false on failure. */
+async function ensureLoaded(replaySrc?: string): Promise<boolean> {
+  if (loaded || api()) {
+    loaded = true;
+    return true;
+  }
+  if (loading) return loading;
+
+  loading = (async (): Promise<boolean> => {
+    try {
+      const src = (replaySrc && replaySrc.trim()) || deriveReplaySrc(MAIN_SRC);
+      if (!src) throw new Error("cannot resolve replay bundle URL");
+      await new Promise<void>((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src = src;
+        s.async = true;
+        s.onload = () => resolve();
+        s.onerror = () => reject(new Error("replay bundle failed to load"));
+        (document.head || document.documentElement).appendChild(s);
+      });
+      if (!api()) throw new Error("replay API not exposed by bundle");
+      loaded = true;
+      return true;
+    } catch (e) {
+      if (!warned) {
+        warned = true;
+        console.warn("[emergent.feedback] session replay unavailable:", e);
+      }
+      return false;
+    }
+  })();
+
+  return loading;
+}
 
 /**
- * Start buffering. Idempotent; no-op in iframes; catches any rrweb init
- * failure so the host page is never affected.
+ * Start buffering. Loads the replay bundle on demand (idempotent) and delegates
+ * to it. Never throws; replay is simply unavailable if the bundle fails.
  */
-export function startReplay(bufferMsOverride?: number): void {
-  if (started) return;
-  if (window.top !== window.self) return;
+export async function startReplay(bufferMs?: number, replaySrc?: string): Promise<void> {
+  const ok = await ensureLoaded(replaySrc);
+  if (!ok) return;
   try {
-    bufferMs = bufferMsOverride && bufferMsOverride > 0 ? bufferMsOverride : DEFAULT_BUFFER_MS;
-    buffer = [];
-    metaEvent = null;
-    stopFn = record({
-      emit: (event) => pushEvent(event),
-      checkoutEveryNms: CHECKOUT_EVERY_NMS,
-      maskAllInputs: true,
-      maskInputOptions: { password: true, email: true, tel: true },
-      maskTextSelector: "[data-fo-redact]",
-      blockSelector: ".fo-block",
-      recordCanvas: false,
-      recordCrossOriginIframes: false,
-    });
-    started = true;
+    api()?.start(bufferMs);
   } catch {
-    started = false;
-    stopFn = undefined;
+    // no-op
   }
 }
 
-/** Stop recording and release the buffer. Safe to call when not running. */
+/** Stop recording. No-op if the replay bundle is not loaded. */
 export function stopReplay(): void {
-  if (stopFn) {
-    try {
-      stopFn();
-    } catch {
-      // ignore
-    }
-    stopFn = undefined;
-  }
-  started = false;
-  buffer = [];
-  metaEvent = null;
-}
-
-function pushEvent(event: eventWithTime): void {
-  // The first Meta event (type 4) carries replay initialization state
-  // (href/viewport); retain it separately so it can always be prepended.
-  if (event.type === EventType.Meta) {
-    metaEvent = event;
-    return;
-  }
-
-  buffer.push(event);
-
-  // Bound memory: drop events older than the buffer window (but keep the last
-  // retained event as a baseline anchor; checkoutEveryNms guarantees a full
-  // snapshot well within the window).
-  const cutoff = event.timestamp - bufferMs;
-  while (buffer.length > 1 && buffer[0].timestamp < cutoff) {
-    buffer.shift();
-  }
-  // Hard cap on event count as a second bound.
-  while (buffer.length > DEFAULT_MAX_EVENTS) {
-    buffer.shift();
-  }
-}
-
-function serializeEvents(): eventWithTime[] {
-  const events: eventWithTime[] = [];
-  if (metaEvent) events.push(metaEvent);
-  events.push(...buffer);
-  return events;
-}
-
-/** base64-encode bytes without a stack overflow on large buffers. */
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = "";
-  const CHUNK = 0x8000;
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + CHUNK)));
-  }
-  return btoa(binary);
-}
-
-/** gzip-compress bytes via CompressionStream, or undefined if unsupported/failed. */
-async function tryGzip(bytes: Uint8Array): Promise<Uint8Array | undefined> {
   try {
-    if (typeof CompressionStream === "undefined") return undefined;
-    const stream = new Blob([bytes.buffer as ArrayBuffer])
-      .stream()
-      .pipeThrough(new CompressionStream("gzip"));
-    const buf = await new Response(stream).arrayBuffer();
-    return new Uint8Array(buf);
+    api()?.stop();
+  } catch {
+    // no-op
+  }
+}
+
+/**
+ * Upload payload. Delegates to the loaded bundle; returns undefined when the
+ * bundle is not (yet) loaded, matching the "replay unavailable" case.
+ */
+export async function getReplayPayloadAsync(): Promise<string | undefined> {
+  const a = api();
+  if (!a) return undefined;
+  try {
+    return await a.getPayloadAsync();
   } catch {
     return undefined;
   }
-}
-
-/**
- * Synchronous payload: base64 of the raw JSON (no gzip). Prefer
- * `getReplayPayloadAsync` for the gzip-compressed upload path.
- */
-export function getReplayPayload(): string | undefined {
-  const events = serializeEvents();
-  if (events.length === 0) return undefined;
-  return bytesToBase64(new TextEncoder().encode(JSON.stringify(events)));
-}
-
-/**
- * Upload payload: base64(gzip(JSON.stringify(events))). Falls back to plain
- * base64 (no gzip) when CompressionStream is unavailable — callers cannot tell
- * which; the server treats the value as opaque base64.
- */
-export async function getReplayPayloadAsync(): Promise<string | undefined> {
-  const events = serializeEvents();
-  if (events.length === 0) return undefined;
-  const bytes = new TextEncoder().encode(JSON.stringify(events));
-  const gzipped = await tryGzip(bytes);
-  return bytesToBase64(gzipped ?? bytes);
 }

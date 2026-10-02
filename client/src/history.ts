@@ -2,6 +2,7 @@
 // Starts on page load, captures last N events for feedback context.
 
 import { buildSelector, nearestComponent } from "./selector";
+import { redactText } from "./redact";
 
 export interface SessionEvent {
   type: "navigation" | "input" | "click";
@@ -35,7 +36,7 @@ function pushEvent(type: SessionEvent["type"], data: Record<string, unknown>): v
 function isSensitive(el: HTMLInputElement): boolean {
   if (el.type === "password") return true;
   const hay = [el.name, el.id, el.getAttribute("autocomplete") ?? ""].join(" ").toLowerCase();
-  return /(password|passwd|pwd|secret|token|api[_-]?key|credit|card|cvv|cvc|ssn|social.?security|routing|iban)/.test(hay);
+  return /(password|passwd|pwd|secret|token|api[_-]?key|credit|card|cvv|cvc|ssn|social.?security|routing|iban|email|e-mail|tel|phone|mobile|name|firstname|lastname|address|username|login|dob|birth)/.test(hay);
 }
 
 export function startRecording(): void {
@@ -99,7 +100,7 @@ export function startRecording(): void {
     if (key === lastInputKey && now - lastInputTime < 500) {
       const last = events[events.length - 1];
       if (last?.type === "input") {
-        last.data.value = isSensitive(el) ? "<redacted>" : el.value;
+        last.data.value = isSensitive(el) ? "[redacted]" : redactText(el.value);
         last.timestamp = new Date().toISOString();
         lastInputTime = now;
         return;
@@ -113,7 +114,7 @@ export function startRecording(): void {
       component,
       tagName: tag,
       inputType: el.type || "text",
-      value: isSensitive(el) ? "<redacted>" : el.value,
+      value: isSensitive(el) ? "[redacted]" : redactText(el.value),
     });
   }, true);
 
@@ -127,7 +128,7 @@ export function startRecording(): void {
       component: nearestComponent(target),
       tagName: "select",
       inputType: "select",
-      value: el.value,
+      value: redactText(el.value),
     });
   }, true);
 

@@ -75,15 +75,13 @@ func (h *Handler) MCPServer() *mcp.Server {
 	return srv
 }
 
-// scopedFeedback loads a feedback item and verifies it is exported and within
-// the caller's API-key repo scope.
+// scopedFeedback loads a feedback item and verifies it is within the caller's
+// API-key repo scope. Export state is not required: freshly-created (open)
+// items surfaced by feedback_watch must be readable/verifiable/markable.
 func (h *Handler) scopedFeedback(ctx context.Context, id int64) (store.Feedback, error) {
 	f, err := h.Store.Get(ctx, id)
 	if err != nil {
 		return store.Feedback{}, fmt.Errorf("feedback %d not found", id)
-	}
-	if f.IssueURL == "" {
-		return store.Feedback{}, fmt.Errorf("feedback %d not exported", id)
 	}
 	ti := auth.TokenInfoFromContext(ctx)
 	if ti == nil {

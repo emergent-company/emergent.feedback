@@ -283,11 +283,16 @@ ORDER BY id DESC LIMIT 500`, ph)
 	return out, rows.Err()
 }
 
-// Delete removes a feedback item by ID. Returns an error if the item doesn't
-// belong to the given githubUser.
+// Delete removes a feedback item by ID and its associated lifecycle events.
+// Returns an error if the item doesn't belong to the given githubUser.
 func (s *Store) Delete(ctx context.Context, id int64, githubUser string) error {
-	const q = `DELETE FROM feedback WHERE id = ? AND github_user = ?`
-	res, err := s.db.ExecContext(ctx, q, id, githubUser)
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("store: delete feedback: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	res, err := tx.ExecContext(ctx, `DELETE FROM feedback WHERE id = ? AND github_user = ?`, id, githubUser)
 	if err != nil {
 		return fmt.Errorf("store: delete feedback: %w", err)
 	}
@@ -295,7 +300,10 @@ func (s *Store) Delete(ctx context.Context, id int64, githubUser string) error {
 	if n == 0 {
 		return fmt.Errorf("store: feedback %d not found or not owned by %s", id, githubUser)
 	}
-	return nil
+	if _, err := tx.ExecContext(ctx, `DELETE FROM feedback_events WHERE feedback_id = ?`, id); err != nil {
+		return fmt.Errorf("store: delete feedback events: %w", err)
+	}
+	return tx.Commit()
 }
 
 // MarkExported sets issue_url and status='exported' for the given IDs.
@@ -393,12 +401,19 @@ func (s *Store) SetStatus(ctx context.Context, id int64, status FeedbackStatus, 
 	return tx.Commit()
 }
 
-// SetVerificationResult records a verification outcome and sets verified_at.
-// It does NOT emit an event: event emission is owned by SetStatus, so a green
-// transition (SetVerificationResult + SetStatus(verified)) produces exactly one
-// "verified" event.
+// SetVerificationResult records a verification outcome. `verified_at` is set
+// only for a green result; amber/red store the outcome without claiming a
+// verification. It does NOT emit an event: event emission is owned by
+// SetStatus, so a green transition (SetVerificationResult + SetStatus(verified))
+// produces exactly one "verified" event.
 func (s *Store) SetVerificationResult(ctx context.Context, id int64, result, detail string) error {
-	if _, err := s.db.ExecContext(ctx, `UPDATE feedback SET verification_result = ?, verification_detail = ?, verified_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?`, result, detail, id); err != nil {
+	if result == "green" {
+		if _, err := s.db.ExecContext(ctx, `UPDATE feedback SET verification_result = ?, verification_detail = ?, verified_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?`, result, detail, id); err != nil {
+			return fmt.Errorf("store: set verification result: %w", err)
+		}
+		return nil
+	}
+	if _, err := s.db.ExecContext(ctx, `UPDATE feedback SET verification_result = ?, verification_detail = ? WHERE id = ?`, result, detail, id); err != nil {
 		return fmt.Errorf("store: set verification result: %w", err)
 	}
 	return nil
@@ -546,7 +561,8 @@ func (s *Store) ListDedupeCandidates(ctx context.Context, repo, key string, excl
 }
 
 // SetContextSummary sets the `summary` key inside a feedback item's context JSON
-// (best-effort autotitle persistence).
+// (best-effort autotitle persistence). It never clobbers a non-empty context:
+// a malformed context JSON is left untouched and an error is returned.
 func (s *Store) SetContextSummary(ctx context.Context, id int64, summary string) error {
 	var raw string
 	if err := s.db.QueryRowContext(ctx, `SELECT context_json FROM feedback WHERE id = ?`, id).Scan(&raw); err != nil {
@@ -554,7 +570,9 @@ func (s *Store) SetContextSummary(ctx context.Context, id int64, summary string)
 	}
 	m := map[string]any{}
 	if raw != "" && raw != "{}" {
-		_ = json.Unmarshal([]byte(raw), &m)
+		if err := json.Unmarshal([]byte(raw), &m); err != nil {
+			return fmt.Errorf("store: parse context for summary: %w", err)
+		}
 	}
 	m["summary"] = summary
 	b, err := json.Marshal(m)

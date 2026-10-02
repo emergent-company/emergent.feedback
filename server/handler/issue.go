@@ -191,7 +191,7 @@ func buildSingleItem(sb *strings.Builder, f store.Feedback, level string) {
 	// Comments; compact omits notes.
 	if level != levelCompact {
 		fmt.Fprintf(sb, "### Comment 1\n\n")
-		fmt.Fprintf(sb, "**@%s**  \n%s\n\n", f.GitHubUser, f.Comment)
+		fmt.Fprintf(sb, "**@%s**  \n%s\n\n", f.GitHubUser, redactSecrets(f.Comment))
 	}
 
 	// ## What to do.
@@ -262,7 +262,7 @@ func buildMultiItem(sb *strings.Builder, items []store.Feedback, level string) {
 
 		if level != levelCompact {
 			fmt.Fprintf(sb, "### Comment %d\n\n", i+1)
-			fmt.Fprintf(sb, "**@%s**  \n%s\n\n", f.GitHubUser, f.Comment)
+			fmt.Fprintf(sb, "**@%s**  \n%s\n\n", f.GitHubUser, redactSecrets(f.Comment))
 		}
 
 		sb.WriteString("### What to do\n\n")
@@ -321,7 +321,7 @@ func whatToDo(ctx map[string]any, env map[string]any, f store.Feedback) string {
 	actual := strVal(intent["actual"])
 
 	if expected == "" && actual == "" {
-		return fmt.Sprintf("Address the feedback on `%s`: %s", f.Selector, f.Comment)
+		return fmt.Sprintf("Address the feedback on `%s`: %s", f.Selector, redactSecrets(f.Comment))
 	}
 
 	var sb strings.Builder
@@ -433,9 +433,9 @@ func writeIntent(sb *strings.Builder, ctx map[string]any, intent map[string]any)
 }
 
 func writeRepro(sb *strings.Builder, ctx map[string]any, level string) {
-	steps := stringSlice(ctx["steps"])
-	console := ctx["console"]
-	network := ctx["network"]
+	steps := stringSlice(reproValue(ctx, "steps"))
+	console := reproValue(ctx, "console")
+	network := reproValue(ctx, "network")
 	if len(steps) == 0 && console == nil && network == nil {
 		return
 	}
@@ -718,8 +718,8 @@ func (h *Handler) syncIssueStates(ctx context.Context, issues []store.GitHubIssu
 func selectorShort(sel string) string {
 	parts := strings.Split(sel, ">")
 	last := strings.TrimSpace(parts[len(parts)-1])
-	if len(last) > 60 {
-		return last[:57] + "…"
+	if len([]rune(last)) > 60 {
+		return runeTruncate(last, 57) + "…"
 	}
 	return last
 }
@@ -758,8 +758,8 @@ func formatEventDetail(typ string, data map[string]any) string {
 		tag, _ := data["tagName"].(string)
 		comp, _ := data["component"].(string)
 		val, _ := data["value"].(string)
-		if len(val) > 60 {
-			val = val[:57] + "..."
+		if len([]rune(val)) > 60 {
+			val = runeTruncate(val, 57) + "..."
 		}
 		if comp != "" {
 			return fmt.Sprintf("`%s` [%s] = \"%s\"", tag, comp, val)

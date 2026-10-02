@@ -153,6 +153,56 @@ func TestUnmapStackWithInlineSourcemap(t *testing.T) {
 	}
 }
 
+func TestShortenPath(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"/root/emergent.memory/apps/web-ui/src/Foo.tsx", "web-ui/src/Foo.tsx"},
+		{"/a/b.js", "/a/b.js"}, // <= 3 segments, unchanged
+		{"/a/b/c/d.js", "b/c/d.js"},
+		{"src/Foo.tsx", "src/Foo.tsx"}, // relative, unchanged
+		{"https://cdn.example.com/bundle.js", "https://cdn.example.com/bundle.js"}, // URL, unchanged
+		{"webpack:///src/Foo.tsx", "webpack:///src/Foo.tsx"},                       // virtual, unchanged
+		{"file:///root/a/b/c/d.js", "b/c/d.js"},
+		{`C:\Users\mcj\code\a\b\d.js`, `a/b/d.js`},
+	}
+	for _, c := range cases {
+		if got := shortenPath(c.in); got != c.want {
+			t.Fatalf("shortenPath(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestUnmapContextConsoleShortensUnmappedPaths(t *testing.T) {
+	_, s, _ := newLifecycleHandler(t)
+	ctx := context.Background()
+	h := &Handler{Store: s}
+
+	// No sourcemap stored → frames cannot be mapped; their absolute paths must
+	// be shortened to the last 3 segments.
+	contextJSON := `{"appVersion":"1.0.0","console":[{"level":"error","message":"boom","stack":[{"path":"/root/emergent.memory/apps/web-ui/src/Foo.tsx","line":10,"column":2}]}]}`
+	out := h.unmapContextConsole(ctx, "org/repo", contextJSON)
+	if strings.Contains(out, "/root/emergent.memory/apps/web-ui/src/Foo.tsx") {
+		t.Fatalf("absolute path leaked: %s", out)
+	}
+	if !strings.Contains(out, "web-ui/src/Foo.tsx") {
+		t.Fatalf("expected shortened path in: %s", out)
+	}
+}
+
+func TestUnmapContextConsoleShortensStackText(t *testing.T) {
+	_, s, _ := newLifecycleHandler(t)
+	ctx := context.Background()
+	h := &Handler{Store: s}
+
+	contextJSON := `{"appVersion":"1.0.0","console":[{"level":"error","message":"boom","stack_text":"Error: boom\n    at foo (/root/emergent.memory/apps/web-ui/src/Foo.tsx:10:5)"}]}`
+	out := h.unmapContextConsole(ctx, "org/repo", contextJSON)
+	if strings.Contains(out, "/root/emergent.memory/apps/web-ui/src/Foo.tsx") {
+		t.Fatalf("absolute path leaked via stack_text: %s", out)
+	}
+	if !strings.Contains(out, "web-ui/src/Foo.tsx") {
+		t.Fatalf("expected shortened path in stack_text: %s", out)
+	}
+}
+
 func TestDeriveStatusNoAppliedInference(t *testing.T) {
 	// An exported item with no explicit lifecycle status must not read "applied".
 	f := store.Feedback{Status: store.StatusExported, IssueURL: "https://github.com/org/repo/issues/1"}
@@ -185,7 +235,7 @@ func TestBuildIssueContentMultiItemStructured(t *testing.T) {
 
 	for _, want := range []string{
 		"src/A.tsx", "src/B.tsx", // source per item
-		"be blue", "be green",    // intent expected per item
+		"be blue", "be green", // intent expected per item
 		"## Item 1", "## Item 2", // per-item headings
 	} {
 		if !strings.Contains(body, want) {

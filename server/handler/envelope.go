@@ -53,7 +53,7 @@ func BuildEnvelope(f store.Feedback) map[string]any {
 	if ex := buildExplanation(ctx, f); ex != nil {
 		env["explanation"] = ex
 	}
-	if repro := buildRepro(ctx); repro != nil {
+	if repro := buildRepro(ctx, f); repro != nil {
 		env["repro"] = repro
 	}
 	if e := buildEnvironment(ctx, f); e != nil {
@@ -118,12 +118,12 @@ func BuildConciseEnvelope(f store.Feedback) map[string]any {
 	ctx := parseContext(f.ContextJSON)
 
 	env := map[string]any{
-		"schema":     envelopeSchema,
-		"version":    envelopeVersion,
-		"id":         f.ID,
-		"status":     deriveStatus(f),
-		"type":       deriveType(ctx, f),
-		"summary":    deriveSummary(ctx, f),
+		"schema":  envelopeSchema,
+		"version": envelopeVersion,
+		"id":      f.ID,
+		"status":  deriveStatus(f),
+		"type":    deriveType(ctx, f),
+		"summary": deriveSummary(ctx, f),
 	}
 
 	el := map[string]any{}
@@ -221,7 +221,7 @@ func deriveSummary(ctx map[string]any, f store.Feedback) string {
 	if s := heuristicSummary(ctx, f); s != "" {
 		return s
 	}
-	return truncate(f.Comment, 140)
+	return truncate(redactSecrets(f.Comment), 140)
 }
 
 func truncate(s string, n int) string {
@@ -230,6 +230,16 @@ func truncate(s string, n int) string {
 		return string(r)
 	}
 	return string(r[:n-1]) + "…"
+}
+
+// runeTruncate returns the first n runes of s, never splitting a UTF-8
+// sequence. Used for byte-slice truncation of user text (selectors, values).
+func runeTruncate(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n])
 }
 
 func buildTarget(ctx map[string]any, f store.Feedback) map[string]any {
@@ -358,7 +368,7 @@ func buildExplanation(ctx map[string]any, f store.Feedback) map[string]any {
 		}
 	}
 	if text != "" {
-		out["text"] = text
+		out["text"] = redactSecrets(text)
 	}
 	if quality != "" {
 		out["quality"] = quality
@@ -372,27 +382,41 @@ func buildExplanation(ctx map[string]any, f store.Feedback) map[string]any {
 	return out
 }
 
-func buildRepro(ctx map[string]any) map[string]any {
+func buildRepro(ctx map[string]any, f store.Feedback) map[string]any {
 	out := map[string]any{}
-	if v := ctx["steps"]; v != nil {
+	if v := reproValue(ctx, "steps"); v != nil {
 		out["steps"] = v
 	}
-	if v := ctx["console"]; v != nil {
+	if v := reproValue(ctx, "console"); v != nil {
 		out["console"] = v
 	}
-	if v := ctx["network"]; v != nil {
+	if v := reproValue(ctx, "network"); v != nil {
 		out["network"] = v
 	}
 	if v := ctx["sessionHistory"]; v != nil {
 		out["session_history"] = v
 	}
-	if v := ctx["replay"]; v != nil {
+	// replay: prefer client-provided, else reference the stored replay blob.
+	if v := reproValue(ctx, "replay"); v != nil {
 		out["replay"] = v
+	} else if len(f.Replay) > 0 {
+		out["replay"] = fmt.Sprintf("feedback://%d/replay", f.ID)
 	}
 	if len(out) == 0 {
 		return nil
 	}
 	return out
+}
+
+// reproValue returns a repro field, reading the nested `repro` object first and
+// falling back to top-level keys for legacy payloads (client now nests repro).
+func reproValue(ctx map[string]any, key string) any {
+	if r, ok := ctx["repro"].(map[string]any); ok {
+		if v, ok := r[key]; ok && v != nil {
+			return v
+		}
+	}
+	return ctx[key]
 }
 
 func buildEnvironment(ctx map[string]any, f store.Feedback) map[string]any {

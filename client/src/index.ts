@@ -45,7 +45,7 @@ import { startReporterNotify, stopReporterNotify } from "./notify";
 
   // Opt-in session replay: start buffering immediately (pre-bug window) and
   // keep it running across mode transitions — never stopped on idle.
-  if (config.replay) startReplay(config.replayBufferMs);
+  if (config.replay) startReplay(config.replayBufferMs, config.replaySrc);
 
   startActivationListener(config);
 
