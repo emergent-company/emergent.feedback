@@ -176,18 +176,14 @@ func BuildConciseEnvelope(f store.Feedback) map[string]any {
 	return env
 }
 
-// deriveStatus maps store lifecycle state onto the envelope status enum.
-// New lifecycle values (applied/verified/resolved/exported) pass through;
-// legacy rows fall back to the exported/open signal.
+// deriveStatus maps the persisted lifecycle status onto the envelope status
+// enum. It reads the real store Status (open/applied/verified/resolved/exported)
+// and never infers applied/verified/resolved from issue_url.
 func deriveStatus(f store.Feedback) string {
-	switch f.Status {
-	case store.StatusApplied, store.StatusVerified, store.StatusResolved, store.StatusExported:
-		return string(f.Status)
+	if f.Status == "" {
+		return "open"
 	}
-	if f.IssueURL != "" {
-		return "applied"
-	}
-	return "open"
+	return string(f.Status)
 }
 
 // deriveType returns the envelope type, preferring explicit client fields

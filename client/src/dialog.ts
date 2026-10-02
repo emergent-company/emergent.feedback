@@ -35,6 +35,9 @@ function injectStyles(): void {
       flex-direction: column;
       overflow: hidden;
     }
+    /* Programmatic focus target — no visible ring on the card itself. */
+    #__ef_dialog__ .ef-card:focus,
+    #__ef_dialog__ .ef-login-card:focus { outline: none; }
     #__ef_dialog__ .ef-header {
       padding: 14px 18px 10px;
       border-bottom: 1px solid #e8e8e8;
@@ -100,7 +103,7 @@ function injectStyles(): void {
     }
     #__ef_dialog__ .ef-comment-date {
       font-size: 11px;
-      color: #999;
+      color: #767676;
     }
     #__ef_dialog__ .ef-comment-text {
       font-size: 13px;
@@ -141,7 +144,7 @@ function injectStyles(): void {
       border-color: #4f86f7;
       box-shadow: 0 0 0 3px rgba(79,134,247,0.15);
     }
-    #__ef_dialog__ textarea::placeholder { color: #aaa; }
+    #__ef_dialog__ textarea::placeholder { color: #767676; }
     #__ef_dialog__ .ef-error {
       color: #c53030;
       font-size: 12px;
@@ -216,7 +219,7 @@ function injectStyles(): void {
     }
     #__ef_dialog__ .ef-meta-toggle summary {
       font-size: 11px;
-      color: #888;
+      color: #767676;
       cursor: pointer;
       user-select: none;
       list-style: none;
@@ -241,7 +244,7 @@ function injectStyles(): void {
       line-height: 1.6;
     }
     #__ef_dialog__ .ef-meta-key {
-      color: #999;
+      color: #767676;
       white-space: nowrap;
     }
     #__ef_dialog__ .ef-meta-val {
@@ -280,7 +283,7 @@ function injectStyles(): void {
       display: inline-block;
       width: 36px;
       font-weight: 600;
-      color: #888;
+      color: #767676;
       text-transform: uppercase;
       flex-shrink: 0;
     }
@@ -316,7 +319,7 @@ function injectStyles(): void {
     }
     #__ef_dialog__ .ef-topic-label {
       font-size: 11px;
-      color: #888;
+      color: #767676;
     }
     #__ef_dialog__ .ef-topic-input {
       width: 100%;
@@ -346,7 +349,7 @@ function injectStyles(): void {
     }
     #__ef_dialog__ .ef-component-label {
       font-size: 11px;
-      color: #999;
+      color: #767676;
       white-space: nowrap;
       flex-shrink: 0;
     }
@@ -389,7 +392,8 @@ function injectStyles(): void {
       font-family: ui-monospace, "SF Mono", Menlo, monospace;
     }
     #__ef_dialog__ .ef-target-chip-label {
-      color: #999;
+      /* on #f2f2f2 chip — #767676 only clears 4.0:1 there */
+      color: #666666;
       font-family: inherit;
     }
 
@@ -409,7 +413,7 @@ function injectStyles(): void {
     #__ef_dialog__ .ef-intent-label {
       font-size: 10px;
       font-weight: 700;
-      color: #999;
+      color: #767676;
       text-transform: uppercase;
       letter-spacing: 0.05em;
       min-width: 54px;
@@ -447,13 +451,14 @@ function injectStyles(): void {
       color: #2b5fd0;
     }
     #__ef_dialog__ .ef-chip.ef-chip-muted {
-      color: #999;
+      /* chip hover background is #fafafa */
+      color: #666666;
       border-style: dashed;
       font-weight: 400;
     }
     #__ef_dialog__ .ef-hint {
       font-size: 11px;
-      color: #aaa;
+      color: #767676;
       flex-basis: 100%;
       padding-left: 62px;
       line-height: 1.4;
@@ -492,7 +497,8 @@ function injectStyles(): void {
     }
     #__ef_dialog__ .ef-current-prop {
       font-size: 11px;
-      color: #888;
+      /* on #fafafa read-out background */
+      color: #666666;
       flex-shrink: 0;
       white-space: nowrap;
     }
@@ -545,6 +551,53 @@ function getOrCreateDialog(): HTMLElement {
     document.body.appendChild(el);
   }
   return el;
+}
+
+// ── Modal focus management ────────────────────────────────────────────────────
+// The overlay is a custom <div> modal, so we implement the focus semantics a
+// native <dialog> would give us: move focus inside on open, keep Tab contained,
+// and return focus to the invoking element on close.
+
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), textarea:not([disabled]), ' +
+  'input:not([disabled]):not([type="hidden"]), select:not([disabled]), ' +
+  'summary, [tabindex]:not([tabindex="-1"])';
+
+let focusReturnEl: HTMLElement | null = null;
+let dialogKeydown: ((e: KeyboardEvent) => void) | null = null;
+
+function getFocusable(card: HTMLElement): HTMLElement[] {
+  return Array.from(card.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
+    .filter((el) => el.offsetParent !== null || el === document.activeElement);
+}
+
+/**
+ * Wire focus containment + restoration for a dialog card. Captures the element
+ * that currently has focus so closeDialog() can restore it, moves focus to the
+ * card itself (a stable, non-keyboard-triggering target), and traps Tab /
+ * Shift+Tab inside the card while it is open.
+ */
+function activateDialog(card: HTMLElement): void {
+  focusReturnEl = (document.activeElement as HTMLElement | null) ?? null;
+
+  dialogKeydown = (e: KeyboardEvent) => {
+    if (e.key !== "Tab") return;
+    const items = getFocusable(card);
+    if (items.length === 0) { e.preventDefault(); card.focus(); return; }
+    const first = items[0];
+    const last = items[items.length - 1];
+    const active = document.activeElement as HTMLElement | null;
+    if (!active || active === card || !card.contains(active)) {
+      e.preventDefault();
+      (e.shiftKey ? last : first).focus();
+      return;
+    }
+    if (e.shiftKey && active === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
+  };
+  document.addEventListener("keydown", dialogKeydown, true);
+
+  card.focus();
 }
 
 export type FeedbackType = "bug" | "enhancement";
@@ -732,10 +785,10 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
         </div>` : "";
 
   dialog.innerHTML = `
-    <div class="ef-card">
+    <div class="ef-card" role="dialog" aria-modal="true" aria-labelledby="__ef_title__" tabindex="-1">
       <div class="ef-header">
         <div class="ef-header-top">
-          <h2>${title}</h2>
+          <h2 id="__ef_title__">${title}</h2>
           <div class="ef-user-pill">
             <img src="${escapeHtml(opts.user.avatarUrl)}" alt="">
             <span>${escapeHtml(opts.user.login)}</span>
@@ -795,6 +848,9 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     </div>
   `;
 
+  const card = dialog.querySelector<HTMLElement>(".ef-card")!;
+  activateDialog(card);
+
   const textarea = dialog.querySelector<HTMLTextAreaElement>("#__ef_comment__")!;
   const submitBtn = dialog.querySelector<HTMLButtonElement>("#__ef_submit__")!;
   const cancelBtn = dialog.querySelector<HTMLButtonElement>("#__ef_cancel__")!;
@@ -828,7 +884,9 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   let action: IntentAction = inferAction(getType());
   let actionTouched = false;
   let expected = "";
-  let actualTouched = false;
+  // True once the human edits the prefilled "Current" value. Drives provenance:
+  // browser-prefilled actual is `captured`; human-edited actual is `stated`.
+  let actualEdited = false;
   let breadth: ScopeBreadth = "element";
 
   const renderActions = () => {
@@ -885,7 +943,9 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
       : "Region/multi selection isn't captured yet — this element is recorded.";
   });
 
-  actualInput?.addEventListener("input", () => { actualTouched = true; });
+  // Any edit (including clearing the field) marks the actual value as stated.
+  actualInput?.addEventListener("input", () => { actualEdited = true; });
+  actualInput?.addEventListener("change", () => { actualEdited = true; });
 
   /** Build the structured intent passed to onSubmit as the third argument. */
   const buildIntent = (): FeedbackIntent => {
@@ -895,6 +955,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
       action,
       expected: expected.trim() || undefined,
       actual: actualVal ? `${current ? current.label + ": " : ""}${actualVal}` : undefined,
+      actualEdited,
       scope: { breadth, targets: [opts.selector] },
     };
   };
@@ -910,7 +971,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     const parts: string[] = [];
     if (expected.trim()) parts.push(expected.trim());
     const actualVal = actualInput?.value.trim();
-    if (actualTouched && actualVal && current) parts.push(`currently ${current.label}: ${actualVal}`);
+    if (actualEdited && actualVal && current) parts.push(`currently ${current.label}: ${actualVal}`);
     return parts.join(" — ");
   };
 
@@ -1002,8 +1063,8 @@ export function showLoginDialog(opts: LoginDialogOptions): void {
   const dialog = getOrCreateDialog();
 
   dialog.innerHTML = `
-    <div class="ef-login-card">
-      <h2>Sign in with GitHub</h2>
+    <div class="ef-login-card" role="dialog" aria-modal="true" aria-labelledby="__ef_login_title__" tabindex="-1">
+      <h2 id="__ef_login_title__">Sign in with GitHub</h2>
       <p>Authentication required to submit feedback.</p>
       <div class="ef-login-actions">
         <button class="ef-btn-secondary" id="__ef_cancel__">Cancel</button>
@@ -1012,6 +1073,9 @@ export function showLoginDialog(opts: LoginDialogOptions): void {
       <div class="ef-error" id="__ef_err__" style="margin-top:8px"></div>
     </div>
   `;
+
+  const card = dialog.querySelector<HTMLElement>(".ef-login-card")!;
+  activateDialog(card);
 
   const loginBtn = dialog.querySelector<HTMLButtonElement>("#__ef_login__")!;
   const cancelBtn = dialog.querySelector<HTMLButtonElement>("#__ef_cancel__")!;
@@ -1039,7 +1103,18 @@ export function showLoginDialog(opts: LoginDialogOptions): void {
 
 export function closeDialog(): void {
   const dialog = document.getElementById(DIALOG_ID);
-  if (dialog) dialog.remove();
+  if (!dialog) return;
+  if (dialogKeydown) {
+    document.removeEventListener("keydown", dialogKeydown, true);
+    dialogKeydown = null;
+  }
+  dialog.remove();
+  // Return focus to the control that opened the dialog, if it still exists.
+  const ret = focusReturnEl;
+  focusReturnEl = null;
+  if (ret && document.contains(ret) && typeof ret.focus === "function") {
+    try { ret.focus(); } catch { /* element may have been removed */ }
+  }
 }
 
 const TOAST_ID = "__ef_toast__";

@@ -153,8 +153,14 @@ test('detects repo root via .git and strips prefix', () => {
   assert.equal(toRepoRelative(file, root), 'src/components/Button.tsx');
 });
 
-test('falls back to ../ path when file is outside root (never empty)', () => {
-  const rel = toRepoRelative('/other/src/App.tsx', '/repo');
-  assert.ok(rel.length > 0);
-  assert.match(rel, /^\.\.\//);
+test('returns undefined for files outside root (no traversal path emitted)', () => {
+  assert.equal(toRepoRelative('/other/src/App.tsx', '/repo'), undefined);
+});
+
+test('does not stamp elements for files outside root', () => {
+  const result = transformJsx('<div>x</div>', {
+    filename: '/other/src/App.tsx',
+    root: ROOT,
+  });
+  assert.equal(result, null);
 });

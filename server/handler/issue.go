@@ -141,6 +141,11 @@ func buildIssueContent(items []store.Feedback, _ string) (title, body string) {
 
 // buildIssueContentLevel formats the GitHub issue title and Markdown body at
 // the requested detail level (compact|standard|forensic).
+//
+// Single-item exports render a single structured envelope. Multi-item exports
+// render the shared preamble + Environment once, then a full structured block
+// (Element/Intent/Repro/Verification + trust order + provenance badges) per
+// item, so every note's structured fields are reconciled.
 func buildIssueContentLevel(items []store.Feedback, level string) (title, body string) {
 	if len(items) == 0 {
 		return "Feedback report", ""
@@ -158,73 +163,138 @@ func buildIssueContentLevel(items []store.Feedback, level string) (title, body s
 		title = fmt.Sprintf("Feedback: %d comments on %s", len(items), selectorShort(first.Selector))
 	}
 
-	ctx := parseContext(first.ContextJSON)
-	env := BuildEnvelope(first)
-
 	var sb strings.Builder
-
 	// 1. Behavioral preamble — first block, agent reads rules first.
 	sb.WriteString(behavioralPreamble)
 	sb.WriteString("\n")
 
-	// 2. ## Task — summary + type + status.
-	sb.WriteString("## Task\n\n")
-	fmt.Fprintf(&sb, "**Summary:** %s  \n", strVal(env["summary"]))
-	fmt.Fprintf(&sb, "**Type:** %s  \n", strVal(env["type"]))
-	fmt.Fprintf(&sb, "**Status:** %s  \n\n", strVal(env["status"]))
-
-	// Comments (preserve single/multi-item behavior); compact omits notes.
-	if level != levelCompact {
-		for i, f := range items {
-			fmt.Fprintf(&sb, "### Comment %d\n\n", i+1)
-			fmt.Fprintf(&sb, "**@%s**  \n%s\n\n", f.GitHubUser, f.Comment)
-		}
-	}
-
-	// 3. ## What to do — generated from intent.
-	sb.WriteString("## What to do\n\n")
-	sb.WriteString(whatToDo(ctx, env, first))
-	sb.WriteString("\n\n")
-
-	// 4. ## Trust order — numbered, badge-tagged.
-	sb.WriteString("## Trust order\n\n")
-	writeTrustOrder(&sb, ctx, len(first.Screenshot) > 0)
-	sb.WriteString("\n")
-
-	// 5. ## Element — selector + fingerprint + source (compact: selector+source).
-	sb.WriteString("## Element\n\n")
-	writeElement(&sb, ctx, env, first, level)
-	sb.WriteString("\n")
-
-	if level != levelCompact {
-		// 6. ## Intent.
-		if intent := getMap(env, "intent"); len(intent) > 0 {
-			sb.WriteString("## Intent\n\n")
-			writeIntent(&sb, ctx, intent)
-			sb.WriteString("\n")
-		}
-
-		// 7. ## Repro — steps + console + network.
-		writeRepro(&sb, ctx, level)
-
-		// 8. ## Environment.
-		writeEnvironment(&sb, ctx, first)
-	}
-
-	// 9. ## Verification — explicit "Done when:" line.
-	sb.WriteString("## Verification\n\n")
-	writeVerification(&sb, env)
-
-	if level != levelCompact {
-		// Folded (standard) or expanded (forensic): computed styles + HTML + context.
-		writeComputedStyles(&sb, ctx, level)
-		writeFoldedContext(&sb, ctx, first, level)
-
-		// Session history (from client-side ring buffer).
-		writeSessionHistory(&sb, ctx, level)
+	if len(items) == 1 {
+		buildSingleItem(&sb, first, level)
+	} else {
+		buildMultiItem(&sb, items, level)
 	}
 
 	return title, sb.String()
+}
+
+// buildSingleItem renders the structured envelope for a single feedback item.
+func buildSingleItem(sb *strings.Builder, f store.Feedback, level string) {
+	ctx := parseContext(f.ContextJSON)
+	env := BuildEnvelope(f)
+
+	// ## Task — summary + type + status.
+	sb.WriteString("## Task\n\n")
+	fmt.Fprintf(sb, "**Summary:** %s  \n", strVal(env["summary"]))
+	fmt.Fprintf(sb, "**Type:** %s  \n", strVal(env["type"]))
+	fmt.Fprintf(sb, "**Status:** %s  \n\n", strVal(env["status"]))
+
+	// Comments; compact omits notes.
+	if level != levelCompact {
+		fmt.Fprintf(sb, "### Comment 1\n\n")
+		fmt.Fprintf(sb, "**@%s**  \n%s\n\n", f.GitHubUser, f.Comment)
+	}
+
+	// ## What to do.
+	sb.WriteString("## What to do\n\n")
+	sb.WriteString(whatToDo(ctx, env, f))
+	sb.WriteString("\n\n")
+
+	// ## Trust order.
+	sb.WriteString("## Trust order\n\n")
+	writeTrustOrder(sb, ctx, len(f.Screenshot) > 0)
+	sb.WriteString("\n")
+
+	// ## Element.
+	sb.WriteString("## Element\n\n")
+	writeElement(sb, ctx, env, f, level)
+	sb.WriteString("\n")
+
+	if level != levelCompact {
+		// ## Intent.
+		if intent := getMap(env, "intent"); len(intent) > 0 {
+			sb.WriteString("## Intent\n\n")
+			writeIntent(sb, ctx, intent)
+			sb.WriteString("\n")
+		}
+
+		// ## Repro.
+		writeRepro(sb, ctx, level)
+
+		// ## Environment.
+		writeEnvironment(sb, ctx, f)
+	}
+
+	// ## Verification.
+	sb.WriteString("## Verification\n\n")
+	writeVerification(sb, env)
+
+	if level != levelCompact {
+		writeComputedStyles(sb, ctx, level)
+		writeFoldedContext(sb, ctx, f, level)
+		writeSessionHistory(sb, ctx, level)
+	}
+}
+
+// buildMultiItem renders the shared Task + Environment once, then a full
+// structured block per item.
+func buildMultiItem(sb *strings.Builder, items []store.Feedback, level string) {
+	first := items[0]
+	firstCtx := parseContext(first.ContextJSON)
+	firstEnv := BuildEnvelope(first)
+
+	// ## Task (from the first item).
+	sb.WriteString("## Task\n\n")
+	fmt.Fprintf(sb, "**Summary:** %s  \n", strVal(firstEnv["summary"]))
+	fmt.Fprintf(sb, "**Type:** %s  \n", strVal(firstEnv["type"]))
+	fmt.Fprintf(sb, "**Status:** %s  \n\n", strVal(firstEnv["status"]))
+
+	// Shared Environment (once), unless compact.
+	if level != levelCompact {
+		writeEnvironment(sb, firstCtx, first)
+	}
+
+	// Per-item structured blocks.
+	for i, f := range items {
+		ctx := parseContext(f.ContextJSON)
+		env := BuildEnvelope(f)
+
+		fmt.Fprintf(sb, "## Item %d\n\n", i+1)
+
+		if level != levelCompact {
+			fmt.Fprintf(sb, "### Comment %d\n\n", i+1)
+			fmt.Fprintf(sb, "**@%s**  \n%s\n\n", f.GitHubUser, f.Comment)
+		}
+
+		sb.WriteString("### What to do\n\n")
+		sb.WriteString(whatToDo(ctx, env, f))
+		sb.WriteString("\n\n")
+
+		sb.WriteString("### Trust order\n\n")
+		writeTrustOrder(sb, ctx, len(f.Screenshot) > 0)
+		sb.WriteString("\n")
+
+		sb.WriteString("### Element\n\n")
+		writeElement(sb, ctx, env, f, level)
+		sb.WriteString("\n")
+
+		if level != levelCompact {
+			if intent := getMap(env, "intent"); len(intent) > 0 {
+				sb.WriteString("### Intent\n\n")
+				writeIntent(sb, ctx, intent)
+				sb.WriteString("\n")
+			}
+			writeRepro(sb, ctx, level)
+		}
+
+		sb.WriteString("### Verification\n\n")
+		writeVerification(sb, env)
+
+		if level != levelCompact {
+			writeComputedStyles(sb, ctx, level)
+			writeFoldedContext(sb, ctx, f, level)
+			writeSessionHistory(sb, ctx, level)
+		}
+	}
 }
 
 // whatToDo generates the "## What to do" sentence from intent:

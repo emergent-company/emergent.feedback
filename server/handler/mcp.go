@@ -288,6 +288,7 @@ func (h *Handler) toolFeedbackList(ctx context.Context, _ *mcp.CallToolRequest, 
 	}
 
 	var repos []string
+	wildcard := false
 	if in.Repo != "" {
 		if !repoInScope(in.Repo, ti.Scopes) {
 			return nil, nil, fmt.Errorf("repo %s not in key scope", in.Repo)
@@ -295,9 +296,18 @@ func (h *Handler) toolFeedbackList(ctx context.Context, _ *mcp.CallToolRequest, 
 		repos = []string{in.Repo}
 	} else {
 		repos = ti.Scopes
+		wildcard = repoInScope("*", ti.Scopes)
 	}
 
-	items, err := h.Store.ListExportedLite(ctx, repos)
+	var (
+		items []store.ExportedLite
+		err   error
+	)
+	if wildcard {
+		items, err = h.Store.ListExportedLiteAll(ctx)
+	} else {
+		items, err = h.Store.ListExportedLite(ctx, repos)
+	}
 	if err != nil {
 		return nil, nil, err
 	}

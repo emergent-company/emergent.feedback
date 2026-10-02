@@ -305,3 +305,39 @@ func TestDedupeDuplicateLink(t *testing.T) {
 		t.Fatalf("possible_duplicates = %v, want [%d]", got.PossibleDuplicates, f1.ID)
 	}
 }
+
+func TestListExportedLiteAll(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	f1, err := s.Create(ctx, CreateParams{URL: "https://a.com/", Selector: "button", Comment: "a", GitHubUser: "alice", Repo: "org/a"})
+	if err != nil {
+		t.Fatalf("Create a: %v", err)
+	}
+	f2, err := s.Create(ctx, CreateParams{URL: "https://a.com/", Selector: "button", Comment: "b", GitHubUser: "bob", Repo: "org/b"})
+	if err != nil {
+		t.Fatalf("Create b: %v", err)
+	}
+	if err := s.MarkExported(ctx, []int64{f1.ID}, "https://github.com/org/a/issues/1"); err != nil {
+		t.Fatalf("MarkExported a: %v", err)
+	}
+	if err := s.MarkExported(ctx, []int64{f2.ID}, "https://github.com/org/b/issues/1"); err != nil {
+		t.Fatalf("MarkExported b: %v", err)
+	}
+
+	all, err := s.ListExportedLiteAll(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 2 {
+		t.Fatalf("all = %d, want 2", len(all))
+	}
+
+	scoped, err := s.ListExportedLite(ctx, []string{"org/a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scoped) != 1 || scoped[0].ID != f1.ID {
+		t.Fatalf("scoped = %v, want only org/a item %d", scoped, f1.ID)
+	}
+}

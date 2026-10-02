@@ -1,5 +1,5 @@
 import { existsSync, statSync } from 'node:fs';
-import { dirname, relative, resolve } from 'node:path';
+import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 
 /**
  * Walk up from `start` until a `.git` entry is found (file or directory —
@@ -33,13 +33,25 @@ export function findRepoRoot(start: string): string {
 /**
  * Return `file` relative to `root`, normalized to POSIX separators and with
  * any leading `./` stripped. Never emits a leading `/`.
+ *
+ * Returns `undefined` when `file` is outside `root`: `relative()` yields a
+ * `..` traversal segment (or an absolute path when `file` lives on a different
+ * Windows drive), which cannot identify a file within the repo and would leak
+ * the external filesystem layout.
  */
-export function toRepoRelative(file: string, root: string): string {
-  let rel = relative(resolve(root), resolve(file));
-  if (!rel) {
-    // `file` is the root itself or resolution produced nothing usable —
-    // fall back to the full resolved path so we never emit an empty source.
-    rel = resolve(file);
+export function toRepoRelative(file: string, root: string): string | undefined {
+  const rel = relative(resolve(root), resolve(file));
+
+  // Outside `root`: a `..` traversal segment, or an absolute path on a
+  // different Windows drive.
+  if (isAbsolute(rel) || rel === '..' || rel.startsWith(`..${sep}`)) {
+    return undefined;
   }
+
+  // `file` is `root` itself — no meaningful relative path exists.
+  if (!rel) {
+    return undefined;
+  }
+
   return rel.replace(/\\/g, '/').replace(/^\.\//, '');
 }

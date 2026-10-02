@@ -17,13 +17,14 @@ import { captureSnapshot } from "./snapshot";
 import { resolveSource, buildFingerprint } from "./source";
 import {
   scoreExplanation,
-  stampProvenance,
+  computeProvenance,
   TRUST_ORDER,
   type FeedbackIntent,
   type Verification,
   type ElementFingerprint,
+  type SourceRef,
 } from "./envelope";
-import { redactText, redactAttributes } from "./redact";
+import { redactText, redactAttributes, redactElementHTML } from "./redact";
 import { startConsoleCapture, getConsoleErrors } from "./console";
 import { startVerifyLoop, stopVerifyLoop } from "./verify";
 import { startReplay, getReplayPayloadAsync } from "./replay";
@@ -168,12 +169,19 @@ import { startReporterNotify, stopReporterNotify } from "./notify";
         const screenshot = await captureElement(target);
         const snapshot = captureSnapshot();
         const replay = config.replay ? await getReplayPayloadAsync() : undefined;
-        // intent/explanation are only known at submit time — merge them into
-        // the capture-time context before shipping.
+        // intent/explanation/provenance are only known at submit time — merge
+        // them into the capture-time context before shipping.
         const contextWithIntent = {
           ...context,
           intent,
           explanation: scoreExplanation(comment, intent),
+          provenance: computeProvenance({
+            intent,
+            hasScreenshot: !!screenshot,
+            hasSnapshot: !!snapshot,
+            cssFrameworks: context["cssFramework"] as string[] | undefined,
+            source: context["source"] as SourceRef | undefined,
+          }),
           verification: buildVerification(
             selector,
             context["fingerprint"] as ElementFingerprint | undefined,
@@ -374,7 +382,7 @@ import { startReporterNotify, stopReporterNotify } from "./notify";
   function gatherContext(el: Element): Record<string, unknown> {
     const rect = el.getBoundingClientRect();
     const source = resolveSource(el);
-    const outerHTML = redactText(el.outerHTML ?? "").slice(0, 4000);
+    const outerHTML = redactElementHTML(el).slice(0, 4000);
     const innerText = redactText((el as HTMLElement).innerText ?? "").slice(0, 200);
     return {
       url: window.location.href,
@@ -387,7 +395,6 @@ import { startReporterNotify, stopReporterNotify } from "./notify";
       attributes: gatherAttributes(el),
       source,
       fingerprint: buildFingerprint(el),
-      provenance: stampProvenance(source),
       trust_order: TRUST_ORDER,
       cssFramework: detectCSSFramework(el),
       computedStyles: gatherComputedStyles(el),

@@ -152,3 +152,47 @@ func TestUnmapStackWithInlineSourcemap(t *testing.T) {
 		t.Fatalf("no original source in: %s", out)
 	}
 }
+
+func TestDeriveStatusNoAppliedInference(t *testing.T) {
+	// An exported item with no explicit lifecycle status must not read "applied".
+	f := store.Feedback{Status: store.StatusExported, IssueURL: "https://github.com/org/repo/issues/1"}
+	if got := deriveStatus(f); got != "exported" {
+		t.Fatalf("deriveStatus(exported) = %q, want exported", got)
+	}
+	// Empty status + issue_url must NOT infer applied.
+	f2 := store.Feedback{IssueURL: "https://github.com/org/repo/issues/1"}
+	if got := deriveStatus(f2); got != "open" {
+		t.Fatalf("deriveStatus(empty) = %q, want open", got)
+	}
+}
+
+func TestBuildIssueContentMultiItemStructured(t *testing.T) {
+	ctxA := map[string]any{
+		"intent": map[string]any{"kind": "bug", "action": "fix", "expected": "be blue", "actual": "is red"},
+		"source": map[string]any{"component": "A", "file": "src/A.tsx", "line": 1.0, "confidence": "exact"},
+	}
+	ctxB := map[string]any{
+		"intent": map[string]any{"kind": "bug", "action": "change", "expected": "be green", "actual": "is yellow"},
+		"source": map[string]any{"component": "B", "file": "src/B.tsx", "line": 2.0, "confidence": "approximate"},
+	}
+	aJSON, _ := json.Marshal(ctxA)
+	bJSON, _ := json.Marshal(ctxB)
+	items := []store.Feedback{
+		{ID: 1, URL: "https://a.com/", Selector: "div.a", Comment: "one", ContextJSON: string(aJSON), GitHubUser: "alice"},
+		{ID: 2, URL: "https://a.com/", Selector: "div.b", Comment: "two", ContextJSON: string(bJSON), GitHubUser: "bob"},
+	}
+	_, body := buildIssueContent(items, "")
+
+	for _, want := range []string{
+		"src/A.tsx", "src/B.tsx", // source per item
+		"be blue", "be green",    // intent expected per item
+		"## Item 1", "## Item 2", // per-item headings
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("missing %q:\n%s", want, body)
+		}
+	}
+	if strings.Count(body, "## Environment") != 1 {
+		t.Fatalf("Environment should appear exactly once:\n%s", body)
+	}
+}

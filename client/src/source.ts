@@ -35,11 +35,17 @@ function parseFileLineCol(raw: string): {
 }
 
 /**
- * Strip absolute/URL path prefixes to a repo-relative path when a common
- * root is detectable. Never rewrites a path into something it is not — if no
- * recognizable root exists the original string is returned unchanged.
+ * Normalize a RUNTIME path (React fiber `_debugSource`, Vue `__file`, dev-tool
+ * stamps). Only strips webpack:// devtool URL prefixes and query/hash suffixes,
+ * and relativizes an absolute filesystem path (leading "/" or drive letter)
+ * against the filesystem root.
+ *
+ * INVARIANT: never truncate at a "/src/" (or similar) marker — monorepo paths
+ * like "packages/web/src/App.tsx" are already repo-relative and must be
+ * preserved verbatim. Only runtime-absolute paths are rewritten, and only
+ * minimally.
  */
-function normalizeFile(raw: string): string {
+function normalizeRuntimePath(raw: string): string {
   let f = raw;
 
   // webpack:// devtool URLs: webpack:///./src/... or webpack://next/./src/...
@@ -50,17 +56,9 @@ function normalizeFile(raw: string): string {
   const q = f.search(/[?#]/);
   if (q >= 0) f = f.slice(0, q);
 
-  // Drop leading "./" or "/".
-  f = f.replace(/^\.\/+/, "").replace(/^\/+/, "");
-
-  // If a recognizable repo-root marker is present, truncate to repo-relative.
-  for (const marker of ["/src/", "/lib/", "/app/", "/pages/", "/components/", "/views/"]) {
-    const idx = f.indexOf(marker);
-    if (idx >= 0) {
-      f = f.slice(idx + 1);
-      break;
-    }
-  }
+  // Relativize an absolute filesystem path against the filesystem root.
+  // (Drive letter or leading slash only — never a mid-path marker.)
+  f = f.replace(/^[A-Za-z]:[\\/]+/, "").replace(/^[/\\]+/, "");
 
   return f;
 }
@@ -84,7 +82,7 @@ function resolveReact(el: Element): SourceRef | null {
     if (ds && typeof ds.fileName === "string" && ds.fileName) {
       return {
         component,
-        file: normalizeFile(ds.fileName),
+        file: normalizeRuntimePath(ds.fileName),
         line: typeof ds.lineNumber === "number" ? ds.lineNumber : undefined,
         column: typeof ds.columnNumber === "number" ? ds.columnNumber : undefined,
         framework: "react",
@@ -141,7 +139,7 @@ function resolveVue(el: Element): SourceRef | null {
       const name = vpc?.type?.name ?? vpc?.type?.__name;
       return {
         component: typeof name === "string" && name ? name : undefined,
-        file: normalizeFile(file),
+        file: normalizeRuntimePath(file),
         framework: "vue",
         resolution: "framework-meta",
         confidence: "approximate",
@@ -193,7 +191,7 @@ function resolveDevStamps(el: Element): SourceRef | null {
     const line = parseInt(node.getAttribute("data-inspector-line") ?? "", 10);
     const column = parseInt(node.getAttribute("data-inspector-column") ?? "", 10);
     return {
-      file: normalizeFile(rel),
+      file: normalizeRuntimePath(rel),
       line: Number.isNaN(line) ? undefined : line,
       column: Number.isNaN(column) ? undefined : column,
       resolution: "dev-stamp",
@@ -206,7 +204,7 @@ function resolveDevStamps(el: Element): SourceRef | null {
   if (v) {
     const parsed = parseFileLineCol(v);
     return {
-      file: normalizeFile(parsed.file),
+      file: normalizeRuntimePath(parsed.file),
       line: parsed.line,
       column: parsed.column,
       framework: "vue",
@@ -223,7 +221,7 @@ function resolveDevStamps(el: Element): SourceRef | null {
       ? parseFileLineCol(loc)
       : {};
     return {
-      file: normalizeFile(astroFile),
+      file: normalizeRuntimePath(astroFile),
       line: parsed.line,
       column: parsed.column,
       framework: "astro",
@@ -259,7 +257,11 @@ export function resolveSource(el: Element): SourceRef {
       if (raw) {
         const parsed = parseFileLineCol(raw);
         return {
-          file: normalizeFile(parsed.file),
+          // INVARIANT: build-stamp paths are already repo-relative by contract
+          // (the plugin emits e.g. "packages/web/src/App.tsx:12:3"). Use the
+          // file verbatim — never run it through runtime normalization, which
+          // could truncate a monorepo path at a "/src/" marker.
+          file: parsed.file,
           line: parsed.line,
           column: parsed.column,
           resolution: "build-stamp",

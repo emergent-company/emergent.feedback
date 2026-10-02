@@ -65,7 +65,9 @@ export interface FeedbackIntent {
   kind: "bug" | "enhancement" | "question" | "task";
   action: IntentAction;
   expected?: string; // what the human wants
-  actual?: string; // what is wrong now
+  actual?: string; // what is wrong now (prefilled from computed styles)
+  /** True when the user manually edited the prefilled `actual` value. */
+  actualEdited?: boolean;
   scope: IntentScope;
 }
 
@@ -109,26 +111,52 @@ export const TRUST_ORDER: string[] = [
   "summary",
 ];
 
+/** Inputs needed to compute per-field provenance at submit time. */
+export interface ProvenanceInput {
+  intent?: FeedbackIntent;
+  hasScreenshot: boolean;
+  cssFrameworks?: string[];
+  source?: SourceRef;
+  /** Reserved for a future `visual.snapshot_ref` key (not yet in TRUST_ORDER). */
+  hasSnapshot?: boolean;
+}
+
 /**
- * Build the default provenance map for a captured envelope. Keys mirror
- * `TRUST_ORDER` so every ranked field carries an honesty marker.
+ * Compute the provenance map from ACTUAL capture/submit results. Keys mirror
+ * `TRUST_ORDER`. This replaces the earlier unconditional map: a field is only
+ * marked `stated`/`captured`/`inferred` when that evidence actually exists,
+ * otherwise it is `absent` (the honesty contract of §2.3).
  *
- * `source` (when passed) lets us mark `target.source` as `absent` when
- * nothing was actually resolved rather than claiming a capture that never
- * happened — the honesty contract of §2.3.
+ * - `intent.expected` → `stated` only when non-empty, else `absent`.
+ * - `intent.actual`   → `captured` (prefilled from computed styles) unless
+ *                       `intent.actualEdited` is set, in which case `stated`;
+ *                       `absent` when empty.
+ * - `target.source`   → `captured` only when `confidence !== "none"`, else `absent`.
+ * - `visual.screenshot_ref` → `captured` iff a screenshot was taken.
+ * - `environment.css_framework` → `inferred` iff non-empty, else `absent`.
+ * - `summary`         → `inferred` (derived by the AI/server).
  */
-export function stampProvenance(source?: SourceRef): Record<string, Provenance> {
-  const sourceState: Provenance =
-    source && source.confidence !== "none" ? "captured" : "absent";
+export function computeProvenance(input: ProvenanceInput): Record<string, Provenance> {
+  const expected = input.intent?.expected?.trim();
+  const actual = input.intent?.actual?.trim();
+
+  const expectedState: Provenance = expected ? "stated" : "absent";
+  const actualState: Provenance = actual
+    ? input.intent?.actualEdited
+      ? "stated"
+      : "captured"
+    : "absent";
+
   return {
-    "target.source": sourceState,
+    "target.source": input.source && input.source.confidence !== "none" ? "captured" : "absent",
     "target.element.fingerprint": "captured",
-    "intent.expected": "stated",
-    "intent.actual": "stated",
+    "intent.expected": expectedState,
+    "intent.actual": actualState,
     "target.element.selector": "captured",
-    "visual.screenshot_ref": "captured",
+    "visual.screenshot_ref": input.hasScreenshot ? "captured" : "absent",
     "target.element.computed_styles": "captured",
-    "environment.css_framework": "inferred",
+    "environment.css_framework":
+      input.cssFrameworks && input.cssFrameworks.length > 0 ? "inferred" : "absent",
     "summary": "inferred",
   };
 }

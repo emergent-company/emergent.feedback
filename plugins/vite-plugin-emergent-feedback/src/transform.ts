@@ -133,6 +133,10 @@ export function transformJsx(
       const line = loc.start.line;
       const column = loc.start.column + 1;
       const rel = toRepoRelative(filename, root);
+      // Out-of-root files have no repo-relative path — skip stamping entirely
+      // rather than emitting a leaky `../` traversal or absolute path.
+      if (rel == null) return;
+
       const value = `${rel}:${line}:${column}`;
 
       node.attributes.push(

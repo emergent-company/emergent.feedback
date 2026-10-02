@@ -466,11 +466,19 @@ func (s *Store) ListExportedLite(ctx context.Context, repos []string) ([]Exporte
 	for _, r := range repos {
 		args = append(args, r)
 	}
-	q := fmt.Sprintf(`
-SELECT id, comment, context_json, label, status, COALESCE(issue_url,''), created_at
-FROM feedback
-WHERE issue_url != '' AND repo IN (%s)
-ORDER BY id DESC LIMIT 500`, ph)
+	return s.queryExportedLite(ctx, fmt.Sprintf(`WHERE issue_url != '' AND repo IN (%s)`, ph), args)
+}
+
+// ListExportedLiteAll returns exported feedback across all repos (used when an
+// API key carries the "*" bootstrap scope).
+func (s *Store) ListExportedLiteAll(ctx context.Context) ([]ExportedLite, error) {
+	return s.queryExportedLite(ctx, `WHERE issue_url != ''`, nil)
+}
+
+func (s *Store) queryExportedLite(ctx context.Context, where string, args []any) ([]ExportedLite, error) {
+	q := `SELECT id, comment, context_json, label, status, COALESCE(issue_url,''), created_at
+FROM feedback ` + where + `
+ORDER BY id DESC LIMIT 500`
 	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("store: list exported lite: %w", err)

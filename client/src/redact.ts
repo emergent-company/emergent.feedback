@@ -76,3 +76,43 @@ export function redactAttributes(attrs: Iterable<AttrKV>): AttrKV[] {
   }
   return out;
 }
+
+/**
+ * Serialize an element to redacted HTML without mutating the live page.
+ * Mirrors snapshot.ts's redaction pass exactly on a clone:
+ *   - `src`/`href`/`action` URLs are sanitized (sensitive query params → `[redacted]`)
+ *   - `srcset` is removed
+ *   - attributes matching SENSITIVE_ATTR or whose value matches TOKEN_VALUE are dropped
+ *   - token-shaped substrings in the serialized output are replaced with `[redacted]`
+ * Returns "" on any error so callers never ship unredacted HTML.
+ */
+export function redactElementHTML(el: Element): string {
+  try {
+    const clone = el.cloneNode(true) as Element;
+
+    const redactNode = (node: Element): void => {
+      for (const attr of Array.from(node.attributes)) {
+        const name = attr.name;
+        const value = attr.value;
+        if (name === "src" || name === "href" || name === "action") {
+          node.setAttribute(name, sanitizeURL(value));
+          continue;
+        }
+        if (name === "srcset") {
+          node.removeAttribute(name);
+          continue;
+        }
+        if (SENSITIVE_ATTR.test(name) || TOKEN_VALUE.test(value)) {
+          node.removeAttribute(name);
+        }
+      }
+    };
+
+    redactNode(clone);
+    clone.querySelectorAll("*").forEach(redactNode);
+
+    return redactText(clone.outerHTML);
+  } catch {
+    return "";
+  }
+}
