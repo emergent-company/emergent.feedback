@@ -49,8 +49,6 @@ export interface CreateFeedbackParams {
   label: string;
   screenshot?: string;
   snapshot?: string;
-  /** Opt-in session replay: base64 of gzip(rrweb JSON). */
-  replay?: string;
 }
 
 export interface ExportIssueParams {

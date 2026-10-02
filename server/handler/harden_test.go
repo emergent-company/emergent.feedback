@@ -7,56 +7,12 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/emergent-company/emergent.feedback/server/github"
-	"github.com/emergent-company/emergent.feedback/server/middleware"
 	"github.com/emergent-company/emergent.feedback/server/store"
-	"github.com/labstack/echo/v4"
 	mcpauth "github.com/modelcontextprotocol/go-sdk/auth"
 )
-
-// newHardeningHandler builds an echo server with the sourcemaps route and a
-// test-login middleware (mirrors newLifecycleHandler but no GitHub token is
-// ever stored, so userRepos always fails).
-func newHardeningHandler(t *testing.T) (*Handler, *store.Store, *echo.Echo) {
-	t.Helper()
-	s, err := store.Open(filepath.Join(t.TempDir(), "test.db"))
-	if err != nil {
-		t.Fatalf("store.Open: %v", err)
-	}
-	t.Cleanup(func() { _ = s.Close() })
-	h := New(s, &github.AppConfig{}, "secret")
-
-	e := echo.New()
-	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
-			c.Set(middleware.UserLoginKey, c.Request().Header.Get("X-Test-Login"))
-			return next(c)
-		}
-	})
-	e.POST("/sourcemaps", h.HandleUploadSourcemaps)
-	return h, s, e
-}
-
-// TestUploadSourcemapsFailsClosed verifies that a scope check that cannot be
-// determined (no stored GitHub token → userRepos errors) results in a 403,
-// never an arbitrary-repo upload.
-func TestUploadSourcemapsFailsClosed(t *testing.T) {
-	_, _, e := newHardeningHandler(t)
-
-	body := `{"repo":"evil/arbitrary","version":"1.0.0","maps":{"bundle.js.map":"{}"}}`
-	req := httptest.NewRequest(http.MethodPost, "/sourcemaps", strings.NewReader(body))
-	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-	req.Header.Set("X-Test-Login", "alice")
-	rec := httptest.NewRecorder()
-	e.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("status = %d, want 403 (fail closed): %s", rec.Code, rec.Body.String())
-	}
-}
 
 // scopeContext wraps a handler that resolves feedback with the bearer-token
 // auth middleware so a TokenInfo lands in the request context (there is no

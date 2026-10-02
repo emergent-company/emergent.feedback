@@ -1,13 +1,7 @@
 package handler
 
 import (
-	"bytes"
-	"context"
-	"encoding/json"
-	"net/http"
-	"os"
 	"strings"
-	"time"
 
 	"github.com/emergent-company/emergent.feedback/server/store"
 )
@@ -85,99 +79,4 @@ func lowerFirst(s string) string {
 	}
 	r[0] = []rune(strings.ToLower(string(r[0])))[0]
 	return string(r)
-}
-
-// generateSummary produces a summary: LLM (if configured, 2s cap) falling back
-// to the deterministic heuristic. Never blocks on the LLM beyond the timeout.
-func generateSummary(ctx map[string]any, f store.Feedback) string {
-	if title, ok := llmTitle(ctx, f); ok && title != "" {
-		return title
-	}
-	return heuristicSummary(ctx, f)
-}
-
-// llmEnabled reports whether LLM autotitle is configured.
-func llmEnabled() bool {
-	return os.Getenv("FEEDBACK_LLM_BASE_URL") != "" && os.Getenv("FEEDBACK_LLM_API_KEY") != ""
-}
-
-// llmTitle asks an OpenAI-compatible endpoint for a concise title. Returns
-// (title, false) on any error/timeout/absence of config.
-func llmTitle(ctx map[string]any, f store.Feedback) (string, bool) {
-	base := os.Getenv("FEEDBACK_LLM_BASE_URL")
-	key := os.Getenv("FEEDBACK_LLM_API_KEY")
-	if base == "" || key == "" {
-		return "", false
-	}
-	model := os.Getenv("FEEDBACK_LLM_MODEL")
-	if model == "" {
-		model = "gpt-4o-mini"
-	}
-
-	prompt := titlePrompt(ctx, f)
-
-	reqCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	payload := map[string]any{
-		"model": model,
-		"messages": []map[string]string{
-			{"role": "system", "content": "You write concise bug-report titles. Return only the title, no quotes, max 80 characters."},
-			{"role": "user", "content": prompt},
-		},
-	}
-	body, _ := json.Marshal(payload)
-
-	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, strings.TrimRight(base, "/")+"/chat/completions", bytes.NewReader(body))
-	if err != nil {
-		return "", false
-	}
-	req.Header.Set("Authorization", "Bearer "+key)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", false
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		return "", false
-	}
-
-	var out struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil || len(out.Choices) == 0 {
-		return "", false
-	}
-
-	title := strings.TrimSpace(out.Choices[0].Message.Content)
-	title = strings.Trim(title, "\"`")
-	if title == "" {
-		return "", false
-	}
-	return truncate(title, 120), true
-}
-
-// titlePrompt builds a minimal prompt from comment + intent signals.
-func titlePrompt(ctx map[string]any, f store.Feedback) string {
-	var b strings.Builder
-	if f.Comment != "" {
-		b.WriteString("Comment: " + redactSecrets(f.Comment) + "\n")
-	}
-	intent := getMap(ctx, "intent")
-	if action := strVal(intent["action"]); action != "" {
-		b.WriteString("Action: " + action + "\n")
-	}
-	if expected := strVal(intent["expected"]); expected != "" {
-		b.WriteString("Expected: " + expected + "\n")
-	}
-	if b.Len() == 0 {
-		return "Write a title for this feedback."
-	}
-	return b.String() + "Write a short title for this feedback."
 }

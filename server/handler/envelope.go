@@ -53,7 +53,7 @@ func BuildEnvelope(f store.Feedback) map[string]any {
 	if ex := buildExplanation(ctx, f); ex != nil {
 		env["explanation"] = ex
 	}
-	if repro := buildRepro(ctx, f); repro != nil {
+	if repro := buildRepro(ctx); repro != nil {
 		env["repro"] = repro
 	}
 	if e := buildEnvironment(ctx, f); e != nil {
@@ -387,7 +387,7 @@ func buildExplanation(ctx map[string]any, f store.Feedback) map[string]any {
 	return out
 }
 
-func buildRepro(ctx map[string]any, f store.Feedback) map[string]any {
+func buildRepro(ctx map[string]any) map[string]any {
 	out := map[string]any{}
 	if v := reproValue(ctx, "steps"); v != nil {
 		out["steps"] = v
@@ -400,12 +400,6 @@ func buildRepro(ctx map[string]any, f store.Feedback) map[string]any {
 	}
 	if v := ctx["sessionHistory"]; v != nil {
 		out["session_history"] = v
-	}
-	// replay: prefer client-provided, else reference the stored replay blob.
-	if v := reproValue(ctx, "replay"); v != nil {
-		out["replay"] = v
-	} else if len(f.Replay) > 0 {
-		out["replay"] = fmt.Sprintf("feedback://%d/replay", f.ID)
 	}
 	if len(out) == 0 {
 		return nil
@@ -481,9 +475,6 @@ func buildVisual(f store.Feedback) map[string]any {
 	}
 	if len(f.Snapshot) > 0 {
 		out["snapshot_ref"] = fmt.Sprintf("feedback://%d/snapshot", f.ID)
-	}
-	if len(f.Replay) > 0 {
-		out["replay_ref"] = fmt.Sprintf("feedback://%d/replay", f.ID)
 	}
 	if len(out) == 0 {
 		return nil

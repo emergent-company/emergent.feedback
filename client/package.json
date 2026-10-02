@@ -3,16 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --minify --format=iife --global-name=EmergentFeedback --outfile=../server/static/emergent-feedback.js && esbuild replay.entry.ts --bundle --minify --format=iife --global-name=EmergentFeedbackReplay --outfile=../server/static/emergent-feedback-replay.js",
-    "build:replay": "esbuild replay.entry.ts --bundle --minify --format=iife --global-name=EmergentFeedbackReplay --outfile=../server/static/emergent-feedback-replay.js",
-    "build:dev": "esbuild src/index.ts --bundle --format=iife --global-name=EmergentFeedback --outfile=../server/static/emergent-feedback.js --sourcemap && esbuild replay.entry.ts --bundle --format=iife --global-name=EmergentFeedbackReplay --outfile=../server/static/emergent-feedback-replay.js --sourcemap",
+    "build": "esbuild src/index.ts --bundle --minify --format=iife --global-name=EmergentFeedback --outfile=../server/static/emergent-feedback.js",
+    "build:dev": "esbuild src/index.ts --bundle --format=iife --global-name=EmergentFeedback --outfile=../server/static/emergent-feedback.js --sourcemap",
     "watch": "esbuild src/index.ts --bundle --format=iife --global-name=EmergentFeedback --outfile=../server/static/emergent-feedback.js --sourcemap --watch",
     "test": "npm run test:build && node --test test-dist/",
     "test:build": "esbuild test/*.test.ts --bundle --platform=node --format=esm --out-extension:.js=.mjs --outdir=test-dist"
   },
   "dependencies": {
-    "html2canvas": "^1.4.1",
-    "rrweb": "^2.1.6"
+    "html2canvas": "^1.4.1"
   },
   "devDependencies": {
     "esbuild": "^0.25.0",

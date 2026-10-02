@@ -83,16 +83,6 @@ func TestBuildIssueContentRedactsComment(t *testing.T) {
 	}
 }
 
-func TestTitlePromptRedactsComment(t *testing.T) {
-	p := titlePrompt(nil, store.Feedback{Comment: "token ghp_AbCdEfGhIjKlMnOpQrSt broke"})
-	if strings.Contains(p, "ghp_AbCdEfGhIjKlMnOpQrSt") {
-		t.Fatalf("comment secret leaked into LLM prompt: %q", p)
-	}
-	if !strings.Contains(p, "[redacted]") {
-		t.Fatalf("expected redacted marker in prompt: %q", p)
-	}
-}
-
 func TestRedactSecretsSensitiveParamSubstrings(t *testing.T) {
 	// Suffixed/prefixed param names must be scrubbed, matching the client's
 	// substring isSensitiveURLParam check (not an exact-key match).

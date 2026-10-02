@@ -78,10 +78,6 @@ func (h *Handler) HandleExportIssue(c echo.Context) error {
 	if !repoInScope(req.Repo, allowedRepos) {
 		return echo.NewHTTPError(http.StatusForbidden, "repo not in scope")
 	}
-	// Best-effort console stack unmapping before rendering (never blocks on failure).
-	for i := range items {
-		items[i].ContextJSON = h.unmapContextConsole(ctx, items[i].Repo, items[i].ContextJSON)
-	}
 	title, body := buildIssueContent(items, login)
 	if req.Title != "" {
 		title = req.Title

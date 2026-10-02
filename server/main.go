@@ -12,7 +12,7 @@ import (
 	"github.com/emergent-company/emergent.feedback/server/store"
 )
 
-//go:embed static/emergent-feedback.js static/emergent-feedback-replay.js
+//go:embed static/emergent-feedback.js
 var staticFiles embed.FS
 
 //go:embed schema/envelope.v1.json
