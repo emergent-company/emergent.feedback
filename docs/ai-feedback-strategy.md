@@ -19,11 +19,12 @@ code-derived reference):
   anchor_stable live; human + test_exists fallback); `feedback_mark_applied` /
   `feedback_mark_resolved` + GitHub issue comment/close; `feedback_watch` long-poll;
   `feedback_events` monotonic sequence; screenshot capture. Status: shipped.
-- **Phase C — forensic + replay + portability.** rrweb replay (opt-in, 60s buffer);
-  source-map upload + best-effort stack unmapping; detail levels (compact/standard/
+- **Phase C — forensic + replay + portability.** Detail levels (compact/standard/
   forensic) + `response_format`; published envelope JSON Schema at
   `GET /schema/envelope.v1.json`; reporter notify + heuristic dedupe + auto-title
-  (heuristic, optional LLM). Status: shipped.
+  (deterministic heuristic). Status: shipped in this PR. **Session replay,
+  source-map upload/unmapping, and optional LLM auto-title are NOT in this PR —
+  they ship in follow-up PR #8.**
 
 **Deferred (not yet implemented):** Vue/Svelte build-stamp support (the in-repo
 plugin is React JSX/TSX only); `test_exists` verification is evaluated client-side
@@ -39,19 +40,21 @@ MCP **resource** + `fix-feedback` prompt (v2).
 - **Build plugin ships in-repo** — `plugins/vite-plugin-emergent-feedback/`
   (React JSX/TSX; Vue/Svelte unsupported). Injects
   `data-fo-src="<repo-relative>:<line>:<column>"`.
-- **Source-map unmap is best-effort** — stored per `(repo, version, path)`, applied
-  only when a frame matches; on any failure absolute filesystem paths are shortened
-  to their last 3 segments (no full-path leakage).
+- **Source-map unmap is best-effort** (Phase C — PR #8, not in this PR) — stored
+  per `(repo, version, path)`, applied only when a frame matches; on any failure
+  absolute filesystem paths are shortened to their last 3 segments (no full-path
+  leakage).
 - **Dedupe is heuristic only** — `sha256(repo+selector+fingerprint.path+normalized
   comment)`; links `duplicate_of`, never auto-merges.
-- **Auto-title** uses a deterministic heuristic; the optional LLM is async +
-  non-blocking (2s cap, falls back to heuristic).
-- **Replay is a lazy second bundle** — main `emergent-feedback.js` (~269 KB) +
-  `emergent-feedback-replay.js` (~179 KB), fetched only when `data-replay` is on.
+- **Auto-title** uses a deterministic heuristic (this PR); the optional LLM is
+  async + non-blocking (2s cap, falls back to heuristic) — Phase C, PR #8.
+- **Replay is a lazy second bundle** (Phase C — PR #8, not in this PR) — main
+  `emergent-feedback.js` (~269 KB) + `emergent-feedback-replay.js` (~179 KB),
+  fetched only when `data-replay` is on.
 - **Hardening pass** — server-side `redactSecrets` on comments; source-map upload
-  fails closed (403) when scope is undeterminable; replay decompression capped at
-  20MB (413); `verified_at` set only for `green`; deleting feedback cascades its
-  events.
+  fails closed (403) when scope is undeterminable (Phase C — PR #8); replay
+  decompression capped at 20MB (413) (Phase C — PR #8); `verified_at` set only for
+  `green`; deleting feedback cascades its events.
 
 ---
 
