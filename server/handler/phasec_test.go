@@ -153,6 +153,28 @@ func TestUnmapStackWithInlineSourcemap(t *testing.T) {
 	}
 }
 
+func TestUnmapContextConsoleNestedReproConsole(t *testing.T) {
+	_, s, _ := newLifecycleHandler(t)
+	ctx := context.Background()
+
+	sm := `{"version":3,"file":"bundle.js","sources":["src/App.tsx"],"names":[],"mappings":"AAAA"}`
+	if err := s.UpsertSourcemap(ctx, "org/repo", "1.0.0", "bundle.js.map", []byte(sm)); err != nil {
+		t.Fatalf("UpsertSourcemap: %v", err)
+	}
+
+	h := &Handler{Store: s}
+	// The client nests console under repro.console; unmapping must read the
+	// nested array (this test FAILS if the nested read is reverted to top-level).
+	contextJSON := `{"appVersion":"1.0.0","repro":{"console":[{"level":"error","message":"boom","stack":[{"path":"https://cdn.example.com/bundle.js","line":1,"column":0}]}]}}`
+	out := h.unmapContextConsole(ctx, "org/repo", contextJSON)
+	if !strings.Contains(out, "unmapped_stack") {
+		t.Fatalf("no unmapped_stack in: %s", out)
+	}
+	if !strings.Contains(out, "src/App.tsx") {
+		t.Fatalf("no original source in: %s", out)
+	}
+}
+
 func TestShortenPath(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{"/root/emergent.memory/apps/web-ui/src/Foo.tsx", "web-ui/src/Foo.tsx"},

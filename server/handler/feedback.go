@@ -224,7 +224,7 @@ func (h *Handler) HandleListFeedbackByURL(c echo.Context) error {
 		out = append(out, item{
 			ID:         f.ID,
 			Selector:   f.Selector,
-			Comment:    f.Comment,
+			Comment:    redactSecrets(f.Comment),
 			GitHubUser: f.GitHubUser,
 			CreatedAt:  f.CreatedAt.Format("2006-01-02 15:04"),
 		})
@@ -247,12 +247,17 @@ func (h *Handler) HandleGetFeedback(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusForbidden, "feedback not found")
 	}
 
+	ctx := parseContext(f.ContextJSON)
+	if ctx == nil {
+		ctx = map[string]any{}
+	}
+
 	resp := map[string]any{
 		"id":             f.ID,
 		"url":            f.URL,
 		"selector":       f.Selector,
-		"comment":        f.Comment,
-		"context":        json.RawMessage(f.ContextJSON),
+		"comment":        redactSecrets(f.Comment),
+		"context":        redactContext(ctx),
 		"github_user":    f.GitHubUser,
 		"repo":           f.Repo,
 		"label":          f.Label,

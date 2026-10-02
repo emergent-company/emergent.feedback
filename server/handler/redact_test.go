@@ -90,3 +90,46 @@ func TestTitlePromptRedactsComment(t *testing.T) {
 		t.Fatalf("expected redacted marker in prompt: %q", p)
 	}
 }
+
+func TestRedactSecretsSensitiveParamSubstrings(t *testing.T) {
+	// Suffixed/prefixed param names must be scrubbed, matching the client's
+	// substring isSensitiveURLParam check (not an exact-key match).
+	in := "see https://app.example.com/path?access_token=abc123&refresh_token=def456&other=1 for details"
+	out := redactSecrets(in)
+	for _, leak := range []string{"abc123", "def456"} {
+		if strings.Contains(out, leak) {
+			t.Fatalf("sensitive param value leaked: %s", out)
+		}
+	}
+	for _, want := range []string{"access_token=[redacted]", "refresh_token=[redacted]"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected %q in: %s", want, out)
+		}
+	}
+}
+
+func TestRedactSecretsPreservesHexSHA(t *testing.T) {
+	// A 40-char pure-hex commit SHA must survive redaction.
+	sha := "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678"
+	if len(sha) != 40 {
+		t.Fatalf("test fixture not 40 chars: %d", len(sha))
+	}
+	in := "commit " + sha + " fixes it"
+	if got := redactSecrets(in); !strings.Contains(got, sha) {
+		t.Fatalf("40-char hex SHA was redacted: %s", got)
+	}
+}
+
+func TestRedactSecretsStillRedactsLongNonHex(t *testing.T) {
+	// A 40-char string containing a non-hex char, and strings longer than 40,
+	// must still be redacted.
+	cases := []string{
+		strings.Repeat("z", 40),                        // 40 chars, non-hex
+		"a1b2c3d4e5f60718293a4b5c6d7e8f90123456789", // 41 hex chars
+	}
+	for _, in := range cases {
+		if got := redactSecrets(in); !strings.Contains(got, "[redacted]") {
+			t.Fatalf("expected redaction for %q, got %q", in, got)
+		}
+	}
+}

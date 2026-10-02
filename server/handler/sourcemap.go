@@ -76,7 +76,9 @@ func (h *Handler) unmapContextConsole(ctx context.Context, repo, contextJSON str
 	if m == nil {
 		return contextJSON
 	}
-	console, ok := m["console"].([]any)
+	// Client nests console under repro.console; read nested first and fall back
+	// to the legacy top-level console key (same lookup as buildRepro).
+	console, ok := reproValue(m, "console").([]any)
 	if !ok || len(console) == 0 {
 		return contextJSON
 	}
@@ -116,7 +118,17 @@ func (h *Handler) unmapContextConsole(ctx context.Context, repo, contextJSON str
 	if !changed {
 		return contextJSON
 	}
-	m["console"] = console
+	// Write the updated console array back to whichever container held it:
+	// nested repro.console first, then legacy top-level console.
+	if r, ok := m["repro"].(map[string]any); ok {
+		if _, has := r["console"]; has {
+			r["console"] = console
+		} else {
+			m["console"] = console
+		}
+	} else {
+		m["console"] = console
+	}
 	b, err := json.Marshal(m)
 	if err != nil {
 		return contextJSON

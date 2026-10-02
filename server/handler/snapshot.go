@@ -14,14 +14,25 @@ const maxDecompressedBytes = 20 * 1024 * 1024
 // errReplayTooLarge signals a decompressed replay exceeding the size cap.
 var errReplayTooLarge = errors.New("replay too large")
 
-// decodeSnapshot decompresses a gzipped snapshot blob.
+// errSnapshotTooLarge signals a decompressed snapshot exceeding the size cap.
+var errSnapshotTooLarge = errors.New("snapshot too large")
+
+// decodeSnapshot decompresses a gzipped snapshot blob, capping the decompressed
+// size at maxDecompressedBytes to prevent zip-bomb style decompression.
 func decodeSnapshot(b []byte) ([]byte, error) {
 	gr, err := gzip.NewReader(bytes.NewReader(b))
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = gr.Close() }()
-	return io.ReadAll(gr)
+	out, err := io.ReadAll(io.LimitReader(gr, maxDecompressedBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(out) > maxDecompressedBytes {
+		return nil, errSnapshotTooLarge
+	}
+	return out, nil
 }
 
 // gunzipOrRaw decompresses a gzipped blob, returning the raw bytes unchanged if

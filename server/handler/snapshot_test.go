@@ -34,6 +34,24 @@ func TestDecodeSnapshotInvalid(t *testing.T) {
 	}
 }
 
+func TestDecodeSnapshotRejectsOversize(t *testing.T) {
+	// ~20MB + 1 of data compresses tiny, exercising the decompression cap.
+	var buf bytes.Buffer
+	gw := gzip.NewWriter(&buf)
+	big := make([]byte, maxDecompressedBytes+1)
+	if _, err := gw.Write(big); err != nil {
+		t.Fatalf("gzip write: %v", err)
+	}
+	if err := gw.Close(); err != nil {
+		t.Fatalf("gzip close: %v", err)
+	}
+
+	_, err := decodeSnapshot(buf.Bytes())
+	if !errors.Is(err, errSnapshotTooLarge) {
+		t.Fatalf("expected errSnapshotTooLarge, got %v", err)
+	}
+}
+
 func TestGunzipOrRawRejectsOversize(t *testing.T) {
 	// ~20MB + 1 of data compresses tiny, so this exercises the decompression cap
 	// rather than the (already capped) compressed-size path.

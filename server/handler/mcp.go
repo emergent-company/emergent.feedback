@@ -208,7 +208,7 @@ func (h *Handler) toolListForIssue(ctx context.Context, _ *mcp.CallToolRequest, 
 			ID:            f.ID,
 			Selector:      f.Selector,
 			URL:           f.URL,
-			Comment:       f.Comment,
+			Comment:       redactSecrets(f.Comment),
 			HasScreenshot: len(f.Screenshot) > 0,
 			HasSnapshot:   len(f.Snapshot) > 0,
 		})
