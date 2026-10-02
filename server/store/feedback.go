@@ -335,8 +335,9 @@ type FeedbackEvent struct {
 	CreatedAt  time.Time
 }
 
-// ExportedLite is a lightweight projection of exported feedback — enough to
-// render the feedback_list tool without loading screenshot/snapshot blobs.
+// ExportedLite is a lightweight projection of a feedback row — enough to render
+// the feedback_list tool (summary/type/status/source_confidence/issue_url)
+// without loading screenshot/snapshot blobs.
 type ExportedLite struct {
 	ID          int64
 	Comment     string
@@ -481,22 +482,56 @@ func (s *Store) ListExportedLite(ctx context.Context, repos []string) ([]Exporte
 	for _, r := range repos {
 		args = append(args, r)
 	}
-	return s.queryExportedLite(ctx, fmt.Sprintf(`WHERE issue_url != '' AND repo IN (%s)`, ph), args)
+	return s.queryLite(ctx, fmt.Sprintf(`WHERE issue_url != '' AND repo IN (%s)`, ph), args)
 }
 
 // ListExportedLiteAll returns exported feedback across all repos (used when an
 // API key carries the "*" bootstrap scope).
 func (s *Store) ListExportedLiteAll(ctx context.Context) ([]ExportedLite, error) {
-	return s.queryExportedLite(ctx, `WHERE issue_url != ''`, nil)
+	return s.queryLite(ctx, `WHERE issue_url != ''`, nil)
 }
 
-func (s *Store) queryExportedLite(ctx context.Context, where string, args []any) ([]ExportedLite, error) {
+// ListLite returns a lightweight projection (no blobs) of feedback whose repo
+// is in repos, across all lifecycle statuses. An empty status filter means
+// "all statuses"; otherwise only items with that exact status are returned.
+func (s *Store) ListLite(ctx context.Context, repos []string, status string) ([]ExportedLite, error) {
+	if len(repos) == 0 {
+		return nil, nil
+	}
+	ph := strings.TrimSuffix(strings.Repeat("?,", len(repos)), ",")
+	args := make([]any, 0, len(repos)+1)
+	for _, r := range repos {
+		args = append(args, r)
+	}
+	where := fmt.Sprintf(`repo IN (%s)`, ph)
+	if status != "" {
+		where += ` AND status = ?`
+		args = append(args, status)
+	}
+	return s.queryLite(ctx, `WHERE `+where, args)
+}
+
+// ListLiteAll returns ListLite across all repos (for the "*" bootstrap scope).
+func (s *Store) ListLiteAll(ctx context.Context, status string) ([]ExportedLite, error) {
+	where := `1=1`
+	args := make([]any, 0, 1)
+	if status != "" {
+		where += ` AND status = ?`
+		args = append(args, status)
+	}
+	return s.queryLite(ctx, `WHERE `+where, args)
+}
+
+// queryLite runs the shared lightweight feedback projection query. A created_at
+// value that fails to parse is left as the zero time; callers that filter on
+// CreatedAt must treat a zero time as "unknown" rather than "before".
+func (s *Store) queryLite(ctx context.Context, where string, args []any) ([]ExportedLite, error) {
 	q := `SELECT id, comment, context_json, label, status, COALESCE(issue_url,''), created_at
 FROM feedback ` + where + `
 ORDER BY id DESC LIMIT 500`
 	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
-		return nil, fmt.Errorf("store: list exported lite: %w", err)
+		return nil, fmt.Errorf("store: list lite: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -505,7 +540,7 @@ ORDER BY id DESC LIMIT 500`
 		var e ExportedLite
 		var createdAt string
 		if err := rows.Scan(&e.ID, &e.Comment, &e.ContextJSON, &e.Label, &e.Status, &e.IssueURL, &createdAt); err != nil {
-			return nil, fmt.Errorf("store: scan exported lite: %w", err)
+			return nil, fmt.Errorf("store: scan lite: %w", err)
 		}
 		e.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
 		out = append(out, e)

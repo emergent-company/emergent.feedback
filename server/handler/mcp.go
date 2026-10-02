@@ -49,7 +49,7 @@ func (h *Handler) MCPServer() *mcp.Server {
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "feedback_list",
-		Description: "List exported feedback items within the key's repo scope, sorted by source confidence (exact first); optional filters for repo, status, type, and since.",
+		Description: "List feedback items within the key's repo scope across all lifecycle statuses (open|applied|verified|resolved|exported), sorted by source confidence (exact first); optional filters for repo, status, type, and since.",
 	}, h.toolFeedbackList)
 
 	mcp.AddTool(srv, &mcp.Tool{
@@ -276,9 +276,9 @@ type feedbackListItem struct {
 	IssueURL         string `json:"issue_url"`
 }
 
-// toolFeedbackList lists exported feedback for the key's repo scope via a
-// lightweight store query (no screenshot/snapshot blobs), then sorts by source
-// confidence descending (exact first).
+// toolFeedbackList lists feedback for the key's repo scope via a lightweight
+// store query (no screenshot/snapshot blobs) across all lifecycle statuses,
+// then sorts by source confidence descending (exact first).
 func (h *Handler) toolFeedbackList(ctx context.Context, _ *mcp.CallToolRequest, in feedbackListInput) (*mcp.CallToolResult, []feedbackListItem, error) {
 	ti := auth.TokenInfoFromContext(ctx)
 	if ti == nil {
@@ -302,9 +302,9 @@ func (h *Handler) toolFeedbackList(ctx context.Context, _ *mcp.CallToolRequest, 
 		err   error
 	)
 	if wildcard {
-		items, err = h.Store.ListExportedLiteAll(ctx)
+		items, err = h.Store.ListLiteAll(ctx, in.Status)
 	} else {
-		items, err = h.Store.ListExportedLite(ctx, repos)
+		items, err = h.Store.ListLite(ctx, repos, in.Status)
 	}
 	if err != nil {
 		return nil, nil, err
@@ -322,10 +322,9 @@ func (h *Handler) toolFeedbackList(ctx context.Context, _ *mcp.CallToolRequest, 
 	for _, it := range items {
 		f := store.Feedback{Status: it.Status, IssueURL: it.IssueURL, Label: it.Label, Comment: it.Comment}
 		status := deriveStatus(f)
-		if in.Status != "" && status != in.Status {
-			continue
-		}
-		if !since.IsZero() && it.CreatedAt.Before(since) {
+		// A zero CreatedAt means the timestamp could not be parsed; treat it as
+		// "unknown" and include the item rather than dropping it via `since`.
+		if !since.IsZero() && !it.CreatedAt.IsZero() && it.CreatedAt.Before(since) {
 			continue
 		}
 		c := parseContext(it.ContextJSON)
@@ -364,7 +363,8 @@ func (h *Handler) toolMarkApplied(ctx context.Context, _ *mcp.CallToolRequest, i
 	if _, err := h.scopedFeedback(ctx, in.FeedbackID); err != nil {
 		return nil, markOutput{}, err
 	}
-	if err := h.Store.SetStatus(ctx, in.FeedbackID, store.StatusApplied, "", in.Summary); err != nil {
+	actor := actorFromTokenInfo(auth.TokenInfoFromContext(ctx))
+	if err := h.Store.SetStatus(ctx, in.FeedbackID, store.StatusApplied, actor, in.Summary); err != nil {
 		return nil, markOutput{}, err
 	}
 	return nil, markOutput{ID: in.FeedbackID, Status: string(store.StatusApplied)}, nil
@@ -374,10 +374,24 @@ func (h *Handler) toolMarkResolved(ctx context.Context, _ *mcp.CallToolRequest, 
 	if _, err := h.scopedFeedback(ctx, in.FeedbackID); err != nil {
 		return nil, markOutput{}, err
 	}
-	if err := h.Store.SetStatus(ctx, in.FeedbackID, store.StatusResolved, "", in.Summary); err != nil {
+	actor := actorFromTokenInfo(auth.TokenInfoFromContext(ctx))
+	if err := h.Store.SetStatus(ctx, in.FeedbackID, store.StatusResolved, actor, in.Summary); err != nil {
 		return nil, markOutput{}, err
 	}
 	return nil, markOutput{ID: in.FeedbackID, Status: string(store.StatusResolved)}, nil
+}
+
+// actorFromTokenInfo derives a stable actor label for a lifecycle event from
+// the authenticated MCP caller. The token verifier sets TokenInfo.UserID to an
+// api-key short-hash (or "mcp-bootstrap"); fall back to "mcp" when absent.
+func actorFromTokenInfo(ti *auth.TokenInfo) string {
+	if ti == nil {
+		return "mcp"
+	}
+	if ti.UserID != "" {
+		return ti.UserID
+	}
+	return "mcp"
 }
 
 type feedbackVerifyOutput struct {

@@ -306,6 +306,44 @@ func TestDedupeDuplicateLink(t *testing.T) {
 	}
 }
 
+func TestListLiteAllStatusesAndFilter(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	openF := createTestFeedback(t, s, ctx)
+	appliedF := createTestFeedback(t, s, ctx)
+	if err := s.SetStatus(ctx, appliedF.ID, StatusApplied, "alice", ""); err != nil {
+		t.Fatalf("SetStatus applied: %v", err)
+	}
+
+	// nil status = all.
+	all, err := s.ListLite(ctx, []string{"org/repo"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 2 {
+		t.Fatalf("all = %d, want 2", len(all))
+	}
+
+	// status filter narrows.
+	applied, err := s.ListLite(ctx, []string{"org/repo"}, string(StatusApplied))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(applied) != 1 || applied[0].ID != appliedF.ID {
+		t.Fatalf("applied = %v, want only id %d", applied, appliedF.ID)
+	}
+
+	// open-only filter excludes the applied item and includes the open one.
+	open, err := s.ListLite(ctx, []string{"org/repo"}, string(StatusOpen))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(open) != 1 || open[0].ID != openF.ID {
+		t.Fatalf("open = %v, want only id %d", open, openF.ID)
+	}
+}
+
 func TestListExportedLiteAll(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()

@@ -151,13 +151,17 @@ func buildRouter(s *store.Store, ghCfg *github.AppConfig, jwtSecret, allowedOrig
 	)
 	verify := func(ctx context.Context, token string, _ *http.Request) (*mcpauth.TokenInfo, error) {
 		if mcpAPIKey != "" && subtle.ConstantTimeCompare([]byte(token), []byte(mcpAPIKey)) == 1 {
-			return &mcpauth.TokenInfo{Scopes: []string{"*"}, Expiration: time.Now().Add(time.Hour)}, nil
+			return &mcpauth.TokenInfo{Scopes: []string{"*"}, Expiration: time.Now().Add(time.Hour), UserID: "mcp-bootstrap"}, nil
 		}
 		repos, err := h.VerifyAPIKey(ctx, token)
 		if err != nil || len(repos) == 0 {
 			return nil, mcpauth.ErrInvalidToken
 		}
-		return &mcpauth.TokenInfo{Scopes: repos, Expiration: time.Now().Add(time.Hour)}, nil
+		return &mcpauth.TokenInfo{
+			Scopes:     repos,
+			Expiration: time.Now().Add(time.Hour),
+			UserID:     "api-key:" + handler.HashAPIKey(token)[:8],
+		}, nil
 	}
 	authed := mcpauth.RequireBearerToken(verify, nil)(streamable)
 	e.Any("/mcp", echo.WrapHandler(authed))

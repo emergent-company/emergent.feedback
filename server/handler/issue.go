@@ -50,6 +50,14 @@ func (h *Handler) HandleExportIssue(c echo.Context) error {
 		items = append(items, f)
 	}
 
+	// Authz: every item's repo must match req.Repo, so a caller cannot export
+	// their feedback into an arbitrary repo the app can access.
+	for _, f := range items {
+		if f.Repo != req.Repo {
+			return echo.NewHTTPError(http.StatusBadRequest, "repo does not match feedback items")
+		}
+	}
+
 	labels := req.Labels
 	if len(labels) == 0 && len(items) > 0 {
 		labels = []string{items[0].Label}
@@ -60,6 +68,15 @@ func (h *Handler) HandleExportIssue(c echo.Context) error {
 		if f.GitHubUser != login {
 			return echo.NewHTTPError(http.StatusForbidden, "cannot export feedback you do not own")
 		}
+	}
+	// Authz: fail closed — the caller's GitHub repos must cover req.Repo before
+	// an issue is created in it.
+	allowedRepos, err := h.userRepos(c)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusForbidden, "repo not in scope")
+	}
+	if !repoInScope(req.Repo, allowedRepos) {
+		return echo.NewHTTPError(http.StatusForbidden, "repo not in scope")
 	}
 	// Best-effort console stack unmapping before rendering (never blocks on failure).
 	for i := range items {
