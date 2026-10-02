@@ -27,7 +27,7 @@ import (
 // from the JWT secret) so the e2e test can seed a stored GitHub token without
 // going through the OAuth callback (which hits github.com).
 func encryptTokenForTest(plain, jwtSecret string) []byte {
-	sum := sha256.Sum256([]byte("emergent-feedback:token:" + jwtSecret))
+	sum := sha256.Sum256([]byte("feedback-overlay:token:" + jwtSecret))
 	block, err := aes.NewCipher(sum[:])
 	if err != nil {
 		panic(err)
@@ -278,8 +278,8 @@ func TestAPIEndToEnd(t *testing.T) {
 		if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
 			t.Fatalf("decode: %v", err)
 		}
-		if !strings.HasPrefix(out.Key, "fo_") {
-			t.Fatalf("key %q missing fo_ prefix", out.Key)
+		if !strings.HasPrefix(out.Key, "ef_") {
+			t.Fatalf("key %q missing ef_ prefix", out.Key)
 		}
 		apiKeyID = out.ID
 		apiKey = out.Key
