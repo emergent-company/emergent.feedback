@@ -15,7 +15,9 @@ import (
 
 // tokenEncryptKey derives an AES-256 key from the JWT secret (domain-separated).
 func tokenEncryptKey(jwtSecret string) []byte {
-	sum := sha256.Sum256([]byte("emergent-feedback:token:" + jwtSecret))
+	// Retained for data compatibility: this salt must stay stable so previously
+	// stored GitHub tokens continue to decrypt. Not a display name.
+	sum := sha256.Sum256([]byte("feedback-overlay:token:" + jwtSecret))
 	return sum[:]
 }
 
