@@ -43,6 +43,11 @@ func (h *Handler) MCPServer() *mcp.Server {
 	}, h.toolFeedbackGet)
 
 	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "feedback_get_replay",
+		Description: "Return the rrweb replay events JSON for a feedback item; requires API-key authentication and repo scope.",
+	}, h.toolGetReplay)
+
+	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "feedback_list",
 		Description: "List feedback items within the key's repo scope across all lifecycle statuses (open|applied|verified|resolved|exported), sorted by source confidence (exact first); optional filters for repo, status, type, and since.",
 	}, h.toolFeedbackList)
@@ -226,9 +231,33 @@ func (h *Handler) toolFeedbackGet(ctx context.Context, _ *mcp.CallToolRequest, i
 		return nil, nil, err
 	}
 	if in.ResponseFormat == "detailed" {
+		f.ContextJSON = h.unmapContextConsole(ctx, f.Repo, f.ContextJSON)
 		return nil, BuildEnvelope(f), nil
 	}
 	return nil, BuildConciseEnvelope(f), nil
+}
+
+type replayOutput struct {
+	Events any `json:"events"`
+}
+
+func (h *Handler) toolGetReplay(ctx context.Context, _ *mcp.CallToolRequest, in feedbackIDInput) (*mcp.CallToolResult, replayOutput, error) {
+	f, err := h.scopedFeedback(ctx, in.FeedbackID)
+	if err != nil {
+		return nil, replayOutput{}, err
+	}
+	if len(f.Replay) == 0 {
+		return nil, replayOutput{}, fmt.Errorf("no replay for feedback %d", in.FeedbackID)
+	}
+	data, err := gunzipOrRaw(f.Replay)
+	if err != nil {
+		return nil, replayOutput{}, err
+	}
+	var events any
+	if err := json.Unmarshal(data, &events); err != nil {
+		events = string(data)
+	}
+	return nil, replayOutput{Events: events}, nil
 }
 
 type feedbackListInput struct {

@@ -232,6 +232,21 @@ func TestBuildEnvelopeReproTopLevelFallback(t *testing.T) {
 	}
 }
 
+func TestBuildEnvelopeReplayRef(t *testing.T) {
+	f := store.Feedback{
+		ID:          9,
+		ContextJSON: `{"repro":{"steps":["a"]}}`,
+		Selector:    "button",
+		Comment:     "x",
+		Replay:      []byte{0x1f, 0x8b},
+	}
+	env := BuildEnvelope(f)
+	repro, _ := env["repro"].(map[string]any)
+	if repro["replay"] != "feedback://9/replay" {
+		t.Fatalf("repro.replay = %v, want feedback://9/replay", repro["replay"])
+	}
+}
+
 func TestBuildEnvelopeLifecycle(t *testing.T) {
 	at := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
 	vt := at.Add(time.Minute)

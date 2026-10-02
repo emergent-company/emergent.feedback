@@ -27,6 +27,7 @@ import {
 import { redactText, redactAttributes, redactElementHTML } from "./redact";
 import { startConsoleCapture, getConsoleErrors } from "./console";
 import { startVerifyLoop, stopVerifyLoop } from "./verify";
+import { startReplay, getReplayPayloadAsync } from "./replay";
 import { startReporterNotify, stopReporterNotify } from "./notify";
 
 (function bootstrap() {
@@ -41,6 +42,10 @@ import { startReporterNotify, stopReporterNotify } from "./notify";
   const auth = new AuthManager(config, api);
 
   api.setOnUnauthorized(() => auth.logout());
+
+  // Opt-in session replay: start buffering immediately (pre-bug window) and
+  // keep it running across mode transitions — never stopped on idle.
+  if (config.replay) startReplay(config.replayBufferMs, config.replaySrc);
 
   startActivationListener(config);
 
@@ -163,6 +168,7 @@ import { startReporterNotify, stopReporterNotify } from "./notify";
       onSubmit: async (comment, type: FeedbackType, intent: FeedbackIntent) => {
         const screenshot = await captureElement(target);
         const snapshot = captureSnapshot();
+        const replay = config.replay ? await getReplayPayloadAsync() : undefined;
         // intent/explanation/provenance are only known at submit time — merge
         // them into the capture-time context before shipping.
         const contextWithIntent = {
@@ -192,6 +198,7 @@ import { startReporterNotify, stopReporterNotify } from "./notify";
           label: config.label,
           screenshot,
           snapshot,
+          ...(replay ? { replay } : {}),
         });
         // Refresh badges, return to active mode.
         await refreshBadges();
