@@ -14,7 +14,7 @@ import type { SourceRef, ElementFingerprint } from "./envelope";
  * segment tolerates Windows drive letters and webpack URL prefixes; only the
  * trailing numeric segments are treated as line/column.
  */
-function parseFileLineCol(raw: string): {
+export function parseFileLineCol(raw: string): {
   file: string;
   line?: number;
   column?: number;
@@ -45,7 +45,7 @@ function parseFileLineCol(raw: string): {
  * preserved verbatim. Only runtime-absolute paths are rewritten, and only
  * minimally.
  */
-function normalizeRuntimePath(raw: string): string {
+export function normalizeRuntimePath(raw: string): string {
   let f = raw;
 
   // webpack:// devtool URLs: webpack:///./src/... or webpack://next/./src/...

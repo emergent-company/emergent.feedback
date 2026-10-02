@@ -495,7 +495,7 @@ func writeEnvironment(sb *strings.Builder, ctx map[string]any, f store.Feedback)
 		url = v
 	}
 	if url != "" {
-		fmt.Fprintf(sb, "- **URL:** %s\n", url)
+		fmt.Fprintf(sb, "- **URL:** %s\n", redactSecrets(url))
 	}
 
 	if vp, ok := ctx["viewport"].(map[string]any); ok {
@@ -588,6 +588,9 @@ func writeComputedStyles(sb *strings.Builder, ctx map[string]any, level string) 
 func writeFoldedContext(sb *strings.Builder, ctx map[string]any, f store.Feedback, level string) {
 	outerHTML, _ := ctx["outerHTML"].(string)
 	prettyCtx := prettyJSON(f.ContextJSON)
+	if ctx != nil {
+		prettyCtx = prettyValue(redactContext(ctx))
+	}
 
 	if level == levelForensic {
 		if outerHTML != "" {

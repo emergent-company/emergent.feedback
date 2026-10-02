@@ -118,12 +118,14 @@ func BuildConciseEnvelope(f store.Feedback) map[string]any {
 	ctx := parseContext(f.ContextJSON)
 
 	env := map[string]any{
-		"schema":  envelopeSchema,
-		"version": envelopeVersion,
-		"id":      f.ID,
-		"status":  deriveStatus(f),
-		"type":    deriveType(ctx, f),
-		"summary": deriveSummary(ctx, f),
+		"schema":     envelopeSchema,
+		"version":    envelopeVersion,
+		"id":         f.ID,
+		"created_at": f.CreatedAt.UTC().Format(time.RFC3339),
+		"status":     deriveStatus(f),
+		"type":       deriveType(ctx, f),
+		"summary":    deriveSummary(ctx, f),
+		"actor":      map[string]any{"github_user": f.GitHubUser},
 	}
 
 	el := map[string]any{}
@@ -264,6 +266,9 @@ func buildTarget(ctx map[string]any, f store.Feedback) map[string]any {
 	if fp := buildFingerprint(ctx); fp != nil {
 		el["fingerprint"] = fp
 	}
+	if styles, ok := ctx["computedStyles"].(map[string]any); ok && len(styles) > 0 {
+		el["computed_styles"] = styles
+	}
 	if len(el) > 0 {
 		t["element"] = el
 	}
@@ -328,13 +333,13 @@ func buildIntent(ctx map[string]any) map[string]any {
 		out["action"] = v
 	}
 	if v := asString(raw["expected"]); v != "" {
-		out["expected"] = v
+		out["expected"] = redactSecrets(v)
 	}
 	if v := asString(raw["actual"]); v != "" {
-		out["actual"] = v
+		out["actual"] = redactSecrets(v)
 	}
 	if sc, ok := raw["scope"].(map[string]any); ok && len(sc) > 0 {
-		out["scope"] = sc
+		out["scope"] = redactContextValue(sc)
 	}
 	if len(out) == 0 {
 		return nil
@@ -427,7 +432,7 @@ func buildEnvironment(ctx map[string]any, f store.Feedback) map[string]any {
 		url = v
 	}
 	if url != "" {
-		out["url"] = url
+		out["url"] = redactSecrets(url)
 	}
 	if v := ctx["viewport"]; v != nil {
 		out["viewport"] = v

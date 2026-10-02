@@ -38,6 +38,7 @@
             "label": { "type": "string" },
             "selector": { "type": "string" },
             "data_component": { "type": "string" },
+            "computed_styles": { "type": "object", "additionalProperties": { "type": "string" } },
             "fingerprint": {
               "type": "object",
               "properties": {

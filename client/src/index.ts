@@ -196,7 +196,6 @@ import { startReporterNotify, stopReporterNotify } from "./notify";
           context: contextWithIntent,
           repo: config.repo,
           label: config.label,
-          feedbackType: type,
           screenshot,
           snapshot,
           ...(replay ? { replay } : {}),
@@ -346,18 +345,24 @@ import { startReporterNotify, stopReporterNotify } from "./notify";
     const expected = intent.expected?.trim();
     const actual = intent.actual?.trim();
 
-    // 1. style_assertion when `actual` was captured from a style prop.
-    if (actual) {
+    // 1. style_assertion only when the change is actually machine-checkable:
+    //    a detectable style prop AND a recorded `before` value. `changed` can
+    //    verify "the value changed" but not a specific stated outcome (e.g.
+    //    "meets WCAG AA"), so any non-empty `expected` falls through to a
+    //    weaker contract — never a false green.
+    if (actual && !expected) {
       const prop = detectStyleProp(actual, computedStyles);
       if (prop) {
         const before = computedStyles?.[prop] ?? extractBefore(actual) ?? "";
-        return {
-          contract: {
-            kind: "style_assertion",
-            check: { selector, prop, before, operator: "changed" },
-          },
-          criteria: expected || `Change ${prop} of the selected element`,
-        };
+        if (before) {
+          return {
+            contract: {
+              kind: "style_assertion",
+              check: { selector, prop, before, operator: "changed" },
+            },
+            criteria: `Change ${prop} of the selected element`,
+          };
+        }
       }
     }
 

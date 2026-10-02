@@ -8,9 +8,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/emergent-company/emergent.feedback/server/github"
+	"github.com/emergent-company/emergent.feedback/server/handler"
 	"github.com/emergent-company/emergent.feedback/server/store"
+	"github.com/google/jsonschema-go/jsonschema"
 )
 
 func TestSchemaRoute(t *testing.T) {
@@ -51,5 +54,52 @@ func TestSchemaEmbedMatchesDocs(t *testing.T) {
 	}
 	if string(disk) != string(envelopeSchemaJSON) {
 		t.Fatal("embedded schema differs from docs/schema/envelope.v1.json")
+	}
+}
+
+func TestEnvelopeValidatesAgainstSchema(t *testing.T) {
+	var schema jsonschema.Schema
+	if err := json.Unmarshal(envelopeSchemaJSON, &schema); err != nil {
+		t.Fatalf("parse schema: %v", err)
+	}
+	resolved, err := schema.Resolve(nil)
+	if err != nil {
+		t.Fatalf("resolve schema: %v", err)
+	}
+
+	ctx := map[string]any{
+		"url":            "https://app.example.com/pricing",
+		"tagName":        "button",
+		"computedStyles": map[string]any{"color": "rgb(1, 2, 3)"},
+		"source": map[string]any{
+			"component": "Foo", "file": "src/Foo.tsx", "line": 42.0,
+			"column": 7.0, "framework": "react", "resolution": "build-stamp",
+			"confidence": "exact",
+		},
+		"intent": map[string]any{
+			"kind": "bug", "action": "change", "expected": "be blue",
+			"actual": "is red",
+			"scope":  map[string]any{"breadth": "element", "targets": []any{"[data-x]"}},
+		},
+	}
+	ctxJSON, _ := json.Marshal(ctx)
+	f := store.Feedback{
+		ID:          1847,
+		URL:         "https://app.example.com/pricing",
+		Selector:    "[data-x]",
+		Comment:     "c",
+		ContextJSON: string(ctxJSON),
+		GitHubUser:  "alice",
+		Status:      store.StatusOpen,
+		CreatedAt:   time.Date(2026, 10, 1, 12, 4, 11, 0, time.UTC),
+	}
+
+	for name, env := range map[string]any{
+		"full":    handler.BuildEnvelope(f),
+		"concise": handler.BuildConciseEnvelope(f),
+	} {
+		if err := resolved.Validate(env); err != nil {
+			t.Fatalf("%s envelope failed schema validation: %v\n%v", name, err, env)
+		}
 	}
 }

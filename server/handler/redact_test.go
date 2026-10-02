@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/emergent-company/emergent.feedback/server/store"
 )
@@ -131,5 +133,75 @@ func TestRedactSecretsStillRedactsLongNonHex(t *testing.T) {
 		if got := redactSecrets(in); !strings.Contains(got, "[redacted]") {
 			t.Fatalf("expected redaction for %q, got %q", in, got)
 		}
+	}
+}
+
+func redactedFixture(t *testing.T) store.Feedback {
+	t.Helper()
+	ctx := map[string]any{
+		"url": "https://app.example.com/confirm?token=eyJhbGciOiJIUzI1NiJ9.abc.def",
+		"intent": map[string]any{
+			"kind":     "bug",
+			"action":   "change",
+			"expected": "text passes contrast",
+			"actual":   "text color: sk-abcdefghijklmnop",
+			"scope":    map[string]any{"breadth": "element", "targets": []any{"[data-x='sk-abcdefghijklmnop']"}},
+		},
+	}
+	ctxJSON, err := json.Marshal(ctx)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	return store.Feedback{
+		ID:          1,
+		URL:         "https://app.example.com/confirm?token=eyJhbGciOiJIUzI1NiJ9.abc.def",
+		Selector:    "button",
+		Comment:     "broken",
+		ContextJSON: string(ctxJSON),
+		GitHubUser:  "alice",
+		CreatedAt:   time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC),
+	}
+}
+
+func TestEnvelopeRedactsURLAndIntent(t *testing.T) {
+	f := redactedFixture(t)
+
+	full := BuildEnvelope(f)
+	concise := BuildConciseEnvelope(f)
+
+	// Full envelope: environment.url is URL-param-scrubbed.
+	envn := getMap(full, "environment")
+	if !strings.Contains(strVal(envn["url"]), "token=[redacted]") {
+		t.Fatalf("environment.url not scrubbed: %v", envn["url"])
+	}
+
+	for name, env := range map[string]map[string]any{"full": full, "concise": concise} {
+		b, _ := json.Marshal(env)
+		s := string(b)
+		if strings.Contains(s, "eyJhbGci") {
+			t.Fatalf("%s envelope leaked URL token: %s", name, s)
+		}
+		if strings.Contains(s, "sk-abcdefghijklmnop") {
+			t.Fatalf("%s envelope leaked sk- key: %s", name, s)
+		}
+		intent := getMap(env, "intent")
+		if !strings.Contains(strVal(intent["actual"]), "[redacted]") {
+			t.Fatalf("%s intent.actual not redacted: %v", name, intent)
+		}
+	}
+}
+
+func TestBuildIssueContentRedactsURLAndIntent(t *testing.T) {
+	f := redactedFixture(t)
+	_, body := buildIssueContent([]store.Feedback{f}, "")
+
+	if strings.Contains(body, "eyJhbGci") {
+		t.Fatalf("URL token leaked into issue body:\n%s", body)
+	}
+	if strings.Contains(body, "sk-abcdefghijklmnop") {
+		t.Fatalf("intent secret leaked into issue body:\n%s", body)
+	}
+	if !strings.Contains(body, "token=[redacted]") {
+		t.Fatalf("URL param not scrubbed in issue body:\n%s", body)
 	}
 }

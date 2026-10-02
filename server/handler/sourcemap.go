@@ -191,7 +191,11 @@ func (h *Handler) unmapStack(ctx context.Context, repo, version string, stack []
 	return out, mapped, shortened
 }
 
-// lookupSourcemap tries the frame basename and common .map suffixes.
+// lookupSourcemap probes the frame basename and common .map suffixes. It
+// delegates the path contract to Store.GetSourcemap, which first tries an exact
+// (repo, version, path) row and then falls back to a suffix match so CI uploads
+// keyed by full asset path (e.g. dist/assets/bundle.js.map) still resolve a
+// basename probe (bundle.js.map).
 func (h *Handler) lookupSourcemap(ctx context.Context, repo, version, base string) ([]byte, error) {
 	candidates := []string{base}
 	if !strings.HasSuffix(base, ".map") {

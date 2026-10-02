@@ -47,7 +47,6 @@ export interface CreateFeedbackParams {
   context: Record<string, unknown>;
   repo: string;
   label: string;
-  feedbackType?: string;
   screenshot?: string;
   snapshot?: string;
   /** Opt-in session replay: base64 of gzip(rrweb JSON). */

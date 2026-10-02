@@ -288,6 +288,24 @@ func TestBuildEnvelopeLifecycle(t *testing.T) {
 	}
 }
 
+func TestBuildTargetEmitsComputedStyles(t *testing.T) {
+	ctx := map[string]any{
+		"computedStyles": map[string]any{"color": "rgb(1, 2, 3)", "fontSize": "16px"},
+	}
+	ctxJSON, _ := json.Marshal(ctx)
+	f := store.Feedback{ID: 1, ContextJSON: string(ctxJSON), Selector: "button", Comment: "x"}
+
+	env := BuildEnvelope(f)
+	el := getMap(env, "target", "element")
+	if el["computed_styles"] == nil {
+		t.Fatalf("computed_styles missing from target.element: %v", el)
+	}
+	styles, ok := el["computed_styles"].(map[string]any)
+	if !ok || styles["color"] != "rgb(1, 2, 3)" {
+		t.Fatalf("computed_styles = %v", el["computed_styles"])
+	}
+}
+
 func TestBuildIssueContentSections(t *testing.T) {
 	ctx := map[string]any{
 		"url":    "https://app.example.com/",

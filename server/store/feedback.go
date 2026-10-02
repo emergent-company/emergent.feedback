@@ -367,8 +367,34 @@ func optionalTime(s string) *time.Time {
 	return &t
 }
 
+// statusRank orders lifecycle stages for the monotonic-transition guard.
+// Export precedes apply: a human exports feedback to an issue (exported) before
+// the agent applies/verifies/resolves it. A lower rank is "earlier" in the
+// lifecycle; SetStatus rejects moving to an earlier stage (e.g. resolved or
+// verified back to applied) and treats re-setting the current stage as a no-op.
+func statusRank(s FeedbackStatus) int {
+	switch s {
+	case StatusOpen:
+		return 0
+	case StatusExported:
+		return 1
+	case StatusApplied:
+		return 2
+	case StatusVerified:
+		return 3
+	case StatusResolved:
+		return 4
+	default:
+		return -1
+	}
+}
+
 // SetStatus updates a feedback item's status plus the matching *_at timestamp
 // and records a feedback_events row (type applied|verified|resolved|open).
+// It is idempotent and monotonic: re-setting the current status inserts no
+// event and does not rewrite the timestamp, and transitions to an earlier
+// lifecycle stage are rejected (guarding against concurrent verify polls or
+// accidental backward moves such as resolved/verified -> applied).
 func (s *Store) SetStatus(ctx context.Context, id int64, status FeedbackStatus, actor, detail string) error {
 	var tsCol string
 	switch status {
@@ -385,6 +411,23 @@ func (s *Store) SetStatus(ctx context.Context, id int64, status FeedbackStatus, 
 		return err
 	}
 	defer tx.Rollback() //nolint:errcheck
+
+	// Read the current status inside the tx so concurrent callers serialize on
+	// the write lock and the second one observes the committed transition.
+	var current FeedbackStatus
+	if err := tx.QueryRowContext(ctx, `SELECT status FROM feedback WHERE id = ?`, id).Scan(&current); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("store: feedback %d not found", id)
+		}
+		return fmt.Errorf("store: read status: %w", err)
+	}
+	if current == status {
+		// Already in the target state: no event, no timestamp churn.
+		return tx.Commit()
+	}
+	if statusRank(status) < statusRank(current) {
+		return fmt.Errorf("store: cannot transition %s to %s (monotonic lifecycle)", current, status)
+	}
 
 	if tsCol != "" {
 		q := fmt.Sprintf(`UPDATE feedback SET status = ?, %s = strftime('%%Y-%%m-%%dT%%H:%%M:%%SZ','now') WHERE id = ?`, tsCol)
@@ -409,7 +452,10 @@ func (s *Store) SetStatus(ctx context.Context, id int64, status FeedbackStatus, 
 // produces exactly one "verified" event.
 func (s *Store) SetVerificationResult(ctx context.Context, id int64, result, detail string) error {
 	if result == "green" {
-		if _, err := s.db.ExecContext(ctx, `UPDATE feedback SET verification_result = ?, verification_detail = ?, verified_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?`, result, detail, id); err != nil {
+		// Idempotent: only stamp verified_at when transitioning INTO green.
+		// A repeat green post (concurrent verify tabs) updates the result/detail
+		// but preserves the original verified_at so the timestamp does not churn.
+		if _, err := s.db.ExecContext(ctx, `UPDATE feedback SET verification_result = ?, verification_detail = ?, verified_at = CASE WHEN (verification_result IS NULL OR verification_result != 'green') THEN strftime('%Y-%m-%dT%H:%M:%SZ','now') ELSE verified_at END WHERE id = ?`, result, detail, id); err != nil {
 			return fmt.Errorf("store: set verification result: %w", err)
 		}
 		return nil

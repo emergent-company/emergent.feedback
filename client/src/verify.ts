@@ -29,10 +29,14 @@ function kebab(prop: string): string {
 /**
  * Evaluate a verification contract against the live DOM.
  *
- * - style_assertion: computed value changed from `before` → green, else red.
- * - anchor_stable:    element at selector with matching fingerprint tag →
- *                     green; present but different tag → amber; missing → red.
- * - human:            always amber ("needs human confirmation").
+ * - style_assertion: explicit operators (`changed`, `equals`, `not_equals`,
+ *   `present`) with constrained semantics. `changed` alone cannot verify the
+ *   direction/correctness of a change, so it returns amber (human confirm) on
+ *   a change and red when unchanged; unknown operators return amber, never a
+ *   false green.
+ * - anchor_stable:   element at selector with matching fingerprint tag →
+ *                    green; present but different tag → amber; missing → red.
+ * - human:           always amber ("needs human confirmation").
  */
 export function evaluateContract(contract: VerificationContract): ContractEvaluation {
   try {
@@ -41,7 +45,6 @@ export function evaluateContract(contract: VerificationContract): ContractEvalua
         const check = contract.check ?? {};
         const selector = check["selector"];
         const prop = check["prop"];
-        const before = check["before"];
         const operator = check["operator"] ?? "changed";
 
         if (!selector || !prop) {
@@ -54,20 +57,56 @@ export function evaluateContract(contract: VerificationContract): ContractEvalua
         }
 
         const current = window.getComputedStyle(el).getPropertyValue(kebab(prop)).trim();
-        if (operator === "changed") {
-          if (before !== undefined && before !== "" && current !== before) {
-            return { result: "green", detail: `${prop} changed from "${before}" to "${current}"` };
+
+        // Operators are constrained and explicit. An UNKNOWN operator must
+        // never be treated as "changed" — return amber, not a false green.
+        switch (operator) {
+          case "changed": {
+            const before = check["before"];
+            if (before === undefined || before === "") {
+              return { result: "amber", detail: `${prop} has no recorded "before" value to compare against (current "${current}")` };
+            }
+            if (current !== before) {
+              // "changed" alone cannot verify the direction/correctness of the
+              // change — a value that changed but in the wrong direction must
+              // not claim success. At most amber (human confirmation).
+              return { result: "amber", detail: `${prop} changed from "${before}" to "${current}" — needs human confirmation of correctness` };
+            }
+            return { result: "red", detail: `${prop} still "${current}" (expected change from "${before}")` };
           }
-          if (before === undefined || before === "") {
-            return { result: "amber", detail: `${prop} has no recorded "before" value to compare against (current "${current}")` };
+
+          case "equals": {
+            const expected = check["value"] ?? check["expected"];
+            if (expected === undefined || expected === "") {
+              return { result: "amber", detail: `style_assertion "equals" missing target value` };
+            }
+            if (current === expected) {
+              return { result: "green", detail: `${prop} equals "${expected}"` };
+            }
+            return { result: "red", detail: `${prop} is "${current}" (expected "${expected}")` };
           }
-          return { result: "red", detail: `${prop} still "${current}" (expected change from "${before}")` };
+
+          case "not_equals": {
+            const forbidden = check["value"] ?? check["expected"];
+            if (forbidden === undefined || forbidden === "") {
+              return { result: "amber", detail: `style_assertion "not_equals" missing target value` };
+            }
+            if (current !== forbidden) {
+              return { result: "green", detail: `${prop} is "${current}" (no longer "${forbidden}")` };
+            }
+            return { result: "red", detail: `${prop} still "${current}" (must not equal "${forbidden}")` };
+          }
+
+          case "present": {
+            if (current !== "") {
+              return { result: "green", detail: `${prop} is present ("${current}")` };
+            }
+            return { result: "red", detail: `${prop} is not present` };
+          }
+
+          default:
+            return { result: "amber", detail: `unknown style_assertion operator "${operator}"` };
         }
-        // Generic compare: non-before value treated as changed.
-        if (before !== undefined && current !== before) {
-          return { result: "green", detail: `${prop} changed from "${before}" to "${current}"` };
-        }
-        return { result: "red", detail: `${prop} still "${current}"` };
       }
 
       case "anchor_stable": {

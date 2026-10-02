@@ -114,11 +114,11 @@ Research finding: **no tool publishes both a formal data schema and explicit age
 
 ```jsonc
 {
-  "schema": "https://feedback-overlay.dev/envelope",
+  "schema": "https://feedback.emergent-company.ai/schema/envelope.v1.json",
   "version": "1.0.0",
   "id": 1847,
   "created_at": "2026-10-01T12:04:11Z",
-  "status": "open",                       // open | applied | verified | resolved
+  "status": "open",                       // open | applied | verified | resolved | exported
 
   "type": "bug",                          // bug | enhancement | question | task
 
@@ -156,7 +156,7 @@ Research finding: **no tool publishes both a formal data schema and explicit age
     "kind": "bug",
     "action": "change",                   // change | add | remove | move | fix | refactor | investigate
     "expected": "text/icon passes WCAG AA (contrast >= 4.5:1)",
-    "actual": "contrast ratio 2.1:1 (grey #999 on white)",
+    "actual": "text color: rgb(153, 153, 153)",   // client emits "<label>: <value>", not prose
     "scope": { "breadth": "element", "targets": ["[data-testid='pricing-upgrade']"] }
   },
 

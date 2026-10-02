@@ -18,7 +18,7 @@ import (
 func heuristicSummary(ctx map[string]any, f store.Feedback) string {
 	intent := getMap(ctx, "intent")
 	action := strVal(intent["action"])
-	expected := strVal(intent["expected"])
+	expected := redactSecrets(strVal(intent["expected"]))
 	label := elementLabel(ctx)
 
 	if action == "" && expected == "" && label == "" {

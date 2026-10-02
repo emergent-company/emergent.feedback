@@ -174,6 +174,86 @@ func TestGreenSingleVerifiedEvent(t *testing.T) {
 	}
 }
 
+func TestGreenPathIdempotent(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+	f := createTestFeedback(t, s, ctx)
+
+	// The green path = SetVerificationResult(green) + SetStatus(verified).
+	green := func() {
+		t.Helper()
+		if err := s.SetVerificationResult(ctx, f.ID, "green", "passed"); err != nil {
+			t.Fatalf("SetVerificationResult: %v", err)
+		}
+		if err := s.SetStatus(ctx, f.ID, StatusVerified, "alice", ""); err != nil {
+			t.Fatalf("SetStatus verified: %v", err)
+		}
+	}
+
+	green()
+	first, err := s.Get(ctx, f.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.VerifiedAt == nil {
+		t.Fatal("verified_at not set after first green")
+	}
+
+	// A second green (concurrent verify tab) must not churn verified_at or add
+	// another "verified" event.
+	green()
+	second, err := s.Get(ctx, f.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.VerifiedAt == nil {
+		t.Fatal("verified_at nil after second green")
+	}
+	if !first.VerifiedAt.Equal(*second.VerifiedAt) {
+		t.Fatalf("verified_at churned: %v -> %v", first.VerifiedAt, second.VerifiedAt)
+	}
+
+	events, err := s.ListEventsSince(ctx, 0, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	verifiedCount := 0
+	for _, e := range events {
+		if e.Type == "verified" {
+			verifiedCount++
+		}
+	}
+	if verifiedCount != 1 {
+		t.Fatalf("verified events = %d, want exactly 1: %v", verifiedCount, events)
+	}
+}
+
+func TestSetStatusRejectsBackwardTransition(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+	f := createTestFeedback(t, s, ctx)
+
+	for _, st := range []FeedbackStatus{StatusApplied, StatusVerified, StatusResolved} {
+		if err := s.SetStatus(ctx, f.ID, st, "alice", ""); err != nil {
+			t.Fatalf("SetStatus %s: %v", st, err)
+		}
+	}
+
+	// Backward moves must be rejected and leave the status unchanged.
+	for _, st := range []FeedbackStatus{StatusApplied, StatusVerified} {
+		if err := s.SetStatus(ctx, f.ID, st, "alice", ""); err == nil {
+			t.Fatalf("expected backward transition resolved->%s to be rejected", st)
+		}
+	}
+	got, err := s.Get(ctx, f.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != StatusResolved {
+		t.Fatalf("status = %s, want resolved (backward move must not apply)", got.Status)
+	}
+}
+
 func TestListExportedLite(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
