@@ -2,7 +2,7 @@
 // Starts on page load, captures last N events for feedback context.
 
 import { buildSelector, nearestComponent } from "./selector";
-import { redactText, sanitizeURL } from "./redact";
+import { redactPII, sanitizeURL } from "./redact";
 
 export interface SessionEvent {
   type: "navigation" | "input" | "click";
@@ -135,7 +135,7 @@ export function startRecording(): void {
     if (key === lastInputKey && now - lastInputTime < 500) {
       const last = events[events.length - 1];
       if (last?.type === "input") {
-        last.data.value = isSensitive(el) ? "[redacted]" : redactText(el.value);
+        last.data.value = isSensitive(el) ? "[redacted]" : redactPII(el.value);
         last.timestamp = new Date().toISOString();
         lastInputTime = now;
         return;
@@ -149,7 +149,7 @@ export function startRecording(): void {
       component,
       tagName: tag,
       inputType: el.type || "text",
-      value: isSensitive(el) ? "[redacted]" : redactText(el.value),
+      value: isSensitive(el) ? "[redacted]" : redactPII(el.value),
     });
   }, true);
 
@@ -163,7 +163,7 @@ export function startRecording(): void {
       component: nearestComponent(target),
       tagName: "select",
       inputType: "select",
-      value: isSensitive(el) ? "[redacted]" : redactText(el.value),
+      value: isSensitive(el) ? "[redacted]" : redactPII(el.value),
     });
   }, true);
 
@@ -174,7 +174,7 @@ export function startRecording(): void {
     const role = target.getAttribute("role");
     if (tag !== "a" && tag !== "button" && role !== "button") return;
     const raw = (target.textContent || "").trim().slice(0, 80);
-    const text = clickIsSensitive(target) ? "[redacted]" : redactText(raw);
+    const text = clickIsSensitive(target) ? "[redacted]" : redactPII(raw);
     pushEvent("click", {
       selector: buildSelector(target),
       component: nearestComponent(target),

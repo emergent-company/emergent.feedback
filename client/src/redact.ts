@@ -45,6 +45,48 @@ export function redactText(s: string): string {
   return s.replace(TOKEN_VALUE_GLOBAL, "[redacted]");
 }
 
+// ── Content-shape PII (free text) ───────────────────────────────────────────
+//
+// `redactText` only catches token-shaped strings. `redactPII` additionally
+// catches content that *looks* like PII regardless of the field it landed in
+// (an email typed into a generic text field, a phone number in a button label,
+// an SSN in a console message). Names are deliberately NOT detected — matching
+// human names reliably is impossible without heavy false positives.
+//
+// WHERE TO USE: user-captured free text only — session-history input/select
+// values and click labels, plus console messages/stack_text. Do NOT blanket-
+// apply to issue bodies or docs, where a stray email/phone is often legitimate
+// content that would get mangled.
+
+const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+const SSN_RE = /\b\d{3}-\d{2}-\d{4}\b/g;
+// Phone candidates: optional `+country`, optional `(area)` or area, then two
+// digit groups separated by space/dot/hyphen/parens. The `≥8 digits` and
+// `has-a-separator` checks run in the replace callback (below) so a bare digit
+// run (IDs, amounts, and the 40-char tokens already eaten by `redactText`)
+// never matches.
+const PHONE_RE =
+  /(?:\+?\d{1,3}[\s.-]?)?(?:\(\d{2,4}\)[\s.-]?|\d{2,4}[\s.-]?)\d{3,4}[\s.-]?\d{3,4}/g;
+
+function phoneDigits(s: string): number {
+  let n = 0;
+  for (const ch of s) if (ch >= "0" && ch <= "9") n++;
+  return n;
+}
+
+/**
+ * Redact free text: token shapes (via `redactText`) plus content-shaped PII —
+ * email addresses, SSNs, and phone numbers. Names are intentionally NOT
+ * detected. Pure and DOM-free.
+ */
+export function redactPII(text: string): string {
+  let out = redactText(text);
+  out = out.replace(EMAIL_RE, "[redacted]");
+  out = out.replace(SSN_RE, "[redacted]");
+  out = out.replace(PHONE_RE, (m) => (phoneDigits(m) >= 8 && /[()+\s.-]/.test(m) ? "[redacted]" : m));
+  return out;
+}
+
 /** A single attribute name/value pair (agnostic to DOM structure). */
 export interface AttrKV {
   name: string;

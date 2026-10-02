@@ -2,10 +2,10 @@
 //
 // Captures the last N console.error/console.warn calls and window-level
 // 'error' / 'unhandledrejection' events for the feedback `repro.console`
-// payload. Every message is token-redacted and has sensitive URL query params
-// scrubbed before being retained.
+// payload. Every message is content-shaped PII-redacted and has sensitive URL
+// query params scrubbed before being retained.
 
-import { redactText, sanitizeURL } from "./redact";
+import { redactPII, sanitizeURL } from "./redact";
 
 export interface StackFrame {
   path: string;
@@ -43,7 +43,7 @@ function stringify(v: unknown): string {
 
 /** Sanitize URLs embedded in free text without mangling the surrounding prose. */
 function sanitizeMessage(raw: string): string {
-  const redacted = redactText(raw);
+  const redacted = redactPII(raw);
   return redacted.replace(/https?:\/\/[^\s"'<>)]+/g, (url) => sanitizeURL(url));
 }
 
@@ -127,7 +127,7 @@ export function parseStack(raw: string): StackFrame[] {
 
 /** Redact + truncate the raw stack string for humans. */
 export function redactStack(stack: string): string {
-  return redactText(stack).slice(0, MAX_STACK);
+  return redactPII(stack).slice(0, MAX_STACK);
 }
 
 function push(level: ConsoleEntry["level"], message: string, stack?: string): void {

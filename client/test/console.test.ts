@@ -53,3 +53,10 @@ test("redactStack redacts tokens and truncates to 4000 chars", () => {
   const long = "word ".repeat(1000); // 5000 chars
   assert.equal(redactStack(long).length, 4000);
 });
+
+test("redactStack redacts content-shaped PII in stack text", () => {
+  const out = redactStack("error contacting jane.doe@example.com at 415-555-2671");
+  assert.ok(!out.includes("jane.doe@example.com"), "email leaked");
+  assert.ok(!out.includes("415-555-2671"), "phone leaked");
+  assert.ok(out.includes("[redacted]"));
+});

@@ -5,6 +5,7 @@ import "./setup";
 import { FakeElement } from "./setup";
 import {
   redactText,
+  redactPII,
   sanitizeURL,
   isSensitiveURLParam,
   redactAttributes,
@@ -33,6 +34,43 @@ test("redactText redacts token shapes and leaves normal prose untouched", () => 
   // Normal prose must pass through unchanged
   const prose = "clicked the submit button on the checkout page";
   assert.equal(redactText(prose), prose);
+});
+
+test("redactPII redacts emails", () => {
+  assert.equal(redactPII("reach me at jane.doe@example.com please"), "reach me at [redacted] please");
+  assert.equal(redactPII("user+tag@sub.domain.co"), "[redacted]");
+  assert.equal(redactPII("contact admin@example.org or support@foo-bar.io"), "contact [redacted] or [redacted]");
+});
+
+test("redactPII redacts SSNs", () => {
+  assert.equal(redactPII("SSN is 123-45-6789 ok"), "SSN is [redacted] ok");
+  assert.equal(redactPII("123-45-6789"), "[redacted]");
+});
+
+test("redactPII redacts phone numbers with separators/parens/country code", () => {
+  assert.equal(redactPII("call 415-555-2671 now"), "call [redacted] now");
+  assert.equal(redactPII("call (415) 555-2671 now"), "call [redacted] now");
+  assert.equal(redactPII("call +1 (415) 555-2671 now"), "call [redacted] now");
+  assert.equal(redactPII("call +44 20 7946 0958 now"), "call [redacted] now");
+  assert.equal(redactPII("call 555.267.8910 now"), "call [redacted] now");
+  assert.equal(redactPII("call +14155552671 now"), "call [redacted] now");
+});
+
+test("redactPII leaves short numbers, timestamps, versions, and plain digit runs", () => {
+  assert.equal(redactPII("order 1234 shipped"), "order 1234 shipped");
+  assert.equal(redactPII("zip 56789"), "zip 56789");
+  assert.equal(redactPII("date 2024-01-15 fixed"), "date 2024-01-15 fixed");
+  assert.equal(redactPII("ts 2026-10-02T16:11:00"), "ts 2026-10-02T16:11:00");
+  assert.equal(redactPII("time 10:30:45"), "time 10:30:45");
+  assert.equal(redactPII("version 1.2.3"), "version 1.2.3");
+  assert.equal(redactPII("id 12345678"), "id 12345678");
+  assert.equal(redactPII("ISBN 978-0-596-52068-7"), "ISBN 978-0-596-52068-7");
+  assert.equal(redactPII("plain prose nothing here"), "plain prose nothing here");
+});
+
+test("redactPII still redacts token shapes via redactText", () => {
+  assert.equal(redactPII("sk-abcdef123456789"), "[redacted]");
+  assert.equal(redactPII("0123456789012345678901234567890123456789"), "[redacted]");
 });
 
 test("sanitizeURL scrubs sensitive query params and preserves the rest", () => {
