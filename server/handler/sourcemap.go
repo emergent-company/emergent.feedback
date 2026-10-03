@@ -172,6 +172,11 @@ func (h *Handler) unmapStack(ctx context.Context, repo, version string, stack []
 
 		genLine := frameInt(frame, "line", 1)
 		genCol := frameInt(frame, "column", 0)
+		// V8 stack columns are 1-based; go-sourcemap's Consumer.Source expects a
+		// 0-based generated column (lines are 1-based on both sides).
+		if genCol > 0 {
+			genCol--
+		}
 		src, name, line, col, ok := consumer.Source(genLine, genCol)
 		if !ok || src == "" {
 			f, did := shortenFrame(frame)

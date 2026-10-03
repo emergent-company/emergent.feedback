@@ -166,6 +166,31 @@ func TestUnmapStackShortensMappedSourcePath(t *testing.T) {
 	}
 }
 
+func TestUnmapStackColumnOffByOne(t *testing.T) {
+	_, s, _ := newLifecycleHandler(t)
+	ctx := context.Background()
+
+	// Two segments on generated line 1: genCol 0 -> srcCol 0, genCol 1 -> srcCol 5.
+	sm := `{"version":3,"file":"bundle.js","sources":["src/App.tsx"],"names":[],"mappings":"AAAA,CAAK"}`
+	if err := s.UpsertSourcemap(ctx, "org/repo", "1.0.0", "bundle.js.map", []byte(sm)); err != nil {
+		t.Fatalf("UpsertSourcemap: %v", err)
+	}
+
+	h := &Handler{Store: s}
+	stack := []any{map[string]any{"path": "https://cdn.example.com/bundle.js", "line": 1.0, "column": 1.0}}
+	out, mapped, _ := h.unmapStack(ctx, "org/repo", "1.0.0", stack)
+	if !mapped || len(out) != 1 {
+		t.Fatalf("expected one mapped frame, got mapped=%v out=%v", mapped, out)
+	}
+	f, ok := out[0].(map[string]any)
+	if !ok {
+		t.Fatalf("frame not a map: %v", out[0])
+	}
+	if col, _ := f["column"].(int); col != 0 {
+		t.Fatalf("mapped column = %v, want 0 (1-based col 1 -> 0-based col 0)", f["column"])
+	}
+}
+
 func TestShortenStackTextWindowsPath(t *testing.T) {
 	in := `Error: boom
     at foo (C:\Users\name\work\src\Foo.tsx:10:5)`

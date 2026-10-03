@@ -313,6 +313,7 @@ Read from the `<script>` tag (`client/src/config.ts`):
 | `data-replay` | presence enables replay; `"false"` disables | off |
 | `data-replay-buffer-ms` | replay buffer window | `60000` |
 | `data-replay-src` | explicit URL for the lazy replay bundle (else derived from the main bundle URL) | — |
+| `data-replay-mask-text` | presence masks **all** page text (rrweb `maskTextSelector: "*"`), not just inputs/redacted | off |
 
 Authentication is GitHub OAuth (popup → `POST /auth/callback`); there is **no**
 `data-token` attribute — the JWT is stored in `localStorage["__ef_token__"]`.
@@ -329,8 +330,12 @@ Opt-in (`data-replay`), rrweb, **lazily loaded** in a second bundle:
   delegates to `window.__EF_REPLAY__`. rrweb is only fetched/executed when replay
   is on.
 - Sliding buffer, **~60s** (default), max 5000 events; full snapshot every 30s.
-- Masking on by default: `maskAllInputs`, `password`/`email`/`tel`, `[data-fo-redact]`
-  text masked, `.fo-block` subtrees excluded, no canvas, no cross-origin iframes.
+- Masking is partial by default (privacy-focused but replay-useful): all inputs
+  (`maskAllInputs` + `password`/`email`/`tel`), `[data-fo-redact]` text, and
+  `.fo-block` subtrees are masked/excluded; no canvas, no cross-origin iframes.
+  **Other page text IS captured.** Opt into full text masking with
+  `data-replay-mask-text`, which switches rrweb `maskTextSelector` to `"*"`
+  (masking every element's text).
 - Payload on submit: `base64(gzip(JSON events))` (falls back to plain base64 when
   `CompressionStream` is unavailable).
 - Server stores it in the `feedback.replay` BLOB (gzip), serves it decompressed at

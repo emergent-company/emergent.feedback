@@ -23,7 +23,7 @@ const buffer = new ReplayBuffer();
  * Start buffering. Idempotent; no-op in iframes; catches any rrweb init
  * failure so the host page is never affected.
  */
-export function startReplay(bufferMsOverride?: number): void {
+export function startReplay(bufferMsOverride?: number, maskText?: boolean): void {
   if (started) return;
   if (window.top !== window.self) return;
   try {
@@ -33,7 +33,10 @@ export function startReplay(bufferMsOverride?: number): void {
       checkoutEveryNms: computeCheckoutEveryNms(buffer.window),
       maskAllInputs: true,
       maskInputOptions: { password: true, email: true, tel: true },
-      maskTextSelector: "[data-fo-redact]",
+      // rrweb 2.x has no `maskAllText`; mask every element's text (via the
+      // universal selector) when the opt-in flag is set, else only
+      // [data-fo-redact].
+      maskTextSelector: maskText === true ? "*" : "[data-fo-redact]",
       blockSelector: ".fo-block",
       recordCanvas: false,
       recordCrossOriginIframes: false,

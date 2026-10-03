@@ -7,7 +7,7 @@
 import { startReplay, stopReplay, getReplayPayloadAsync } from "./src/replay-core";
 
 interface ReplayAPI {
-  start: (bufferMs?: number) => void;
+  start: (bufferMs?: number, maskText?: boolean) => void;
   stop: () => void;
   getPayloadAsync: () => Promise<string | undefined>;
 }

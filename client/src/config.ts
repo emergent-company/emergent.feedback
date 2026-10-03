@@ -30,6 +30,12 @@ export interface OverlayConfig {
   replayBufferMs?: number;
   /** Explicit URL for the lazy replay bundle. Set via data-replay-src. */
   replaySrc?: string;
+  /**
+   * Opt-in full text masking for replay. When set (data-replay-mask-text), all
+   * page text is masked (not just inputs + `[data-fo-redact]` + `.fo-block`).
+   * Defaults to false — by default page text IS captured so replays stay useful.
+   */
+  replayMaskText: boolean;
 }
 
 function getScriptTag(): HTMLScriptElement | null {
@@ -74,6 +80,8 @@ export function readConfig(): OverlayConfig {
       ? parsedReplayBufferMs
       : undefined;
   const replaySrc = tag?.dataset.replaySrc?.trim() || undefined;
+  const replayMaskText =
+    tag?.dataset.replayMaskText !== undefined && tag?.dataset.replayMaskText !== "false";
 
   return {
     apiBase,
@@ -87,5 +95,6 @@ export function readConfig(): OverlayConfig {
     replay,
     ...(replayBufferMs !== undefined ? { replayBufferMs } : {}),
     ...(replaySrc !== undefined ? { replaySrc } : {}),
+    replayMaskText,
   };
 }

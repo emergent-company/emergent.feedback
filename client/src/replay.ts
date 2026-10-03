@@ -7,7 +7,7 @@
 // is enabled, keeping it out of the main overlay bundle entirely.
 
 type ReplayAPI = {
-  start: (bufferMs?: number) => void;
+  start: (bufferMs?: number, maskText?: boolean) => void;
   stop: () => void;
   getPayloadAsync: () => Promise<string | undefined>;
 };
@@ -79,11 +79,11 @@ async function ensureLoaded(replaySrc?: string): Promise<boolean> {
  * Start buffering. Loads the replay bundle on demand (idempotent) and delegates
  * to it. Never throws; replay is simply unavailable if the bundle fails.
  */
-export async function startReplay(bufferMs?: number, replaySrc?: string): Promise<void> {
+export async function startReplay(bufferMs?: number, replaySrc?: string, maskText?: boolean): Promise<void> {
   const ok = await ensureLoaded(replaySrc);
   if (!ok) return;
   try {
-    api()?.start(bufferMs);
+    api()?.start(bufferMs, maskText);
   } catch {
     // no-op
   }
