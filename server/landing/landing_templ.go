@@ -56,7 +56,7 @@ func LandingPage() templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/feedback-overlay", Variant: ui.ButtonPrimary, Size: ui.ButtonSM, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/emergent.feedback", Variant: ui.ButtonPrimary, Size: ui.ButtonSM, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -90,7 +90,7 @@ func LandingPage() templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/feedback-overlay", Variant: ui.ButtonPrimary, Size: ui.ButtonLG, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var3), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/emergent.feedback", Variant: ui.ButtonPrimary, Size: ui.ButtonLG, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var3), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -107,9 +107,9 @@ func LandingPage() templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var4 string
-		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs("<script src=\"https://feedback.emergent-company.ai/feedback-overlay.js\" data-api=\"https://feedback.emergent-company.ai\" data-repo=\"owner/repo\" async></script>")
+		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs("<script src=\"https://feedback.emergent-company.ai/emergent-feedback.js\" data-api=\"https://feedback.emergent-company.ai\" data-repo=\"owner/repo\" async></script>")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `server/landing/landing.templ`, Line: 68, Col: 208}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `server/landing/landing.templ`, Line: 68, Col: 209}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 		if templ_7745c5c3_Err != nil {
@@ -361,7 +361,7 @@ func LandingPage() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "</div></div></section><!-- ── The issue it produces ───────────────────────────────────────── --><section class=\"border-b border-base-300/60\"><div class=\"mx-auto w-full max-w-5xl px-4 py-16 md:py-20\"><div class=\"max-w-2xl\"><p class=\"font-mono text-xs uppercase tracking-widest text-base-content/50\">The output</p><h2 class=\"mt-2 text-3xl font-semibold tracking-tight\">The issue it produces</h2><p class=\"mt-3 text-base text-base-content/70\">A developer opens the ticket and starts fixing — nothing to chase, nothing to ask.</p></div><div class=\"mockup-browser mt-10 border border-base-300 bg-base-200\"><div class=\"mockup-browser-toolbar\"><div class=\"input\">github.com/emergent-company/feedback-overlay/issues/42</div></div><div class=\"border-t border-base-300 bg-base-100 p-5\"><div class=\"flex flex-wrap items-center gap-2\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "</div></div></section><!-- ── The issue it produces ───────────────────────────────────────── --><section class=\"border-b border-base-300/60\"><div class=\"mx-auto w-full max-w-5xl px-4 py-16 md:py-20\"><div class=\"max-w-2xl\"><p class=\"font-mono text-xs uppercase tracking-widest text-base-content/50\">The output</p><h2 class=\"mt-2 text-3xl font-semibold tracking-tight\">The issue it produces</h2><p class=\"mt-3 text-base text-base-content/70\">A developer opens the ticket and starts fixing — nothing to chase, nothing to ask.</p></div><div class=\"mockup-browser mt-10 border border-base-300 bg-base-200\"><div class=\"mockup-browser-toolbar\"><div class=\"input\">github.com/emergent-company/emergent.feedback/issues/42</div></div><div class=\"border-t border-base-300 bg-base-100 p-5\"><div class=\"flex flex-wrap items-center gap-2\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -503,7 +503,7 @@ func LandingPage() templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/feedback-overlay", Variant: ui.ButtonPrimary, Block: true, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var18), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/emergent.feedback", Variant: ui.ButtonPrimary, Block: true, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var18), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -545,7 +545,7 @@ func LandingPage() templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/feedback-overlay/issues/new", Variant: ui.ButtonOutline, Block: true, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var20), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/emergent.feedback/issues/new", Variant: ui.ButtonOutline, Block: true, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var20), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -593,7 +593,7 @@ func LandingPage() templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/feedback-overlay/issues/new", Variant: ui.ButtonOutline, Block: true, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var22), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/emergent.feedback/issues/new", Variant: ui.ButtonOutline, Block: true, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var22), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -620,15 +620,15 @@ func LandingPage() templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var23 string
-		templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs("<script src=\"https://feedback.your-domain.com/feedback-overlay.js\" data-api=\"https://feedback.your-domain.com\" data-repo=\"owner/repo\" async></script>")
+		templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs("<script src=\"https://feedback.your-domain.com/emergent-feedback.js\" data-api=\"https://feedback.your-domain.com\" data-repo=\"owner/repo\" async></script>")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `server/landing/landing.templ`, Line: 387, Col: 201}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `server/landing/landing.templ`, Line: 387, Col: 202}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "</code></pre></div><p class=\"mb-2 mt-6 font-mono text-xs uppercase tracking-widest text-base-content/50\">Server</p><div class=\"mockup-code w-full text-sm\"><pre data-prefix=\"$\"><code>docker run -p 8080:8080 ghcr.io/emergent-company/feedback-overlay</code></pre></div></div></div></div></section><!-- ── FAQ ─────────────────────────────────────────────────────────── --><section class=\"border-b border-base-300/60 bg-base-200/30\"><div class=\"mx-auto w-full max-w-3xl px-4 py-16 md:py-20\"><div class=\"max-w-2xl\"><p class=\"font-mono text-xs uppercase tracking-widest text-base-content/50\">FAQ</p><h2 class=\"mt-2 text-3xl font-semibold tracking-tight\">Questions, answered</h2></div><div class=\"mt-8 flex flex-col gap-3\"><div class=\"collapse collapse-arrow border border-base-300 bg-base-100\"><input type=\"radio\" name=\"faq\" checked=\"checked\" aria-label=\"What happens to my data, and what gets redacted?\"><div class=\"collapse-title font-medium\">What happens to my data, and what gets redacted?</div><div class=\"collapse-content text-sm text-base-content/75\"><p>Captures are redacted on the way out: sensitive attributes and query parameters are stripped from the DOM snapshot, and sensitive input values (passwords, tokens, keys) are removed from session history. The selected element's HTML and its screenshot are captured as-is, so check them before you file.</p></div></div><div class=\"collapse collapse-arrow border border-base-300 bg-base-100\"><input type=\"radio\" name=\"faq\" aria-label=\"Can I change the hotkey?\"><div class=\"collapse-title font-medium\">Can I change the hotkey?</div><div class=\"collapse-content text-sm text-base-content/75\"><p>Yes. The default is Alt+Shift, and you can override it with a data attribute on the script tag so it never collides with your own shortcuts.</p></div></div><div class=\"collapse collapse-arrow border border-base-300 bg-base-100\"><input type=\"radio\" name=\"faq\" aria-label=\"Which auth providers are supported today?\"><div class=\"collapse-title font-medium\">Which auth providers are supported today?</div><div class=\"collapse-content text-sm text-base-content/75\"><p>GitHub only, for now. Sign-in and issue filing share the same GitHub App, so there is nothing else to configure. More providers are on the roadmap.</p></div></div></div></div></section><!-- ── Footer ──────────────────────────────────────────────────────── --><footer class=\"bg-base-200/60\"><div class=\"mx-auto flex w-full max-w-6xl flex-col items-start gap-6 px-4 py-12 sm:flex-row sm:items-center sm:justify-between\"><div class=\"flex items-center gap-2\"><span class=\"grid size-6 place-items-center rounded-md bg-primary\" aria-hidden=\"true\"><span class=\"size-2.5 rounded-[3px] bg-primary-content\"></span></span> <span class=\"text-sm font-semibold tracking-tight\">emergent.feedback</span> <span class=\"ml-2 font-mono text-xs text-base-content/40\">v0.11.0</span></div><nav class=\"flex items-center gap-4 text-sm\" aria-label=\"Footer\"><a href=\"https://github.com/emergent-company/feedback-overlay\" class=\"link link-hover\" target=\"_blank\" rel=\"noopener noreferrer\">GitHub</a> <a href=\"/panel\" class=\"link link-hover\">Panel</a></nav></div></footer><script src=\"/feedback-overlay.js\" data-repo=\"emergent-company/feedback-overlay\" data-label=\"feedback\" async></script></body></html>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "</code></pre></div><p class=\"mb-2 mt-6 font-mono text-xs uppercase tracking-widest text-base-content/50\">Server</p><div class=\"mockup-code w-full text-sm\"><pre data-prefix=\"$\"><code>docker run -p 8080:8080 ghcr.io/emergent-company/emergent-feedback</code></pre></div></div></div></div></section><!-- ── FAQ ─────────────────────────────────────────────────────────── --><section class=\"border-b border-base-300/60 bg-base-200/30\"><div class=\"mx-auto w-full max-w-3xl px-4 py-16 md:py-20\"><div class=\"max-w-2xl\"><p class=\"font-mono text-xs uppercase tracking-widest text-base-content/50\">FAQ</p><h2 class=\"mt-2 text-3xl font-semibold tracking-tight\">Questions, answered</h2></div><div class=\"mt-8 flex flex-col gap-3\"><div class=\"collapse collapse-arrow border border-base-300 bg-base-100\"><input type=\"radio\" name=\"faq\" checked=\"checked\" aria-label=\"What happens to my data, and what gets redacted?\"><div class=\"collapse-title font-medium\">What happens to my data, and what gets redacted?</div><div class=\"collapse-content text-sm text-base-content/75\"><p>Captures are redacted on the way out: sensitive attributes and query parameters are stripped from the DOM snapshot, and sensitive input values (passwords, tokens, keys) are removed from session history. The selected element's HTML and its screenshot are captured as-is, so check them before you file.</p></div></div><div class=\"collapse collapse-arrow border border-base-300 bg-base-100\"><input type=\"radio\" name=\"faq\" aria-label=\"Can I change the hotkey?\"><div class=\"collapse-title font-medium\">Can I change the hotkey?</div><div class=\"collapse-content text-sm text-base-content/75\"><p>Yes. The default is Alt+Shift, and you can override it with a data attribute on the script tag so it never collides with your own shortcuts.</p></div></div><div class=\"collapse collapse-arrow border border-base-300 bg-base-100\"><input type=\"radio\" name=\"faq\" aria-label=\"Which auth providers are supported today?\"><div class=\"collapse-title font-medium\">Which auth providers are supported today?</div><div class=\"collapse-content text-sm text-base-content/75\"><p>GitHub only, for now. Sign-in and issue filing share the same GitHub App, so there is nothing else to configure. More providers are on the roadmap.</p></div></div></div></div></section><!-- ── Footer ──────────────────────────────────────────────────────── --><footer class=\"bg-base-200/60\"><div class=\"mx-auto flex w-full max-w-6xl flex-col items-start gap-6 px-4 py-12 sm:flex-row sm:items-center sm:justify-between\"><div class=\"flex items-center gap-2\"><span class=\"grid size-6 place-items-center rounded-md bg-primary\" aria-hidden=\"true\"><span class=\"size-2.5 rounded-[3px] bg-primary-content\"></span></span> <span class=\"text-sm font-semibold tracking-tight\">emergent.feedback</span> <span class=\"ml-2 font-mono text-xs text-base-content/40\">v0.11.0</span></div><nav class=\"flex items-center gap-4 text-sm\" aria-label=\"Footer\"><a href=\"https://github.com/emergent-company/emergent.feedback\" class=\"link link-hover\" target=\"_blank\" rel=\"noopener noreferrer\">GitHub</a> <a href=\"/panel\" class=\"link link-hover\">Panel</a></nav></div></footer><script src=\"/emergent-feedback.js\" data-api=\"\" data-repo=\"emergent-company/emergent.feedback\" data-label=\"feedback\" async></script></body></html>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

@@ -10,8 +10,8 @@ import (
 	"regexp"
 	"strconv"
 
-	"github.com/emergent-company/feedback-overlay/server/middleware"
-	"github.com/emergent-company/feedback-overlay/server/store"
+	"github.com/emergent-company/emergent.feedback/server/middleware"
+	"github.com/emergent-company/emergent.feedback/server/store"
 	"github.com/labstack/echo/v4"
 )
 
@@ -29,7 +29,7 @@ func GenerateAPIKey() (string, error) {
 	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
-	return "fo_" + hex.EncodeToString(b), nil
+	return "ef_" + hex.EncodeToString(b), nil
 }
 
 // VerifyAPIKey hashes the token and returns its repo scope (empty on failure).

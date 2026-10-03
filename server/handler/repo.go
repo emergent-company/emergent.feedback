@@ -8,13 +8,15 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/emergent-company/feedback-overlay/server/github"
-	"github.com/emergent-company/feedback-overlay/server/middleware"
+	"github.com/emergent-company/emergent.feedback/server/github"
+	"github.com/emergent-company/emergent.feedback/server/middleware"
 	"github.com/labstack/echo/v4"
 )
 
 // tokenEncryptKey derives an AES-256 key from the JWT secret (domain-separated).
 func tokenEncryptKey(jwtSecret string) []byte {
+	// Retained for data compatibility: this salt must stay stable so previously
+	// stored GitHub tokens continue to decrypt. Not a display name.
 	sum := sha256.Sum256([]byte("feedback-overlay:token:" + jwtSecret))
 	return sum[:]
 }

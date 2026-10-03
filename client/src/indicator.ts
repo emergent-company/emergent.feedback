@@ -2,7 +2,7 @@
 
 import type { OverlayConfig } from "./config";
 
-const BAR_ID = "__fo_indicator__";
+const BAR_ID = "__ef_indicator__";
 
 const STYLES = `
 #${BAR_ID} {
@@ -29,16 +29,16 @@ const STYLES = `
   opacity: 1;
   transition: opacity 1.2s ease;
 }
-#${BAR_ID} .fo-bar-dot {
+#${BAR_ID} .ef-bar-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
   background: #22c55e;
   margin-right: 8px;
   flex-shrink: 0;
-  animation: fo-pulse 2s ease-in-out infinite;
+  animation: ef-pulse 2s ease-in-out infinite;
 }
-#${BAR_ID} .fo-bar-key {
+#${BAR_ID} .ef-bar-key {
   display: inline-block;
   background: rgba(255,255,255,0.12);
   border: 1px solid rgba(255,255,255,0.22);
@@ -49,7 +49,7 @@ const STYLES = `
   font-size: 11px;
   line-height: 18px;
 }
-@keyframes fo-pulse {
+@keyframes ef-pulse {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.4; }
 }
@@ -84,8 +84,8 @@ export function showIndicator(hotkey: OverlayConfig["hotkey"]): void {
 
   const label = hotkeyLabel(hotkey);
   barEl.innerHTML =
-    `<span class="fo-bar-dot"></span>` +
-    `Comment mode\u2002—\u2002press\u00a0<span class="fo-bar-key">${label}</span>\u00a0to exit`;
+    `<span class="ef-bar-dot"></span>` +
+    `Comment mode\u2002—\u2002press\u00a0<span class="ef-bar-key">${label}</span>\u00a0to exit`;
 
   // Reset opacity and show.
   barEl.style.display = "flex";

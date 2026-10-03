@@ -18,7 +18,7 @@ let lastInputTime = 0;
 function isOwnElement(el: Element): boolean {
   let node: Element | null = el;
   while (node && node !== document.documentElement) {
-    if (node.id && node.id.startsWith("__fo_")) return true;
+    if (node.id && node.id.startsWith("__ef_")) return true;
     node = node.parentElement;
   }
   return false;
@@ -55,7 +55,7 @@ export function startRecording(): void {
 
   // Idempotent monkey-patching: wrap only once even if startRecording is
   // re-entered, and preserve the original return values.
-  const PATCHED = "__fo_history_patched__";
+  const PATCHED = "__ef_history_patched__";
   if (!(history as unknown as Record<string, unknown>)[PATCHED]) {
     (history as unknown as Record<string, unknown>)[PATCHED] = true;
 

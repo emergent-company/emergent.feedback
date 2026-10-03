@@ -1,8 +1,8 @@
 package handler
 
 import (
-	"github.com/emergent-company/feedback-overlay/server/github"
-	"github.com/emergent-company/feedback-overlay/server/store"
+	"github.com/emergent-company/emergent.feedback/server/github"
+	"github.com/emergent-company/emergent.feedback/server/store"
 )
 
 // Handler holds the shared dependencies for all HTTP handlers.

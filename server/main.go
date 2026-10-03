@@ -8,11 +8,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/emergent-company/feedback-overlay/server/github"
-	"github.com/emergent-company/feedback-overlay/server/store"
+	"github.com/emergent-company/emergent.feedback/server/github"
+	"github.com/emergent-company/emergent.feedback/server/store"
 )
 
-//go:embed static/feedback-overlay.js
+//go:embed static/emergent-feedback.js
 var staticFiles embed.FS
 
 // Version and Commit are injected at build time via -ldflags.
@@ -67,7 +67,7 @@ func main() {
 	e := buildRouter(s, ghCfg, jwtSecret, allowedOrigins, os.Getenv("MCP_API_KEY"))
 
 	// ── Start ─────────────────────────────────────────────────────────────────
-	fmt.Printf("feedback-overlay %s (%s) listening on :%s\n", Version, Commit, port)
+	fmt.Printf("emergent-feedback %s (%s) listening on :%s\n", Version, Commit, port)
 	if err := e.Start(":" + port); err != nil && err != http.ErrServerClosed {
 		fmt.Fprintf(os.Stderr, "fatal: %v\n", err)
 		os.Exit(1)

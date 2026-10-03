@@ -1,4 +1,4 @@
-// index.ts — feedback-overlay entry point.
+// index.ts — emergent.feedback entry point.
 
 import { readConfig } from "./config";
 import { APIClient } from "./api";
@@ -77,7 +77,7 @@ import { captureSnapshot } from "./snapshot";
   }
 
   function isOwnElement(el: Element): boolean {
-    return el.id.startsWith("__fo_");
+    return el.id.startsWith("__ef_");
   }
 
   // ── Shared: open feedback dialog for an element ─────────────────────────────

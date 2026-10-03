@@ -1,7 +1,7 @@
-# Dockerfile — feedback-overlay
+# Dockerfile — emergent.feedback
 #
 # Three-stage build:
-#   1. node-builder  — compiles the TypeScript client → feedback-overlay.js
+#   1. node-builder  — compiles the TypeScript client → emergent-feedback.js
 #   2. go-builder    — compiles the Go server (embeds the JS bundle)
 #   3. runtime       — minimal alpine image
 #
@@ -9,7 +9,7 @@
 #   docker build \
 #     --build-arg VERSION=$(cat VERSION) \
 #     --build-arg COMMIT=$(git rev-parse --short HEAD) \
-#     -t ghcr.io/emergent-company/feedback-overlay:<version> .
+#     -t ghcr.io/emergent-company/emergent-feedback:<version> .
 #
 # Required runtime env vars:
 #   GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, GITHUB_REDIRECT_URI, JWT_SECRET
@@ -47,7 +47,7 @@ RUN --mount=type=cache,target=/root/go/pkg/mod \
 # Copy source. The JS bundle in server/static/ is a placeholder in the repo;
 # we overwrite it from the node-builder stage below.
 COPY . .
-COPY --from=node-builder /client/../server/static/feedback-overlay.js ./server/static/feedback-overlay.js
+COPY --from=node-builder /client/../server/static/emergent-feedback.js ./server/static/emergent-feedback.js
 
 # VERSION/COMMIT are injected here. Changing them only busts the final link
 # step, not the expensive compilation of all dependencies.
@@ -61,7 +61,7 @@ RUN --mount=type=cache,target=/root/go/pkg/mod \
       -ldflags="-s -w \
         -X main.Version=${VERSION} \
         -X main.Commit=${COMMIT}" \
-      -o /out/feedback-overlay-server \
+      -o /out/emergent-feedback \
       ./server
 
 # ── Stage 3: runtime ───────────────────────────────────────────────────────────
@@ -72,7 +72,7 @@ RUN apk add --no-cache ca-certificates tzdata wget
 # Non-root user
 RUN addgroup -S feedback && adduser -S feedback -G feedback
 
-COPY --link --from=go-builder /out/feedback-overlay-server /usr/local/bin/feedback-overlay-server
+COPY --link --from=go-builder /out/emergent-feedback /usr/local/bin/emergent-feedback
 
 # Persistent data volume for SQLite database.
 # Create /data as root and give it to the feedback user before switching.
@@ -86,4 +86,4 @@ HEALTHCHECK --interval=10s --timeout=5s --retries=3 --start-period=30s \
 
 USER feedback
 
-ENTRYPOINT ["/usr/local/bin/feedback-overlay-server"]
+ENTRYPOINT ["/usr/local/bin/emergent-feedback"]

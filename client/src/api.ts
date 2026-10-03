@@ -1,4 +1,4 @@
-// api.ts — all fetch() calls to the feedback-overlay microservice.
+// api.ts — all fetch() calls to the emergent.feedback microservice.
 
 import type { OverlayConfig } from "./config";
 
@@ -63,16 +63,16 @@ export class APIClient {
 
   setToken(token: string): void {
     this.token = token;
-    localStorage.setItem("__fo_token__", token);
+    localStorage.setItem("__ef_token__", token);
   }
 
   loadToken(): void {
-    this.token = localStorage.getItem("__fo_token__");
+    this.token = localStorage.getItem("__ef_token__");
   }
 
   clearToken(): void {
     this.token = null;
-    localStorage.removeItem("__fo_token__");
+    localStorage.removeItem("__ef_token__");
   }
 
   isAuthenticated(): boolean {

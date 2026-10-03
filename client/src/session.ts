@@ -1,6 +1,6 @@
 // session.ts — overlay-minted session ID for cross-feedback correlation.
 
-const KEY = "__fo_session_id__";
+const KEY = "__ef_session_id__";
 
 let id: string | null = null;
 

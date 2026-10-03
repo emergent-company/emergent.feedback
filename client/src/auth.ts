@@ -8,8 +8,8 @@ export interface AuthUser {
   avatarUrl: string;
 }
 
-const AUTH_MESSAGE_TYPE = "feedback_overlay_auth";
-const USER_KEY = "__fo_user__";
+const AUTH_MESSAGE_TYPE = "emergent_feedback_auth";
+const USER_KEY = "__ef_user__";
 
 export class AuthManager {
   private user: AuthUser | null = null;
@@ -43,7 +43,7 @@ export class AuthManager {
       const authUrl = `${this.config.apiBase}/auth/github?origin=${encodeURIComponent(window.location.origin)}`;
       const popup = window.open(
         authUrl,
-        "feedback_overlay_auth",
+        "emergent_feedback_auth",
         "width=600,height=700,left=200,top=100"
       );
 

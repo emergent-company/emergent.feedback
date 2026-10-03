@@ -61,7 +61,7 @@ export function captureSnapshot(): string | undefined {
     });
 
     // Remove the overlay's own injected DOM.
-    root.querySelectorAll("[id^='__fo_']").forEach((n) => n.remove());
+    root.querySelectorAll("[id^='__ef_']").forEach((n) => n.remove());
 
     const html = root.outerHTML;
     if (html.length > MAX_BYTES) return undefined;

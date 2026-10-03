@@ -7,12 +7,12 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/emergent-company/feedback-overlay/server/github"
-	"github.com/emergent-company/feedback-overlay/server/handler"
-	"github.com/emergent-company/feedback-overlay/server/landing"
-	authmw "github.com/emergent-company/feedback-overlay/server/middleware"
-	"github.com/emergent-company/feedback-overlay/server/panel"
-	"github.com/emergent-company/feedback-overlay/server/store"
+	"github.com/emergent-company/emergent.feedback/server/github"
+	"github.com/emergent-company/emergent.feedback/server/handler"
+	"github.com/emergent-company/emergent.feedback/server/landing"
+	authmw "github.com/emergent-company/emergent.feedback/server/middleware"
+	"github.com/emergent-company/emergent.feedback/server/panel"
+	"github.com/emergent-company/emergent.feedback/server/store"
 	"github.com/emergent-company/go-daisy/render"
 	"github.com/emergent-company/go-daisy/staticfs"
 	"github.com/labstack/echo/v4"
@@ -63,9 +63,9 @@ func buildRouter(s *store.Store, ghCfg *github.AppConfig, jwtSecret, allowedOrig
 		}
 	})
 
-	// ── Static: serve embedded feedback-overlay.js ────────────────────────────
+	// ── Static: serve embedded emergent-feedback.js ────────────────────────────
 	staticFS, _ := fs.Sub(staticFiles, "static")
-	e.GET("/feedback-overlay.js", echo.WrapHandler(http.FileServer(http.FS(staticFS))))
+	e.GET("/emergent-feedback.js", echo.WrapHandler(http.FileServer(http.FS(staticFS))))
 
 	// ── go-daisy static assets (CSS/JS) ───────────────────────────────────────
 	e.GET("/static/*", echo.WrapHandler(staticfs.Handler("/static/")))

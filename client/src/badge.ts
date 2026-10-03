@@ -2,7 +2,7 @@
 
 import type { BadgeSummary, IssueBadge } from "./api";
 
-const BADGE_PREFIX = "__fo_badge__";
+const BADGE_PREFIX = "__ef_badge__";
 let activeBadges: HTMLElement[] = [];
 let resizeObserver: ResizeObserver | null = null;
 

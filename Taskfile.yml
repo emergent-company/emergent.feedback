@@ -20,7 +20,7 @@ tasks:
       - styles/**/*.css
       - package.json
     generates:
-      - ../server/static/feedback-overlay.js
+      - ../server/static/emergent-feedback.js
 
   build:client:dev:
     desc: "Build the JS client bundle (development, with source maps)"
@@ -52,15 +52,15 @@ tasks:
       - |
         CGO_ENABLED=0 go build \
           -ldflags="-s -w -X main.Version={{.VERSION}} -X main.Commit={{.COMMIT}}" \
-          -o bin/feedback-overlay-server \
+          -o bin/emergent-feedback \
           ./server
     sources:
       - server/**/*.go
-      - server/static/feedback-overlay.js
+      - server/static/emergent-feedback.js
       - go.mod
       - go.sum
     generates:
-      - bin/feedback-overlay-server
+      - bin/emergent-feedback
 
   # ── Combined ─────────────────────────────────────────────────────────────────
 
@@ -87,8 +87,8 @@ tasks:
         docker build \
           --build-arg VERSION={{.VERSION}} \
           --build-arg COMMIT={{.COMMIT}} \
-          -t ghcr.io/emergent-company/feedback-overlay:{{.VERSION}} \
-          -t ghcr.io/emergent-company/feedback-overlay:latest \
+          -t ghcr.io/emergent-company/emergent-feedback:{{.VERSION}} \
+          -t ghcr.io/emergent-company/emergent-feedback:latest \
           .
 
   docker:run:
@@ -98,7 +98,7 @@ tasks:
         docker run --rm -p 8080:8080 \
           --env-file .env \
           -v $(pwd)/data:/data \
-          ghcr.io/emergent-company/feedback-overlay:latest
+          ghcr.io/emergent-company/emergent-feedback:latest
 
   # ── Testing ───────────────────────────────────────────────────────────────────
 

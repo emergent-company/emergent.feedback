@@ -33,7 +33,7 @@ templ LandingPage() {
 				</nav>
 				<div class="flex items-center gap-2">
 					<a href="/panel" class="btn btn-ghost btn-sm hidden sm:inline-flex">Panel</a>
-					@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/feedback-overlay", Variant: ui.ButtonPrimary, Size: ui.ButtonSM, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}) {
+					@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/emergent.feedback", Variant: ui.ButtonPrimary, Size: ui.ButtonSM, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}) {
 						GitHub
 					}
 				</div>
@@ -52,7 +52,7 @@ templ LandingPage() {
 						emergent.feedback closes the gap. Drop in one script tag, hold the hotkey, click the broken element, and a fully-contextual GitHub issue is filed for you — selector, styles, viewport, framework and screenshot included.
 					</p>
 					<div class="mt-7 flex flex-wrap items-center gap-3">
-						@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/feedback-overlay", Variant: ui.ButtonPrimary, Size: ui.ButtonLG, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}) {
+						@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/emergent.feedback", Variant: ui.ButtonPrimary, Size: ui.ButtonLG, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}) {
 							Get started on GitHub
 						}
 						<a href="#self-host" class="btn btn-outline btn-lg">Self-host</a>
@@ -65,7 +65,7 @@ templ LandingPage() {
 				<div>
 					<p class="mb-2 font-mono text-xs uppercase tracking-widest text-base-content/50">Install</p>
 					<div class="mockup-code w-full text-sm shadow-xl">
-						<pre data-prefix="&lt;/&gt;"><code>{ "<script src=\"https://feedback.emergent-company.ai/feedback-overlay.js\" data-api=\"https://feedback.emergent-company.ai\" data-repo=\"owner/repo\" async></script>" }</code></pre>
+						<pre data-prefix="&lt;/&gt;"><code>{ "<script src=\"https://feedback.emergent-company.ai/emergent-feedback.js\" data-api=\"https://feedback.emergent-company.ai\" data-repo=\"owner/repo\" async></script>" }</code></pre>
 					</div>
 					<div class="stats mt-6 w-full border border-base-300 bg-base-200/50">
 						<div class="stat">
@@ -213,7 +213,7 @@ templ LandingPage() {
 				</div>
 				<div class="mockup-browser mt-10 border border-base-300 bg-base-200">
 					<div class="mockup-browser-toolbar">
-						<div class="input">github.com/emergent-company/feedback-overlay/issues/42</div>
+						<div class="input">github.com/emergent-company/emergent.feedback/issues/42</div>
 					</div>
 					<div class="border-t border-base-300 bg-base-100 p-5">
 						<div class="flex flex-wrap items-center gap-2">
@@ -322,7 +322,7 @@ templ LandingPage() {
 								<li>Community support</li>
 							</ul>
 							<div class="card-actions mt-6">
-								@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/feedback-overlay", Variant: ui.ButtonPrimary, Block: true, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}) {
+								@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/emergent.feedback", Variant: ui.ButtonPrimary, Block: true, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}) {
 									Get started
 								}
 							</div>
@@ -340,7 +340,7 @@ templ LandingPage() {
 							<li>Email support</li>
 						</ul>
 						<div class="card-actions mt-6">
-							@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/feedback-overlay/issues/new", Variant: ui.ButtonOutline, Block: true, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}) {
+							@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/emergent.feedback/issues/new", Variant: ui.ButtonOutline, Block: true, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}) {
 								Talk to us
 							}
 						</div>
@@ -357,7 +357,7 @@ templ LandingPage() {
 							<li>Priority support</li>
 						</ul>
 						<div class="card-actions mt-6">
-							@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/feedback-overlay/issues/new", Variant: ui.ButtonOutline, Block: true, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}) {
+							@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/emergent.feedback/issues/new", Variant: ui.ButtonOutline, Block: true, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}) {
 								Talk to us
 							}
 						</div>
@@ -384,11 +384,11 @@ templ LandingPage() {
 					<div>
 						<p class="mb-2 font-mono text-xs uppercase tracking-widest text-base-content/50">Client</p>
 						<div class="mockup-code w-full text-sm">
-							<pre data-prefix="&lt;/&gt;"><code>{ "<script src=\"https://feedback.your-domain.com/feedback-overlay.js\" data-api=\"https://feedback.your-domain.com\" data-repo=\"owner/repo\" async></script>" }</code></pre>
+							<pre data-prefix="&lt;/&gt;"><code>{ "<script src=\"https://feedback.your-domain.com/emergent-feedback.js\" data-api=\"https://feedback.your-domain.com\" data-repo=\"owner/repo\" async></script>" }</code></pre>
 						</div>
 						<p class="mb-2 mt-6 font-mono text-xs uppercase tracking-widest text-base-content/50">Server</p>
 						<div class="mockup-code w-full text-sm">
-							<pre data-prefix="$"><code>docker run -p 8080:8080 ghcr.io/emergent-company/feedback-overlay</code></pre>
+							<pre data-prefix="$"><code>docker run -p 8080:8080 ghcr.io/emergent-company/emergent-feedback</code></pre>
 						</div>
 					</div>
 				</div>
@@ -439,13 +439,13 @@ templ LandingPage() {
 					<span class="ml-2 font-mono text-xs text-base-content/40">v0.11.0</span>
 				</div>
 				<nav class="flex items-center gap-4 text-sm" aria-label="Footer">
-					<a href="https://github.com/emergent-company/feedback-overlay" class="link link-hover" target="_blank" rel="noopener noreferrer">GitHub</a>
+					<a href="https://github.com/emergent-company/emergent.feedback" class="link link-hover" target="_blank" rel="noopener noreferrer">GitHub</a>
 					<a href="/panel" class="link link-hover">Panel</a>
 				</nav>
 			</div>
 		</footer>
 
-		<script src="/feedback-overlay.js" data-repo="emergent-company/feedback-overlay" data-label="feedback" async></script>
+		<script src="/emergent-feedback.js" data-api="" data-repo="emergent-company/emergent.feedback" data-label="feedback" async></script>
 	</body>
 	</html>
 }

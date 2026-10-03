@@ -1,4 +1,4 @@
-name: Deploy feedback-overlay
+name: Deploy emergent.feedback
 
 on:
   workflow_dispatch:
@@ -49,7 +49,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5.7.0
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/feedback-overlay
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/emergent-feedback
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=raw,value=${{ steps.ver.outputs.version }}
@@ -66,8 +66,8 @@ jobs:
             COMMIT=${{ steps.ver.outputs.commit }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=feedback-overlay
-          cache-to: type=gha,mode=max,scope=feedback-overlay
+          cache-from: type=gha,scope=emergent-feedback
+          cache-to: type=gha,mode=max,scope=emergent-feedback
 
   # ---------------------------------------------------------------------------
   # 2. Deploy to cluster via SSH over Tailscale
@@ -78,7 +78,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     concurrency:
-      group: feedback-overlay-deploy
+      group: emergent-feedback-deploy
       cancel-in-progress: false
 
     steps:
@@ -122,7 +122,7 @@ jobs:
       - name: Deploy compose file and .env
         run: |
           ssh feedback-server 'mkdir -p /opt/stacks/feedback-overlay'
-          scp compose/feedback-overlay/docker-compose.yml \
+          scp compose/emergent-feedback/docker-compose.yml \
             feedback-server:/opt/stacks/feedback-overlay/docker-compose.yml
 
           printf '%s\n' \
@@ -152,8 +152,8 @@ jobs:
       - name: Pull and restart
         run: |
           ssh feedback-server "echo '${{ secrets.GHCR_PAT }}' | docker login ghcr.io -u '${{ secrets.GHCR_USER }}' --password-stdin"
-          ssh feedback-server "cd /opt/stacks/feedback-overlay && docker compose pull feedback-overlay"
-          ssh feedback-server "cd /opt/stacks/feedback-overlay && docker compose up -d --no-deps feedback-overlay"
+          ssh feedback-server "cd /opt/stacks/feedback-overlay && docker compose pull emergent-feedback"
+          ssh feedback-server "cd /opt/stacks/feedback-overlay && docker compose up -d --no-deps emergent-feedback"
 
       - name: Wait for health check
         id: health
@@ -184,13 +184,13 @@ jobs:
           echo "--- Container status ---"
           ssh feedback-server "docker ps -a --format 'table {{.Names}}\t{{.Status}}'" || true
           echo "--- Container logs ---"
-          ssh feedback-server "docker logs feedback-overlay-feedback-overlay-1 --tail 100 2>&1" || true
+          ssh feedback-server "docker logs feedback-overlay-emergent-feedback-1 --tail 100 2>&1" || true
 
       - name: Rollback to previous image
         if: failure() && steps.health.outputs.rollback == 'true'
         run: |
           echo "Rolling back — restarting with previous image..."
-          ssh feedback-server "cd /opt/stacks/feedback-overlay && docker compose restart feedback-overlay"
+          ssh feedback-server "cd /opt/stacks/feedback-overlay && docker compose restart emergent-feedback"
           echo "::warning::Rollback complete. Investigate the failed deployment."
 
       - name: Write deployment summary
@@ -199,7 +199,7 @@ jobs:
           TAG="${{ steps.tag.outputs.tag }}"
           TIMESTAMP=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
           cat >> "$GITHUB_STEP_SUMMARY" <<EOF
-          ## feedback-overlay Deployment
+          ## emergent.feedback Deployment
 
           | Field        | Value |
           |--------------|-------|

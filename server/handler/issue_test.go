@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/emergent-company/feedback-overlay/server/store"
+	"github.com/emergent-company/emergent.feedback/server/store"
 )
 
 func TestSelectorShort(t *testing.T) {
