@@ -51,7 +51,7 @@ tasks:
     cmds:
       - |
         CGO_ENABLED=0 go build \
-          -ldflags="-s -w -X main.Version={{.VERSION}} -X main.Commit={{.COMMIT}}" \
+          -ldflags="-s -w -X github.com/emergent-company/emergent.feedback/server/app.Version={{.VERSION}} -X github.com/emergent-company/emergent.feedback/server/app.Commit={{.COMMIT}}" \
           -o bin/emergent-feedback \
           ./server
     sources:

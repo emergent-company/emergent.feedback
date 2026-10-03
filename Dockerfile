@@ -59,8 +59,8 @@ RUN --mount=type=cache,target=/root/go/pkg/mod \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build \
       -ldflags="-s -w \
-        -X main.Version=${VERSION} \
-        -X main.Commit=${COMMIT}" \
+        -X github.com/emergent-company/emergent.feedback/server/app.Version=${VERSION} \
+        -X github.com/emergent-company/emergent.feedback/server/app.Commit=${COMMIT}" \
       -o /out/emergent-feedback \
       ./server
 
