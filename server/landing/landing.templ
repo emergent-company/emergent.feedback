@@ -1,0 +1,451 @@
+package landing
+
+import "github.com/emergent-company/go-daisy/components/ui"
+
+// LandingPage is the public commercial one-pager served at "/".
+// Server-rendered with go-daisy components on the dracula theme. The overlay
+// itself is loaded at the very bottom so visitors can try it live on this page.
+templ LandingPage() {
+	<!DOCTYPE html>
+	<html lang="en" data-theme="dracula">
+	<head>
+		<meta charset="UTF-8"/>
+		<meta name="viewport" content="width=device-width, initial-scale=1"/>
+		<title>emergent.feedback</title>
+		<meta name="description" content="emergent.feedback turns vague bug reports into fully-contextual GitHub issues. Drop in one script tag, hold the hotkey, click the broken element, and the exact selector, environment and screenshot land in GitHub."/>
+		<link rel="stylesheet" href="/static/css/app.css"/>
+	</head>
+	<body class="min-h-screen bg-base-100 text-base-content antialiased">
+		<!-- ── Nav ─────────────────────────────────────────────────────────── -->
+		<header class="sticky top-0 z-30 border-b border-base-300/60 bg-base-100/80 backdrop-blur">
+			<div class="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-3">
+				<a href="/" class="flex items-center gap-2">
+					<span class="grid size-7 place-items-center rounded-lg bg-primary" aria-hidden="true">
+						<span class="size-3 rounded-[3px] bg-primary-content"></span>
+					</span>
+					<span class="text-sm font-semibold tracking-tight">emergent.feedback</span>
+				</a>
+				<nav class="hidden items-center gap-1 md:flex" aria-label="Primary">
+					<a href="#how-it-works" class="btn btn-ghost btn-sm">How it works</a>
+					<a href="#what-it-captures" class="btn btn-ghost btn-sm">What it captures</a>
+					<a href="#pricing" class="btn btn-ghost btn-sm">Pricing</a>
+					<a href="#self-host" class="btn btn-ghost btn-sm">Self-host</a>
+				</nav>
+				<div class="flex items-center gap-2">
+					<a href="/panel" class="btn btn-ghost btn-sm hidden sm:inline-flex">Panel</a>
+					@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/feedback-overlay", Variant: ui.ButtonPrimary, Size: ui.ButtonSM, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}) {
+						GitHub
+					}
+				</div>
+			</div>
+		</header>
+
+		<!-- ── Hero ────────────────────────────────────────────────────────── -->
+		<section class="relative overflow-hidden border-b border-base-300/60 bg-base-200/40">
+			<div class="mx-auto grid w-full max-w-6xl items-center gap-10 px-4 py-16 md:grid-cols-2 md:py-24">
+				<div>
+					@ui.Badge(ui.BadgeProps{Label: "Element-level feedback → GitHub issues", Variant: ui.BadgePrimary, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM})
+					<h1 class="mt-5 text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">
+						Your tester said “the button on the right”. Your developers need the exact element.
+					</h1>
+					<p class="mt-5 max-w-xl text-base text-base-content/70">
+						emergent.feedback closes the gap. Drop in one script tag, hold the hotkey, click the broken element, and a fully-contextual GitHub issue is filed for you — selector, styles, viewport, framework and screenshot included.
+					</p>
+					<div class="mt-7 flex flex-wrap items-center gap-3">
+						@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/feedback-overlay", Variant: ui.ButtonPrimary, Size: ui.ButtonLG, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}) {
+							Get started on GitHub
+						}
+						<a href="#self-host" class="btn btn-outline btn-lg">Self-host</a>
+					</div>
+					<div class="mt-7">
+						@ui.Alert(ui.AlertProps{Type: ui.AlertInfo, Style: ui.AlertStyleSoft, Message: "Hold Alt+Shift, click any element on this page and file a real issue against this project — you can try the overlay live right here."})
+					</div>
+				</div>
+
+				<div>
+					<p class="mb-2 font-mono text-xs uppercase tracking-widest text-base-content/50">Install</p>
+					<div class="mockup-code w-full text-sm shadow-xl">
+						<pre data-prefix="&lt;/&gt;"><code>{ "<script src=\"https://feedback.emergent-company.ai/feedback-overlay.js\" data-api=\"https://feedback.emergent-company.ai\" data-repo=\"owner/repo\" async></script>" }</code></pre>
+					</div>
+					<div class="stats mt-6 w-full border border-base-300 bg-base-200/50">
+						<div class="stat">
+							<div class="stat-title text-xs">Setup</div>
+							<div class="stat-value text-2xl">1 tag</div>
+						</div>
+						<div class="stat">
+							<div class="stat-title text-xs">Frameworks</div>
+							<div class="stat-value text-2xl">6+</div>
+						</div>
+						<div class="stat">
+							<div class="stat-title text-xs">Backend</div>
+							<div class="stat-value text-2xl">None</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<!-- ── The problem ─────────────────────────────────────────────────── -->
+		<section class="border-b border-base-300/60 bg-base-200/30">
+			<div class="mx-auto w-full max-w-5xl px-4 py-16 md:py-20">
+				<div class="max-w-2xl">
+					<p class="font-mono text-xs uppercase tracking-widest text-base-content/50">The problem</p>
+					<h2 class="mt-2 text-3xl font-semibold tracking-tight">Bug reports lose the one thing you actually need</h2>
+					<p class="mt-3 text-base text-base-content/70">
+						By the time a vague report reaches a developer, the context is gone. Everyone guesses, and the fix slips a sprint.
+					</p>
+				</div>
+				<div class="mt-10 grid grid-cols-1 gap-5 sm:grid-cols-2">
+					@ui.Card("", nil) {
+						<h3 class="card-title text-base">Vague reports</h3>
+						<p class="text-sm text-base-content/70">“The button doesn’t work.” No steps, no page, no idea which button. A round-trip just to reproduce.</p>
+					}
+					@ui.Card("", nil) {
+						<h3 class="card-title text-base">No selector or element</h3>
+						<p class="text-sm text-base-content/70">Developers hunt through the DOM by hand. The failing element is never named, so guesses pile up.</p>
+					}
+					@ui.Card("", nil) {
+						<h3 class="card-title text-base">Unknown viewport and framework</h3>
+						<p class="text-sm text-base-content/70">Mobile-only? Tailwind or MUI? Without the environment, every fix is shot in the dark.</p>
+					}
+					@ui.Card("", nil) {
+						<h3 class="card-title text-base">Screenshot-only, “works on my machine”</h3>
+						<p class="text-sm text-base-content/70">A PNG proves something broke but carries no styles, no DOM and nothing an agent can act on.</p>
+					}
+				</div>
+			</div>
+		</section>
+
+		<!-- ── How it works ────────────────────────────────────────────────── -->
+		<section id="how-it-works" class="border-b border-base-300/60">
+			<div class="mx-auto w-full max-w-5xl px-4 py-16 md:py-20">
+				<div class="max-w-2xl">
+					<p class="font-mono text-xs uppercase tracking-widest text-base-content/50">How it works</p>
+					<h2 class="mt-2 text-3xl font-semibold tracking-tight">Four steps from click to issue</h2>
+					<p class="mt-3 text-base text-base-content/70">No widgets to mount, no SDK to learn. The overlay lives over your app and gets out of the way.</p>
+				</div>
+				<ul class="steps steps-vertical mt-10 lg:steps-horizontal">
+					<li class="step step-primary">Add the script tag</li>
+					<li class="step step-primary">Hold the hotkey and click the element</li>
+					<li class="step step-primary">Comment or tag it Bug/Enhancement</li>
+					<li class="step step-primary">The issue lands in GitHub with full context</li>
+				</ul>
+				<p class="mt-8 text-sm text-base-content/60">
+					Press <kbd class="kbd kbd-sm">Alt</kbd> + <kbd class="kbd kbd-sm">Shift</kbd> on this page and try it yourself.
+				</p>
+			</div>
+		</section>
+
+		<!-- ── What gets captured ──────────────────────────────────────────── -->
+		<section id="what-it-captures" class="border-b border-base-300/60 bg-base-200/30">
+			<div class="mx-auto w-full max-w-6xl px-4 py-16 md:py-20">
+				<div class="max-w-2xl">
+					<p class="font-mono text-xs uppercase tracking-widest text-base-content/50">What gets captured</p>
+					<h2 class="mt-2 text-3xl font-semibold tracking-tight">Everything a fix needs, captured automatically</h2>
+					<p class="mt-3 text-base text-base-content/70">Each report bundles the element, its environment and its story into one structured payload.</p>
+				</div>
+				<div class="mt-10 grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+					@ui.Card("", nil) {
+						<div class="flex items-center gap-2">
+							<h3 class="card-title text-base">Element</h3>
+							@ui.Badge(ui.BadgeProps{Label: "DOM", Variant: ui.BadgeGhost, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM})
+						</div>
+						<ul class="mt-1 flex flex-col gap-1.5 text-sm text-base-content/70">
+							<li>CSS selector</li>
+							<li>data-component</li>
+							<li>Computed styles</li>
+							<li>Outer HTML</li>
+						</ul>
+					}
+					@ui.Card("", nil) {
+						<div class="flex items-center gap-2">
+							<h3 class="card-title text-base">Environment</h3>
+							@ui.Badge(ui.BadgeProps{Label: "Runtime", Variant: ui.BadgeGhost, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM})
+						</div>
+						<ul class="mt-1 flex flex-col gap-1.5 text-sm text-base-content/70">
+							<li>URL</li>
+							<li>Viewport</li>
+							<li>Device pixel ratio</li>
+							<li>User agent</li>
+							<li>Timestamp</li>
+						</ul>
+					}
+					@ui.Card("", nil) {
+						<div class="flex items-center gap-2">
+							<h3 class="card-title text-base">Framework</h3>
+							@ui.Badge(ui.BadgeProps{Label: "Detected", Variant: ui.BadgeGhost, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM})
+						</div>
+						<p class="mt-1 text-sm text-base-content/70">Tailwind, DaisyUI, Bootstrap, MUI, Chakra, Radix and shadcn are recognised on the fly.</p>
+					}
+					@ui.Card("", nil) {
+						<div class="flex items-center gap-2">
+							<h3 class="card-title text-base">Correlation</h3>
+							@ui.Badge(ui.BadgeProps{Label: "Linked", Variant: ui.BadgeGhost, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM})
+						</div>
+						<ul class="mt-1 flex flex-col gap-1.5 text-sm text-base-content/70">
+							<li>Session ID</li>
+							<li>Application trace ID</li>
+							<li>Session history</li>
+						</ul>
+					}
+					@ui.Card("", nil) {
+						<div class="flex items-center gap-2">
+							<h3 class="card-title text-base">Visual</h3>
+							@ui.Badge(ui.BadgeProps{Label: "Proof", Variant: ui.BadgeGhost, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM})
+						</div>
+						<ul class="mt-1 flex flex-col gap-1.5 text-sm text-base-content/70">
+							<li>Element screenshot</li>
+							<li>Redacted DOM snapshot</li>
+							<li>Available to agents via MCP</li>
+						</ul>
+					}
+				</div>
+			</div>
+		</section>
+
+		<!-- ── The issue it produces ───────────────────────────────────────── -->
+		<section class="border-b border-base-300/60">
+			<div class="mx-auto w-full max-w-5xl px-4 py-16 md:py-20">
+				<div class="max-w-2xl">
+					<p class="font-mono text-xs uppercase tracking-widest text-base-content/50">The output</p>
+					<h2 class="mt-2 text-3xl font-semibold tracking-tight">The issue it produces</h2>
+					<p class="mt-3 text-base text-base-content/70">A developer opens the ticket and starts fixing — nothing to chase, nothing to ask.</p>
+				</div>
+				<div class="mockup-browser mt-10 border border-base-300 bg-base-200">
+					<div class="mockup-browser-toolbar">
+						<div class="input">github.com/emergent-company/feedback-overlay/issues/42</div>
+					</div>
+					<div class="border-t border-base-300 bg-base-100 p-5">
+						<div class="flex flex-wrap items-center gap-2">
+							@ui.Badge(ui.BadgeProps{Label: "Bug", Variant: ui.BadgeError, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM})
+							<h3 class="text-base font-semibold">Checkout button ignores clicks on mobile Safari</h3>
+						</div>
+						<div class="mockup-code mt-4 w-full text-xs">
+							<pre data-prefix="URL"><code>https://app.example.com/checkout</code></pre>
+							<pre data-prefix="Branch"><code>release/2.4</code></pre>
+							<pre data-prefix="Viewport"><code>390 × 844 · DPR 3 (iPhone, Safari)</code></pre>
+							<pre data-prefix="Selector"><code>main &gt; section.cart &gt; button.btn.btn-primary[data-component="checkout"]</code></pre>
+							<pre data-prefix="Styles"><code>&#123; display: flex; pointer-events: none; z-index: 0 &#125;</code></pre>
+							<pre data-prefix="Trace"><code>session=8f2c19 · trace=4b7ae01</code></pre>
+						</div>
+						<p class="mt-4 text-sm text-base-content/70">
+							“On mobile the primary button never fires. Desktop is fine.” — captured with element screenshot, redacted DOM snapshot and session history attached.
+						</p>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<!-- ── Built for testers / developers ──────────────────────────────── -->
+		<section class="border-b border-base-300/60 bg-base-200/30">
+			<div class="mx-auto w-full max-w-5xl px-4 py-16 md:py-20">
+				<div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+					@ui.Card("", nil) {
+						@ui.Badge(ui.BadgeProps{Label: "Built for testers", Variant: ui.BadgeSecondary, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM})
+						<h2 class="card-title mt-2 text-xl">Report what you see, not what you guess</h2>
+						<ul class="mt-2 flex flex-col gap-2.5 text-sm text-base-content/75">
+							<li>Hold one hotkey instead of writing a bug essay</li>
+							<li>Point at the exact element that misbehaved</li>
+							<li>Tag it Bug or Enhancement in the moment</li>
+							<li>Nothing to install or configure per page</li>
+							<li>Works on staging and production alike</li>
+						</ul>
+					}
+					@ui.Card("", nil) {
+						@ui.Badge(ui.BadgeProps{Label: "Built for developers", Variant: ui.BadgeAccent, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM})
+						<h2 class="card-title mt-2 text-xl">Debug with the context already attached</h2>
+						<ul class="mt-2 flex flex-col gap-2.5 text-sm text-base-content/75">
+							<li>Exact selector and computed styles in the ticket</li>
+							<li>Viewport, DPR and user agent captured for you</li>
+							<li>Framework and data-component hints baked in</li>
+							<li>Session and trace IDs to correlate with logs</li>
+							<li>Issues land in GitHub, right next to the code</li>
+						</ul>
+					}
+				</div>
+			</div>
+		</section>
+
+		<!-- ── Agent-ready (MCP) ───────────────────────────────────────────── -->
+		<section class="border-b border-base-300/60">
+			<div class="mx-auto w-full max-w-5xl px-4 py-16 md:py-20">
+				<div class="max-w-2xl">
+					<p class="font-mono text-xs uppercase tracking-widest text-base-content/50">Agent-ready</p>
+					<h2 class="mt-2 text-3xl font-semibold tracking-tight">Let coding agents read the report</h2>
+					<p class="mt-3 text-base text-base-content/70">
+						Expose feedback to your agents over MCP. Repo-scoped API keys mean an agent only ever sees the repositories you allow.
+					</p>
+				</div>
+				<div class="mt-8 grid grid-cols-1 gap-5 lg:grid-cols-2">
+					@ui.CardRaw("border border-base-300 bg-base-200/50 shadow-none", "gap-2", nil) {
+						<h3 class="text-sm font-semibold uppercase tracking-wide text-base-content/60">MCP tools</h3>
+						<ul class="flex flex-col gap-2">
+							<li><code class="rounded-md bg-base-300/60 px-2 py-1 font-mono text-sm">feedback_get_context</code></li>
+							<li><code class="rounded-md bg-base-300/60 px-2 py-1 font-mono text-sm">feedback_get_screenshot</code></li>
+							<li><code class="rounded-md bg-base-300/60 px-2 py-1 font-mono text-sm">feedback_get_snapshot</code></li>
+							<li><code class="rounded-md bg-base-300/60 px-2 py-1 font-mono text-sm">feedback_list_for_issue</code></li>
+						</ul>
+					}
+					@ui.CardRaw("border border-base-300 bg-base-200/50 shadow-none", "gap-2", nil) {
+						<h3 class="text-sm font-semibold uppercase tracking-wide text-base-content/60">Repo-scoped API keys</h3>
+						<p class="text-sm text-base-content/75">
+							Create a key per agent, limited to the repositories you select. Keys are shown once and can be revoked at any time — a leaked key only ever exposes the repos you named.
+						</p>
+						<a href="/panel" class="link link-primary mt-1 text-sm">Manage keys in the panel →</a>
+					}
+				</div>
+			</div>
+		</section>
+
+		<!-- ── Pricing ─────────────────────────────────────────────────────── -->
+		<section id="pricing" class="border-b border-base-300/60 bg-base-200/30">
+			<div class="mx-auto w-full max-w-6xl px-4 py-16 md:py-20">
+				<div class="max-w-2xl">
+					<p class="font-mono text-xs uppercase tracking-widest text-base-content/50">Pricing</p>
+					<h2 class="mt-2 text-3xl font-semibold tracking-tight">Start free, self-hosted, forever</h2>
+					<p class="mt-3 text-base text-base-content/70">The open-source tier is complete. Managed hosting is there when you would rather not run it yourself.</p>
+				</div>
+				<div class="mt-10 grid grid-cols-1 items-stretch gap-6 md:grid-cols-3">
+					<div class="card border-2 border-primary bg-base-100 shadow-lg">
+						<div class="card-body">
+							<div class="flex items-center justify-between gap-2">
+								<h3 class="card-title text-lg">Community</h3>
+								@ui.Badge(ui.BadgeProps{Label: "Start here", Variant: ui.BadgePrimary, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM})
+							</div>
+							<p class="mt-2 text-4xl font-semibold tracking-tight">$0</p>
+							<p class="text-sm text-base-content/60">Self-host, everything included.</p>
+							<ul class="mt-4 flex flex-1 flex-col gap-2 text-sm text-base-content/75">
+								<li>Full overlay + server source</li>
+								<li>GitHub issue filing</li>
+								<li>All capture fields and screenshots</li>
+								<li>MCP server and scoped API keys</li>
+								<li>Community support</li>
+							</ul>
+							<div class="card-actions mt-6">
+								@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/feedback-overlay", Variant: ui.ButtonPrimary, Block: true, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}) {
+									Get started
+								}
+							</div>
+						</div>
+					</div>
+
+					@ui.Card("", nil) {
+						<h3 class="card-title text-lg">Cloud</h3>
+						<p class="mt-2 text-4xl font-semibold tracking-tight">Contact</p>
+						<p class="text-sm text-base-content/60">Managed hosting, zero ops.</p>
+						<ul class="mt-4 flex flex-1 flex-col gap-2 text-sm text-base-content/75">
+							<li>We run the server and upgrades</li>
+							<li>Managed database and backups</li>
+							<li>Usage dashboard</li>
+							<li>Email support</li>
+						</ul>
+						<div class="card-actions mt-6">
+							@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/feedback-overlay/issues/new", Variant: ui.ButtonOutline, Block: true, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}) {
+								Talk to us
+							}
+						</div>
+					}
+
+					@ui.Card("", nil) {
+						<h3 class="card-title text-lg">Enterprise</h3>
+						<p class="mt-2 text-4xl font-semibold tracking-tight">Contact</p>
+						<p class="text-sm text-base-content/60">Controls for larger teams.</p>
+						<ul class="mt-4 flex flex-1 flex-col gap-2 text-sm text-base-content/75">
+							<li>SSO and audit logs</li>
+							<li>Scheduled backups</li>
+							<li>Uptime SLA</li>
+							<li>Priority support</li>
+						</ul>
+						<div class="card-actions mt-6">
+							@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/feedback-overlay/issues/new", Variant: ui.ButtonOutline, Block: true, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}) {
+								Talk to us
+							}
+						</div>
+					}
+				</div>
+			</div>
+		</section>
+
+		<!-- ── Self-host ───────────────────────────────────────────────────── -->
+		<section id="self-host" class="border-b border-base-300/60">
+			<div class="mx-auto w-full max-w-5xl px-4 py-16 md:py-20">
+				<div class="grid grid-cols-1 items-start gap-10 md:grid-cols-2">
+					<div>
+						<p class="font-mono text-xs uppercase tracking-widest text-base-content/50">Self-host</p>
+						<h2 class="mt-2 text-3xl font-semibold tracking-tight">Run it on your own infrastructure</h2>
+						<p class="mt-3 text-base text-base-content/70">
+							The same server that powers the managed tier ships as a container. Bring your own database, keep every byte of feedback inside your network.
+						</p>
+						<p class="mt-4 text-sm text-base-content/60">
+							A GitHub App is required: create one, then set its credentials through your environment before starting the server.
+						</p>
+						@ui.Alert(ui.AlertProps{Type: ui.AlertWarning, Style: ui.AlertStyleSoft, Message: "GitHub App and environment configuration (app ID, private key, client secret and webhook) are required."})
+					</div>
+					<div>
+						<p class="mb-2 font-mono text-xs uppercase tracking-widest text-base-content/50">Client</p>
+						<div class="mockup-code w-full text-sm">
+							<pre data-prefix="&lt;/&gt;"><code>{ "<script src=\"https://feedback.your-domain.com/feedback-overlay.js\" data-api=\"https://feedback.your-domain.com\" data-repo=\"owner/repo\" async></script>" }</code></pre>
+						</div>
+						<p class="mb-2 mt-6 font-mono text-xs uppercase tracking-widest text-base-content/50">Server</p>
+						<div class="mockup-code w-full text-sm">
+							<pre data-prefix="$"><code>docker run -p 8080:8080 ghcr.io/emergent-company/feedback-overlay</code></pre>
+						</div>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<!-- ── FAQ ─────────────────────────────────────────────────────────── -->
+		<section class="border-b border-base-300/60 bg-base-200/30">
+			<div class="mx-auto w-full max-w-3xl px-4 py-16 md:py-20">
+				<div class="max-w-2xl">
+					<p class="font-mono text-xs uppercase tracking-widest text-base-content/50">FAQ</p>
+					<h2 class="mt-2 text-3xl font-semibold tracking-tight">Questions, answered</h2>
+				</div>
+				<div class="mt-8 flex flex-col gap-3">
+					<div class="collapse collapse-arrow border border-base-300 bg-base-100">
+						<input type="radio" name="faq" checked="checked" aria-label="What happens to my data, and what gets redacted?"/>
+						<div class="collapse-title font-medium">What happens to my data, and what gets redacted?</div>
+						<div class="collapse-content text-sm text-base-content/75">
+							<p>Captures are redacted on the way out: sensitive attributes and query parameters are stripped from the DOM snapshot, and sensitive input values (passwords, tokens, keys) are removed from session history. The selected element's HTML and its screenshot are captured as-is, so check them before you file.</p>
+						</div>
+					</div>
+					<div class="collapse collapse-arrow border border-base-300 bg-base-100">
+						<input type="radio" name="faq" aria-label="Can I change the hotkey?"/>
+						<div class="collapse-title font-medium">Can I change the hotkey?</div>
+						<div class="collapse-content text-sm text-base-content/75">
+							<p>Yes. The default is Alt+Shift, and you can override it with a data attribute on the script tag so it never collides with your own shortcuts.</p>
+						</div>
+					</div>
+					<div class="collapse collapse-arrow border border-base-300 bg-base-100">
+						<input type="radio" name="faq" aria-label="Which auth providers are supported today?"/>
+						<div class="collapse-title font-medium">Which auth providers are supported today?</div>
+						<div class="collapse-content text-sm text-base-content/75">
+							<p>GitHub only, for now. Sign-in and issue filing share the same GitHub App, so there is nothing else to configure. More providers are on the roadmap.</p>
+						</div>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<!-- ── Footer ──────────────────────────────────────────────────────── -->
+		<footer class="bg-base-200/60">
+			<div class="mx-auto flex w-full max-w-6xl flex-col items-start gap-6 px-4 py-12 sm:flex-row sm:items-center sm:justify-between">
+				<div class="flex items-center gap-2">
+					<span class="grid size-6 place-items-center rounded-md bg-primary" aria-hidden="true">
+						<span class="size-2.5 rounded-[3px] bg-primary-content"></span>
+					</span>
+					<span class="text-sm font-semibold tracking-tight">emergent.feedback</span>
+					<span class="ml-2 font-mono text-xs text-base-content/40">v0.11.0</span>
+				</div>
+				<nav class="flex items-center gap-4 text-sm" aria-label="Footer">
+					<a href="https://github.com/emergent-company/feedback-overlay" class="link link-hover" target="_blank" rel="noopener noreferrer">GitHub</a>
+					<a href="/panel" class="link link-hover">Panel</a>
+				</nav>
+			</div>
+		</footer>
+
+		<script src="/feedback-overlay.js" data-repo="emergent-company/feedback-overlay" data-label="feedback" async></script>
+	</body>
+	</html>
+}
