@@ -16,14 +16,28 @@ import (
 
 func TestComputeDedupeKeyDeterministic(t *testing.T) {
 	ctx := `{"fingerprint":{"path":"body > button"}}`
-	a := computeDedupeKey("org/repo", "button", ctx, "  It   IS broken ")
-	b := computeDedupeKey("org/repo", "button", ctx, "it is broken")
+	a := computeDedupeKey("org/repo", "button", "https://app.example.com/dashboard", ctx, "  It   IS broken ")
+	b := computeDedupeKey("org/repo", "button", "https://app.example.com/dashboard", ctx, "it is broken")
 	if a != b {
 		t.Fatalf("normalized keys differ: %q vs %q", a, b)
 	}
-	c := computeDedupeKey("org/repo", "button", ctx, "it is fine")
+	c := computeDedupeKey("org/repo", "button", "https://app.example.com/dashboard", ctx, "it is fine")
 	if a == c {
 		t.Fatalf("different comments should produce different keys")
+	}
+}
+
+func TestComputeDedupeKeyURLScoped(t *testing.T) {
+	ctx := `{"fingerprint":{"path":"body > button"}}`
+	a := computeDedupeKey("org/repo", "button", "https://app.example.com/page-a", ctx, "it is broken")
+	b := computeDedupeKey("org/repo", "button", "https://app.example.com/page-b", ctx, "it is broken")
+	if a == b {
+		t.Fatalf("different pages should produce different keys: %q", a)
+	}
+	// Query-string noise on the same page must not change the key.
+	c := computeDedupeKey("org/repo", "button", "https://app.example.com/page-a?session=123", ctx, "it is broken")
+	if a != c {
+		t.Fatalf("same page with query noise should match: %q vs %q", a, c)
 	}
 }
 

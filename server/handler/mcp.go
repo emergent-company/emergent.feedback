@@ -156,7 +156,7 @@ func (h *Handler) toolGetContext(ctx context.Context, _ *mcp.CallToolRequest, in
 			return nil, contextOutput{}, fmt.Errorf("corrupt context for feedback %d", in.FeedbackID)
 		}
 	}
-	return nil, contextOutput{Context: m}, nil
+	return nil, contextOutput{Context: redactContext(m)}, nil
 }
 
 type issueInput struct {

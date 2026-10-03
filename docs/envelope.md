@@ -189,19 +189,26 @@ Contract kinds (`client/src/envelope.ts`, `client/src/verify.ts`):
 
 | Kind | `check` fields | Evaluation |
 |---|---|---|
-| `style_assertion` | `{selector, prop, before, operator}` | computed value changed from `before` → `green`; else `red` (amber if no `before`/`selector`) |
-| `anchor_stable` | `{selector, path}` | element found with matching fingerprint tag → `green`; tag changed → `amber`; missing → `red` |
+| `style_assertion` | `{selector, prop, before, operator}` | `equals`/`not_equals`/`present` → `green` when the live value matches (else `red`); `changed` → `amber` on a change (cannot verify direction), `red` when unchanged; unknown operator / missing `selector`/`prop`/`before` → `amber` |
+| `anchor_stable` | `{selector, path}` | element found → `amber` (anchored, but mere presence/tag-match cannot confirm the fix — needs human/agent); missing → `red`; never `green` |
 | `test_exists` | — | treated as `amber` ("needs human") client-side |
 | `human` | — | always `amber` ("needs human confirmation") |
 
-`green` = contract passes (auto-verified) · `amber` = cannot auto-verify / needs
-human · `red` = contract fails.
+`green` = contract passes via a genuine machine check (auto-verified) · `amber` =
+cannot auto-verify / needs human or agent confirmation · `red` = contract fails.
+Only a real check (a `style_assertion` with `equals`/`not_equals`/`present`) may
+produce `green`; `anchor_stable`, `human`, `test_exists`, and `changed` can only
+yield `amber`/`red` and never a false green.
 
 **Who evaluates:** the page-side client polls `GET /feedback/verify-pending`
 (`client/src/verify.ts`, every ~15s while the overlay is active and authenticated),
 evaluates `style_assertion`/`anchor_stable` against the live DOM, and posts
-`green/amber/red` back to `POST /feedback/:id/verify-result`. `human`/`test_exists`
-resolve to `amber` and wait for a human (or the MCP agent) to act.
+conclusive results back to `POST /feedback/:id/verify-result`. `amber` results are
+**not posted** — they neither verify nor fail the item, so the loop skips them and
+waits for a human (or the MCP agent) to act. `anchor_stable` resolves to `amber`
+(anchored, awaiting confirmation) or `red` (missing), never `green`; only a genuine
+machine check (`style_assertion` `equals`/`not_equals`/`present`) can produce the
+`green` that flips status to `verified`.
 
 ---
 
@@ -211,9 +218,10 @@ All tools are repo-scoped via API-key `scopes` (DB keys) or a `*` bootstrap key.
 Per-item tools (`feedback_get`, `feedback_get_snapshot/screenshot/context`,
 `feedback_verify`, `feedback_mark_applied`, `feedback_mark_resolved`) operate on
 **repo-scoped items regardless of export state** — freshly-created (`open`) items
-are readable/verifiable/markable. `feedback_list` still lists **exported** items
-(its store query filters `issue_url != ''`), and handles `*` with an all-repos
-query. (`feedback_get_replay` is Phase C — PR #8, not in this PR.)
+are readable/verifiable/markable. `feedback_list` lists items across **all
+lifecycle statuses** (`open|applied|verified|resolved|exported` — its store query
+no longer filters `issue_url != ''`), and handles `*` with an all-repos query.
+(`feedback_get_replay` is Phase C — PR #8, not in this PR.)
 
 | Tool | Input | Output |
 |---|---|---|
@@ -344,10 +352,11 @@ Opt-in (`data-replay`), rrweb, **lazily loaded** in a second bundle:
 
 ## 11. Dedupe (heuristic)
 
-On create the server computes `dedupe_key = sha256(repo + selector +
-fingerprint.path + normalized comment)` (lowercased, whitespace-collapsed). If an
-existing `open`/`applied` item in the same repo shares the key, the new item's
-`duplicate_of` is set to that id and a `duplicate` event is emitted. Envelope exposes
+On create the server computes `dedupe_key = sha256(repo + selector + normalized
+page URL + fingerprint.path + normalized comment)` (URL stripped of query/fragment;
+comment lowercased + whitespace-collapsed). If an existing `open`/`applied` item
+in the same repo shares the key, the new item's `duplicate_of` is set to that id
+and a `duplicate` event is emitted. Envelope exposes
 `dedupe: {key, duplicate_of?, possible_duplicates[]}`. Heuristic only — fingerprint
 equality ≠ bug equality; items are never auto-merged.
 

@@ -127,26 +127,60 @@ test("style_assertion missing selector/prop → amber", () => {
   assert.equal(noProp.result, "amber");
 });
 
-test("anchor_stable green on matching tag, amber on tag change, red on missing", () => {
+test("anchor_stable found → amber, missing → red (never green)", () => {
   installDOM({ ".btn": new FakeElement("button") });
 
-  const green = evaluateContract({
+  // Found with a matching fingerprint tag: anchored, but mere presence/tag
+  // match cannot confirm the fix — must be amber, NOT green.
+  const matching = evaluateContract({
     kind: "anchor_stable",
     check: { selector: ".btn", path: "main > section > button" },
   });
-  assert.equal(green.result, "green");
+  assert.equal(matching.result, "amber");
 
-  const amber = evaluateContract({
+  // Found without a path (no expected tag): still anchored → amber.
+  const noPath = evaluateContract({
+    kind: "anchor_stable",
+    check: { selector: ".btn" },
+  });
+  assert.equal(noPath.result, "amber");
+
+  // Found but tag changed → amber.
+  const tagChanged = evaluateContract({
     kind: "anchor_stable",
     check: { selector: ".btn", path: "main > section > a" },
   });
-  assert.equal(amber.result, "amber");
+  assert.equal(tagChanged.result, "amber");
 
-  const red = evaluateContract({
+  // Missing → red.
+  const missing = evaluateContract({
     kind: "anchor_stable",
     check: { selector: ".missing", path: "main > section > button" },
   });
-  assert.equal(red.result, "red");
+  assert.equal(missing.result, "red");
+});
+
+test("anchor_stable never returns green (no false auto-verify)", () => {
+  // Every anchor_stable evaluation path: found (matching tag), found (no
+  // path), found (tag changed), missing, missing selector. None may be green —
+  // anchor_stable is not machine-checkable and must never auto-verify.
+  installDOM({ ".btn": new FakeElement("button") });
+
+  const cases: VerificationContract[] = [
+    { kind: "anchor_stable", check: { selector: ".btn", path: "main > section > button" } },
+    { kind: "anchor_stable", check: { selector: ".btn" } },
+    { kind: "anchor_stable", check: { selector: ".btn", path: "main > section > a" } },
+    { kind: "anchor_stable", check: { selector: ".missing", path: "main > section > button" } },
+    { kind: "anchor_stable", check: { path: "main > section > button" } }, // missing selector
+  ];
+
+  for (const contract of cases) {
+    assert.notEqual(
+      evaluateContract(contract).result,
+      "green",
+      `anchor_stable must not return green: ${JSON.stringify(contract)}`
+    );
+  }
 });
 
 test("human contract always amber", () => {

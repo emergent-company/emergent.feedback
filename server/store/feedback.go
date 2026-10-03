@@ -517,26 +517,6 @@ FROM feedback_events e`
 	return out, rows.Err()
 }
 
-// ListExportedLite returns exported feedback (issue_url set) within repos,
-// without loading screenshot/snapshot blobs.
-func (s *Store) ListExportedLite(ctx context.Context, repos []string) ([]ExportedLite, error) {
-	if len(repos) == 0 {
-		return nil, nil
-	}
-	ph := strings.TrimSuffix(strings.Repeat("?,", len(repos)), ",")
-	args := make([]any, 0, len(repos))
-	for _, r := range repos {
-		args = append(args, r)
-	}
-	return s.queryLite(ctx, fmt.Sprintf(`WHERE issue_url != '' AND repo IN (%s)`, ph), args)
-}
-
-// ListExportedLiteAll returns exported feedback across all repos (used when an
-// API key carries the "*" bootstrap scope).
-func (s *Store) ListExportedLiteAll(ctx context.Context) ([]ExportedLite, error) {
-	return s.queryLite(ctx, `WHERE issue_url != ''`, nil)
-}
-
 // ListLite returns a lightweight projection (no blobs) of feedback whose repo
 // is in repos, across all lifecycle statuses. An empty status filter means
 // "all statuses"; otherwise only items with that exact status are returned.

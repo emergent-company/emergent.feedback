@@ -462,22 +462,22 @@ func writeRepro(sb *strings.Builder, ctx map[string]any, level string) {
 	if console != nil {
 		if level == levelForensic {
 			sb.WriteString("**Console**\n\n```json\n")
-			sb.WriteString(prettyValue(console))
+			sb.WriteString(prettyValue(redactContextValue(console)))
 			sb.WriteString("\n```\n\n")
 		} else {
 			sb.WriteString("<details><summary>Console</summary>\n\n```json\n")
-			sb.WriteString(prettyValue(console))
+			sb.WriteString(prettyValue(redactContextValue(console)))
 			sb.WriteString("\n```\n\n</details>\n\n")
 		}
 	}
 	if network != nil {
 		if level == levelForensic {
 			sb.WriteString("**Network**\n\n```json\n")
-			sb.WriteString(prettyValue(network))
+			sb.WriteString(prettyValue(redactContextValue(network)))
 			sb.WriteString("\n```\n\n")
 		} else {
 			sb.WriteString("<details><summary>Network</summary>\n\n```json\n")
-			sb.WriteString(prettyValue(network))
+			sb.WriteString(prettyValue(redactContextValue(network)))
 			sb.WriteString("\n```\n\n</details>\n\n")
 		}
 	}
@@ -773,7 +773,7 @@ func formatEventDetail(typ string, data map[string]any) string {
 	case "input":
 		tag, _ := data["tagName"].(string)
 		comp, _ := data["component"].(string)
-		val, _ := data["value"].(string)
+		val := redactSecrets(asString(data["value"]))
 		if len([]rune(val)) > 60 {
 			val = runeTruncate(val, 57) + "..."
 		}
@@ -784,7 +784,7 @@ func formatEventDetail(typ string, data map[string]any) string {
 	case "click":
 		tag, _ := data["tagName"].(string)
 		comp, _ := data["component"].(string)
-		text, _ := data["text"].(string)
+		text := redactSecrets(asString(data["text"]))
 		if comp != "" {
 			return fmt.Sprintf("`%s` [%s] \"%s\"", tag, comp, text)
 		}
@@ -800,6 +800,7 @@ func shortenEventURL(v any) string {
 	if !ok || s == "" {
 		return "(initial page)"
 	}
+	s = scrubURLParams(s)
 	u, err := url.Parse(s)
 	if err != nil {
 		return s
