@@ -31,7 +31,7 @@ Top-level shape (order as emitted):
 | `explanation` | object | omitted if empty |
 | `repro` | object | omitted if empty |
 | `environment` | object | omitted if empty |
-| `visual` | object | omitted if no screenshot/snapshot (`replay_ref` is Phase C — PR #8) |
+| `visual` | object | omitted if no screenshot/snapshot/replay |
 | `verification` | object | omitted if absent |
 | `applied_at` / `verified_at` / `resolved_at` | string | RFC3339, only when recorded |
 | `dedupe` | object | omitted unless a dedupe key exists |
@@ -50,15 +50,13 @@ Top-level shape (order as emitted):
 
 `explanation`: `{ text, quality?, quality_score? }`
 
-`repro`: `{ steps?, console?, network?, session_history? }` — `replay?` is
-Phase C (PR #8), not present in this PR.
+`repro`: `{ steps?, console?, network?, session_history?, replay? }`
 
 `environment`: `{ url, viewport?, device_pixel_ratio?, user_agent?, framework?,
 css_framework?, branch?, version?, session_id?, trace_id? }`
 
-`visual`: `{ screenshot_ref?, snapshot_ref? }` — refs are
-`feedback://{id}/screenshot|snapshot`. `replay_ref` is Phase C (PR #8), not
-available in this PR.
+`visual`: `{ screenshot_ref?, snapshot_ref?, replay_ref? }` — refs are
+`feedback://{id}/screenshot|snapshot|replay`.
 
 `verification`: `{ contract?, criteria?, result?, detail? }` — `contract`/`criteria`
 come from `context.verification`; `result`/`detail` are the persisted
@@ -170,8 +168,6 @@ slash; line/column 1-based) onto every identifiable DOM element.
 
 ### Console stack unmapping
 
-> **Phase C (PR #8) — not available in this PR.**
-
 Console entries carry `stack?: {path,line,column}[]` (parsed frames) plus a
 `stack_text?: string` (redacted raw trace for humans). The server
 (`server/handler/sourcemap.go`) unmaps the `stack` frames against uploaded source
@@ -209,11 +205,11 @@ resolve to `amber` and wait for a human (or the MCP agent) to act.
 
 All tools are repo-scoped via API-key `scopes` (DB keys) or a `*` bootstrap key.
 Per-item tools (`feedback_get`, `feedback_get_snapshot/screenshot/context`,
-`feedback_verify`, `feedback_mark_applied`, `feedback_mark_resolved`) operate on
-**repo-scoped items regardless of export state** — freshly-created (`open`) items
-are readable/verifiable/markable. `feedback_list` still lists **exported** items
-(its store query filters `issue_url != ''`), and handles `*` with an all-repos
-query. (`feedback_get_replay` is Phase C — PR #8, not in this PR.)
+`feedback_get_replay`, `feedback_verify`, `feedback_mark_applied`,
+`feedback_mark_resolved`) operate on **repo-scoped items regardless of export
+state** — freshly-created (`open`) items are readable/verifiable/markable.
+`feedback_list` still lists **exported** items (its store query filters
+`issue_url != ''`), and handles `*` with an all-repos query.
 
 | Tool | Input | Output |
 |---|---|---|
@@ -223,7 +219,7 @@ query. (`feedback_get_replay` is Phase C — PR #8, not in this PR.)
 | `feedback_mark_applied` | `{ feedback_id, summary? }` | `{ id, status: "applied" }` |
 | `feedback_mark_resolved` | `{ feedback_id, summary? }` | `{ id, status: "resolved" }` |
 | `feedback_watch` | `{ since_seq?, wait_seconds? (cap 25) }` | `{ events: [{seq, feedback_id, type, actor, detail, created_at}], next_seq }` — long-poll |
-| `feedback_get_replay` | `{ feedback_id }` | `{ events }` (decompressed rrweb JSON) — **Phase C (PR #8), not in this PR** |
+| `feedback_get_replay` | `{ feedback_id }` | `{ events }` (decompressed rrweb JSON) |
 | `feedback_get_snapshot` | `{ feedback_id }` | `{ html }` |
 | `feedback_get_screenshot` | `{ feedback_id }` | `{ image_base64, media_type }` |
 | `feedback_get_context` | `{ feedback_id }` | `{ context }` |
@@ -247,7 +243,7 @@ Public (no auth):
 Authenticated (Bearer JWT, owner-scoped where noted):
 
 - `POST /feedback` → create (owner = caller). Body: `{url, selector, comment, context,
-  repo, label, feedbackType?, screenshot?, snapshot?}` (`replay?` is Phase C — PR #8).
+  repo, label, feedbackType?, screenshot?, snapshot?, replay?}`.
 - `GET /feedback/list?url=` → full comment details for open items on a page
 - `GET /feedback/:id` → single item (owner-only)
 - `DELETE /feedback/:id` → delete (owner-only)
@@ -262,11 +258,11 @@ Authenticated (Bearer JWT, owner-scoped where noted):
 - `GET /feedback/verify-pending?url=` → `[{id, selector, contract}]`
 - `GET /feedback/status?url=` → caller's own items `[{id, selector, status, issue_url}]`
 - `GET /feedback/:id/replay` → decompressed rrweb events JSON (owner-only; 413 if
-  decompressed > 20MB) — **Phase C (PR #8), not in this PR**
+  decompressed > 20MB)
 - `POST /issue/export` body `{ids, repo, labels?, title?}` → `{issue_url, issue_number}`
 - `POST /sourcemaps` body `{repo, version?, maps: {"<path>": "<sourcemap JSON>"}}` →
   `{stored}` (413 > ~20MB). Fails **closed** (403) when the caller's repo scope
-  cannot be determined. — **Phase C (PR #8), not in this PR**
+  cannot be determined.
 - `GET /api/reports`, `GET /api/reports/:id` → exported reports (repo-scoped)
 - `GET /api/repos`, `GET/POST/DELETE /api/keys(/:id)`, `GET /me`
 
@@ -280,8 +276,6 @@ Authenticated (Bearer JWT, owner-scoped where noted):
 `deriveSummary` is deterministic: explicit `context.summary` → heuristic → truncated
 comment. The heuristic (`server/handler/autotitle.go`) builds
 `"<Verb> <expected> on <Label>"` from `intent.action` + element `label`/`data_component`.
-
-> **Phase C (PR #8) — LLM auto-title is not available in this PR.**
 
 Optional LLM (isolated in `autotitle.go`, **never blocks a request path**): when
 `FEEDBACK_LLM_BASE_URL` + `FEEDBACK_LLM_API_KEY` are set (optional
@@ -308,9 +302,9 @@ Read from the `<script>` tag (`client/src/config.ts`):
 | `data-version` | App version (→ `context.appVersion`) | — |
 | `data-session-id` | server-injected session ID | — |
 | `data-session-id-selector` | CSS selector to read a trace ID from the DOM | — |
-| `data-replay` | presence enables replay; `"false"` disables — **Phase C (PR #8), not in this PR** | off |
-| `data-replay-buffer-ms` | replay buffer window — **Phase C (PR #8)** | `60000` |
-| `data-replay-src` | explicit URL for the lazy replay bundle (else derived from the main bundle URL) — **Phase C (PR #8)** | — |
+| `data-replay` | presence enables replay; `"false"` disables | off |
+| `data-replay-buffer-ms` | replay buffer window | `60000` |
+| `data-replay-src` | explicit URL for the lazy replay bundle (else derived from the main bundle URL) | — |
 
 Authentication is GitHub OAuth (popup → `POST /auth/callback`); there is **no**
 `data-token` attribute — the JWT is stored in `localStorage["__ef_token__"]`.
@@ -318,8 +312,6 @@ Authentication is GitHub OAuth (popup → `POST /auth/callback`); there is **no*
 ---
 
 ## 10. Replay
-
-> **Phase C (PR #8) — session replay is not available in this PR.**
 
 Opt-in (`data-replay`), rrweb, **lazily loaded** in a second bundle:
 
@@ -357,12 +349,11 @@ equality ≠ bug equality; items are never auto-merged.
 
 - `redactSecrets` (`server/handler/redact.go`) scrubs token values, sensitive
   assignments, and URL query params from the comment before it reaches the issue
-  body, `explanation.text`, the summary fallback, and (in Phase C — PR #8) the LLM
-  auto-title prompt.
+  body, `explanation.text`, the summary fallback, and the LLM auto-title prompt.
 - Source-map upload (`POST /sourcemaps`) **fails closed** — 403 if the caller's
-  repo scope cannot be determined (no silent allow-any-repo) — **Phase C (PR #8)**.
+  repo scope cannot be determined (no silent allow-any-repo).
 - Replay: upload capped at ~5MB decoded (413); decompression capped at 20MB (413)
-  to prevent zip-bomb decompression — **Phase C (PR #8)**.
+  to prevent zip-bomb decompression.
 - Console stack frames and `stack_text` have absolute filesystem paths shortened
-  to their last 3 segments when source-map unmapping fails (§4) — **Phase C (PR #8)**.
+  to their last 3 segments when source-map unmapping fails (§4).
 - Deleting feedback cascades its `feedback_events`.
