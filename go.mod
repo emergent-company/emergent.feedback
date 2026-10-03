@@ -5,6 +5,7 @@ go 1.25.6
 require (
 	github.com/a-h/templ v0.3.1020
 	github.com/emergent-company/go-daisy v0.12.0
+	github.com/go-sourcemap/sourcemap v2.1.4+incompatible
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/jsonschema-go v0.4.3
 	github.com/labstack/echo/v4 v4.15.1

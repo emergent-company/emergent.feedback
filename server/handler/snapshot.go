@@ -7,9 +7,12 @@ import (
 	"io"
 )
 
-// maxDecompressedBytes bounds the decompressed snapshot size (~20MB) to prevent
+// maxDecompressedBytes bounds the decompressed replay size (~20MB) to prevent
 // a zip-bomb style decompression DoS.
 const maxDecompressedBytes = 20 * 1024 * 1024
+
+// errReplayTooLarge signals a decompressed replay exceeding the size cap.
+var errReplayTooLarge = errors.New("replay too large")
 
 // errSnapshotTooLarge signals a decompressed snapshot exceeding the size cap.
 var errSnapshotTooLarge = errors.New("snapshot too large")
@@ -32,3 +35,25 @@ func decodeSnapshot(b []byte) ([]byte, error) {
 	return out, nil
 }
 
+// gunzipOrRaw decompresses a gzipped blob, returning the raw bytes unchanged if
+// the blob is not gzip (defensive for legacy/corrupt replay data). Decompression
+// is capped at maxDecompressedBytes; beyond it an error is returned.
+func gunzipOrRaw(b []byte) ([]byte, error) {
+	gr, err := gzip.NewReader(bytes.NewReader(b))
+	if err != nil {
+		// Not gzip (bad magic/header): return the raw bytes defensively so
+		// legacy/corrupt replay data is still served verbatim.
+		return b, nil
+	}
+	defer func() { _ = gr.Close() }()
+	out, err := io.ReadAll(io.LimitReader(gr, maxDecompressedBytes+1))
+	if err != nil {
+		// The gzip header was accepted but the body is truncated/corrupt:
+		// propagate the error so callers don't serve invalid JSON.
+		return nil, err
+	}
+	if len(out) > maxDecompressedBytes {
+		return nil, errReplayTooLarge
+	}
+	return out, nil
+}

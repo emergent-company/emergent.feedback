@@ -66,6 +66,7 @@ func buildRouter(s *store.Store, ghCfg *github.AppConfig, jwtSecret, allowedOrig
 	// ── Static: serve embedded emergent-feedback.js ────────────────────────────
 	staticFS, _ := fs.Sub(staticFiles, "static")
 	e.GET("/emergent-feedback.js", echo.WrapHandler(http.FileServer(http.FS(staticFS))))
+	e.GET("/emergent-feedback-replay.js", echo.WrapHandler(http.FileServer(http.FS(staticFS))))
 
 	// ── go-daisy static assets (CSS/JS) ───────────────────────────────────────
 	e.GET("/static/*", echo.WrapHandler(staticfs.Handler("/static/")))
@@ -115,6 +116,7 @@ func buildRouter(s *store.Store, ghCfg *github.AppConfig, jwtSecret, allowedOrig
 	auth.GET("/feedback/status", h.HandleFeedbackStatus)
 	auth.GET("/feedback/:id", h.HandleGetFeedback)
 	auth.GET("/feedback/:id/verify", h.HandleGetVerify)
+	auth.GET("/feedback/:id/replay", h.HandleGetReplay)
 	auth.DELETE("/feedback/:id", h.HandleDeleteFeedback)
 	auth.POST("/feedback/:id/applied", h.HandleMarkApplied)
 	auth.POST("/feedback/:id/resolve", h.HandleResolve)
@@ -135,6 +137,7 @@ func buildRouter(s *store.Store, ghCfg *github.AppConfig, jwtSecret, allowedOrig
 
 	auth.POST("/feedback", h.HandleCreateFeedback, feedbackLimiter)
 	auth.POST("/issue/export", h.HandleExportIssue, exportLimiter)
+	auth.POST("/sourcemaps", h.HandleUploadSourcemaps, feedbackLimiter)
 
 	// ── MCP server (API-key auth: DB keys scoped to repos, plus MCP_API_KEY bootstrap) ──
 	mcpSrv := h.MCPServer()

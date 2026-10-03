@@ -19,12 +19,11 @@ code-derived reference):
   anchor_stable live; human + test_exists fallback); `feedback_mark_applied` /
   `feedback_mark_resolved` + GitHub issue comment/close; `feedback_watch` long-poll;
   `feedback_events` monotonic sequence; screenshot capture. Status: shipped.
-- **Phase C — forensic + replay + portability.** Detail levels (compact/standard/
+- **Phase C — forensic + replay + portability.** rrweb replay (opt-in, 60s buffer);
+  source-map upload + best-effort stack unmapping; detail levels (compact/standard/
   forensic) + `response_format`; published envelope JSON Schema at
   `GET /schema/envelope.v1.json`; reporter notify + heuristic dedupe + auto-title
-  (deterministic heuristic). Status: shipped in this PR. **Session replay,
-  source-map upload/unmapping, and optional LLM auto-title are NOT in this PR —
-  they ship in follow-up PR #8.**
+  (heuristic, optional LLM). Status: shipped.
 
 **Deferred (not yet implemented):** Vue/Svelte build-stamp support (the in-repo
 plugin is React JSX/TSX only); `test_exists` verification is evaluated client-side
