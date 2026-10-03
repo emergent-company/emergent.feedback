@@ -10,7 +10,7 @@ import (
 func TestMigrateCreatesSchema(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "test.db")
 
-	s, err := Open(path)
+	s, err := OpenSQLite(path)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -57,18 +57,18 @@ func TestMigrateUpgradeFromV4(t *testing.T) {
 		t.Fatalf("open: %v", err)
 	}
 	ctx := context.Background()
-	if _, err := db.ExecContext(ctx, schemaMigrations); err != nil {
+	if _, err := db.ExecContext(ctx, dialectSQLite.schemaMigrationsDDL()); err != nil {
 		t.Fatalf("schema_migrations: %v", err)
 	}
-	for _, m := range migrations[:4] {
-		if err := applyMigration(ctx, db, m); err != nil {
+	for _, m := range sqliteMigrations[:4] {
+		if err := applyMigration(ctx, db, dialectSQLite, m); err != nil {
 			t.Fatalf("migration %d: %v", m.version, err)
 		}
 	}
 	_ = db.Close()
 
 	// Reopen via Open, which applies migration 5.
-	s, err := Open(path)
+	s, err := OpenSQLite(path)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestMigrateUpgradeFromV4(t *testing.T) {
 func TestMigrateIdempotent(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "test.db")
 
-	s1, err := Open(path)
+	s1, err := OpenSQLite(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +101,7 @@ func TestMigrateIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s2, err := Open(path)
+	s2, err := OpenSQLite(path)
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
 	}
@@ -118,7 +118,7 @@ func TestMigrateIdempotent(t *testing.T) {
 
 func TestSetGitHubIssueState(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "test.db")
-	s, err := Open(path)
+	s, err := OpenSQLite(path)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -160,7 +160,7 @@ func TestSetGitHubIssueState(t *testing.T) {
 func TestForeignKeysEnforced(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "test.db")
 
-	s, err := Open(path)
+	s, err := OpenSQLite(path)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}

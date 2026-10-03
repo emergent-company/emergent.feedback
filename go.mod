@@ -8,6 +8,7 @@ require (
 	github.com/go-sourcemap/sourcemap v2.1.4+incompatible
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/jsonschema-go v0.4.3
+	github.com/jackc/pgx/v5 v5.10.0
 	github.com/labstack/echo/v4 v4.15.1
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	golang.org/x/net v0.51.0
@@ -21,6 +22,9 @@ require (
 	github.com/dlclark/regexp2/v2 v2.2.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
+	github.com/jackc/pgpassfile v1.0.0 // indirect
+	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
+	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/labstack/gommon v0.4.2 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect

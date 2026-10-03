@@ -30,14 +30,14 @@ func (s *Store) CreateAPIKey(ctx context.Context, githubUser, keyHash string, re
 
 	var id int64
 	if err := tx.QueryRowContext(ctx,
-		`INSERT INTO api_keys (github_user, key_hash) VALUES (?, ?) RETURNING id`,
+		s.bind(`INSERT INTO api_keys (github_user, key_hash) VALUES (?, ?) RETURNING id`),
 		githubUser, keyHash,
 	).Scan(&id); err != nil {
 		return 0, fmt.Errorf("store: insert api key: %w", err)
 	}
 	for _, repo := range repos {
 		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO api_key_repos (api_key_id, repo) VALUES (?, ?)`,
+			s.bind(`INSERT INTO api_key_repos (api_key_id, repo) VALUES (?, ?)`),
 			id, repo,
 		); err != nil {
 			return 0, fmt.Errorf("store: insert api key repo: %w", err)
@@ -51,9 +51,9 @@ func (s *Store) CreateAPIKey(ctx context.Context, githubUser, keyHash string, re
 
 // ListAPIKeys returns a user's keys (newest first) with their repo scopes.
 func (s *Store) ListAPIKeys(ctx context.Context, githubUser string) ([]APIKey, error) {
-	rows, err := s.db.QueryContext(ctx, `
+	rows, err := s.db.QueryContext(ctx, s.bind(`
 SELECT id, github_user, created_at, revoked_at
-FROM api_keys WHERE github_user = ? ORDER BY id DESC`, githubUser)
+FROM api_keys WHERE github_user = ? ORDER BY id DESC`), githubUser)
 	if err != nil {
 		return nil, fmt.Errorf("store: list api keys: %w", err)
 	}
@@ -90,7 +90,7 @@ FROM api_keys WHERE github_user = ? ORDER BY id DESC`, githubUser)
 
 // keyRepos returns the repo scope for a key id.
 func (s *Store) keyRepos(ctx context.Context, id int64) ([]string, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT repo FROM api_key_repos WHERE api_key_id = ? ORDER BY repo`, id)
+	rows, err := s.db.QueryContext(ctx, s.bind(`SELECT repo FROM api_key_repos WHERE api_key_id = ? ORDER BY repo`), id)
 	if err != nil {
 		return nil, fmt.Errorf("store: list key repos: %w", err)
 	}
@@ -109,10 +109,8 @@ func (s *Store) keyRepos(ctx context.Context, id int64) ([]string, error) {
 
 // RevokeAPIKey sets revoked_at for a key owned by githubUser.
 func (s *Store) RevokeAPIKey(ctx context.Context, id int64, githubUser string) error {
-	res, err := s.db.ExecContext(ctx,
-		`UPDATE api_keys SET revoked_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ? AND github_user = ?`,
-		id, githubUser,
-	)
+	q := `UPDATE api_keys SET revoked_at = ` + s.d.nowExpr() + ` WHERE id = ? AND github_user = ?`
+	res, err := s.db.ExecContext(ctx, s.bind(q), id, githubUser)
 	if err != nil {
 		return fmt.Errorf("store: revoke api key: %w", err)
 	}
@@ -126,7 +124,7 @@ func (s *Store) RevokeAPIKey(ctx context.Context, id int64, githubUser string) e
 func (s *Store) LookupAPIKeyScopes(ctx context.Context, keyHash string) ([]string, error) {
 	var id int64
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id FROM api_keys WHERE key_hash = ? AND revoked_at IS NULL`, keyHash,
+		s.bind(`SELECT id FROM api_keys WHERE key_hash = ? AND revoked_at IS NULL`), keyHash,
 	).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrKeyNotFound

@@ -94,30 +94,30 @@ func (s *Store) Create(ctx context.Context, p CreateParams) (Feedback, error) {
 	// Dedupe: find an existing open/applied item sharing the dedupe key.
 	var duplicateOf int64
 	if p.DedupeKey != "" {
-		err := tx.QueryRowContext(ctx, `SELECT id FROM feedback WHERE repo = ? AND dedupe_key = ? AND status IN ('open','applied') ORDER BY id LIMIT 1`, p.Repo, p.DedupeKey).Scan(&duplicateOf)
+		err := tx.QueryRowContext(ctx, s.bind(`SELECT id FROM feedback WHERE repo = ? AND dedupe_key = ? AND status IN ('open','applied') ORDER BY id LIMIT 1`), p.Repo, p.DedupeKey).Scan(&duplicateOf)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return Feedback{}, fmt.Errorf("store: dedupe lookup: %w", err)
 		}
 	}
 
-	const q = `
+	q := `
 INSERT INTO feedback (url, selector, comment, context_json, screenshot, github_user, repo, label, snapshot, snapshot_size, replay, replay_size, dedupe_key, duplicate_of)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, created_at`
 
 	var f Feedback
 	var createdAt string
-	if err := tx.QueryRowContext(ctx, q,
+	if err := tx.QueryRowContext(ctx, s.bind(q),
 		p.URL, p.Selector, p.Comment, p.ContextJSON, p.Screenshot, p.GitHubUser, p.Repo, label, p.Snapshot, len(p.Snapshot), p.Replay, len(p.Replay), p.DedupeKey, duplicateOf,
 	).Scan(&f.ID, &createdAt); err != nil {
 		return Feedback{}, fmt.Errorf("store: create feedback: %w", err)
 	}
 
-	if _, err := tx.ExecContext(ctx, `INSERT INTO feedback_events (feedback_id, type, actor, detail) VALUES (?, 'created', ?, '')`, f.ID, p.GitHubUser); err != nil {
+	if _, err := tx.ExecContext(ctx, s.bind(`INSERT INTO feedback_events (feedback_id, type, actor, detail) VALUES (?, 'created', ?, '')`), f.ID, p.GitHubUser); err != nil {
 		return Feedback{}, fmt.Errorf("store: create event: %w", err)
 	}
 	if duplicateOf != 0 {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO feedback_events (feedback_id, type, actor, detail) VALUES (?, 'duplicate', ?, ?)`, f.ID, p.GitHubUser, fmt.Sprintf("%d", duplicateOf)); err != nil {
+		if _, err := tx.ExecContext(ctx, s.bind(`INSERT INTO feedback_events (feedback_id, type, actor, detail) VALUES (?, 'duplicate', ?, ?)`), f.ID, p.GitHubUser, fmt.Sprintf("%d", duplicateOf)); err != nil {
 			return Feedback{}, fmt.Errorf("store: duplicate event: %w", err)
 		}
 	}
@@ -147,7 +147,7 @@ RETURNING id, created_at`
 
 // Get returns a single feedback item by ID.
 func (s *Store) Get(ctx context.Context, id int64) (Feedback, error) {
-	const q = `
+	q := `
 SELECT id, url, selector, comment, context_json, screenshot, github_user, repo, label, status, COALESCE(issue_url,''), created_at,
        COALESCE(snapshot_size,0), snapshot,
        COALESCE(applied_at,''), COALESCE(verified_at,''), COALESCE(resolved_at,''),
@@ -158,7 +158,7 @@ FROM feedback WHERE id = ?`
 
 	var f Feedback
 	var createdAt, appliedAt, verifiedAt, resolvedAt string
-	err := s.db.QueryRowContext(ctx, q, id).Scan(
+	err := s.db.QueryRowContext(ctx, s.bind(q), id).Scan(
 		&f.ID, &f.URL, &f.Selector, &f.Comment, &f.ContextJSON,
 		&f.Screenshot, &f.GitHubUser, &f.Repo, &f.Label, &f.Status, &f.IssueURL, &createdAt,
 		&f.SnapshotSize, &f.Snapshot,
@@ -185,12 +185,12 @@ FROM feedback WHERE id = ?`
 
 // ListByURL returns all open feedback items for a given page URL, newest first.
 func (s *Store) ListByURL(ctx context.Context, url string) ([]Feedback, error) {
-	const q = `
+	q := `
 SELECT id, url, selector, comment, context_json, COALESCE(length(screenshot), 0), github_user, repo, label, status, COALESCE(issue_url,''), created_at
 FROM feedback WHERE url = ? AND status = 'open'
 ORDER BY created_at DESC`
 
-	rows, err := s.db.QueryContext(ctx, q, url)
+	rows, err := s.db.QueryContext(ctx, s.bind(q), url)
 	if err != nil {
 		return nil, fmt.Errorf("store: list by url: %w", err)
 	}
@@ -215,13 +215,13 @@ ORDER BY created_at DESC`
 
 // ListByURLSummary returns per-selector badge counts for a given page URL.
 func (s *Store) ListByURLSummary(ctx context.Context, url string) ([]URLSummary, error) {
-	const q = `
-SELECT selector, COUNT(*) as cnt, GROUP_CONCAT(id) as ids
+	q := `
+SELECT selector, COUNT(*) as cnt, ` + s.d.groupConcat("id") + ` as ids
 FROM feedback WHERE url = ? AND status = 'open'
 GROUP BY selector
 ORDER BY selector`
 
-	rows, err := s.db.QueryContext(ctx, q, url)
+	rows, err := s.db.QueryContext(ctx, s.bind(q), url)
 	if err != nil {
 		return nil, fmt.Errorf("store: summary by url: %w", err)
 	}
@@ -264,7 +264,7 @@ SELECT id, url, selector, comment, repo, label, status, COALESCE(issue_url,''), 
 FROM feedback
 WHERE issue_url != '' AND repo IN (%s)
 ORDER BY id DESC LIMIT 500`, ph)
-	rows, err := s.db.QueryContext(ctx, q, args...)
+	rows, err := s.db.QueryContext(ctx, s.bind(q), args...)
 	if err != nil {
 		return nil, fmt.Errorf("store: list exported: %w", err)
 	}
@@ -292,7 +292,7 @@ func (s *Store) Delete(ctx context.Context, id int64, githubUser string) error {
 	}
 	defer tx.Rollback() //nolint:errcheck
 
-	res, err := tx.ExecContext(ctx, `DELETE FROM feedback WHERE id = ? AND github_user = ?`, id, githubUser)
+	res, err := tx.ExecContext(ctx, s.bind(`DELETE FROM feedback WHERE id = ? AND github_user = ?`), id, githubUser)
 	if err != nil {
 		return fmt.Errorf("store: delete feedback: %w", err)
 	}
@@ -300,7 +300,7 @@ func (s *Store) Delete(ctx context.Context, id int64, githubUser string) error {
 	if n == 0 {
 		return fmt.Errorf("store: feedback %d not found or not owned by %s", id, githubUser)
 	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM feedback_events WHERE feedback_id = ?`, id); err != nil {
+	if _, err := tx.ExecContext(ctx, s.bind(`DELETE FROM feedback_events WHERE feedback_id = ?`), id); err != nil {
 		return fmt.Errorf("store: delete feedback events: %w", err)
 	}
 	return tx.Commit()
@@ -316,9 +316,9 @@ func (s *Store) MarkExported(ctx context.Context, ids []int64, issueURL string) 
 		return err
 	}
 	defer tx.Rollback() //nolint:errcheck
-	const q = `UPDATE feedback SET issue_url = ?, status = ? WHERE id = ?`
+	q := `UPDATE feedback SET issue_url = ?, status = ? WHERE id = ?`
 	for _, id := range ids {
-		if _, err := tx.ExecContext(ctx, q, issueURL, StatusExported, id); err != nil {
+		if _, err := tx.ExecContext(ctx, s.bind(q), issueURL, StatusExported, id); err != nil {
 			return fmt.Errorf("store: mark exported %d: %w", id, err)
 		}
 	}
@@ -415,7 +415,7 @@ func (s *Store) SetStatus(ctx context.Context, id int64, status FeedbackStatus, 
 	// Read the current status inside the tx so concurrent callers serialize on
 	// the write lock and the second one observes the committed transition.
 	var current FeedbackStatus
-	if err := tx.QueryRowContext(ctx, `SELECT status FROM feedback WHERE id = ?`, id).Scan(&current); err != nil {
+	if err := tx.QueryRowContext(ctx, s.bind(`SELECT status FROM feedback WHERE id = ?`), id).Scan(&current); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("store: feedback %d not found", id)
 		}
@@ -430,16 +430,16 @@ func (s *Store) SetStatus(ctx context.Context, id int64, status FeedbackStatus, 
 	}
 
 	if tsCol != "" {
-		q := fmt.Sprintf(`UPDATE feedback SET status = ?, %s = strftime('%%Y-%%m-%%dT%%H:%%M:%%SZ','now') WHERE id = ?`, tsCol)
-		if _, err := tx.ExecContext(ctx, q, status, id); err != nil {
+		q := `UPDATE feedback SET status = ?, ` + tsCol + ` = ` + s.d.nowExpr() + ` WHERE id = ?`
+		if _, err := tx.ExecContext(ctx, s.bind(q), status, id); err != nil {
 			return fmt.Errorf("store: set status %s: %w", status, err)
 		}
 	} else {
-		if _, err := tx.ExecContext(ctx, `UPDATE feedback SET status = ? WHERE id = ?`, status, id); err != nil {
+		if _, err := tx.ExecContext(ctx, s.bind(`UPDATE feedback SET status = ? WHERE id = ?`), status, id); err != nil {
 			return fmt.Errorf("store: set status %s: %w", status, err)
 		}
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO feedback_events (feedback_id, type, actor, detail) VALUES (?, ?, ?, ?)`, id, string(status), actor, detail); err != nil {
+	if _, err := tx.ExecContext(ctx, s.bind(`INSERT INTO feedback_events (feedback_id, type, actor, detail) VALUES (?, ?, ?, ?)`), id, string(status), actor, detail); err != nil {
 		return fmt.Errorf("store: insert event: %w", err)
 	}
 	return tx.Commit()
@@ -455,12 +455,12 @@ func (s *Store) SetVerificationResult(ctx context.Context, id int64, result, det
 		// Idempotent: only stamp verified_at when transitioning INTO green.
 		// A repeat green post (concurrent verify tabs) updates the result/detail
 		// but preserves the original verified_at so the timestamp does not churn.
-		if _, err := s.db.ExecContext(ctx, `UPDATE feedback SET verification_result = ?, verification_detail = ?, verified_at = CASE WHEN (verification_result IS NULL OR verification_result != 'green') THEN strftime('%Y-%m-%dT%H:%M:%SZ','now') ELSE verified_at END WHERE id = ?`, result, detail, id); err != nil {
+		if _, err := s.db.ExecContext(ctx, s.bind(`UPDATE feedback SET verification_result = ?, verification_detail = ?, verified_at = CASE WHEN (verification_result IS NULL OR verification_result != 'green') THEN `+s.d.nowExpr()+` ELSE verified_at END WHERE id = ?`), result, detail, id); err != nil {
 			return fmt.Errorf("store: set verification result: %w", err)
 		}
 		return nil
 	}
-	if _, err := s.db.ExecContext(ctx, `UPDATE feedback SET verification_result = ?, verification_detail = ? WHERE id = ?`, result, detail, id); err != nil {
+	if _, err := s.db.ExecContext(ctx, s.bind(`UPDATE feedback SET verification_result = ?, verification_detail = ? WHERE id = ?`), result, detail, id); err != nil {
 		return fmt.Errorf("store: set verification result: %w", err)
 	}
 	return nil
@@ -498,7 +498,7 @@ FROM feedback_events e`
 	q += ` ORDER BY e.seq ASC LIMIT ?`
 	args = append(args, limit)
 
-	rows, err := s.db.QueryContext(ctx, q, args...)
+	rows, err := s.db.QueryContext(ctx, s.bind(q), args...)
 	if err != nil {
 		return nil, fmt.Errorf("store: list events: %w", err)
 	}
@@ -555,7 +555,7 @@ func (s *Store) queryLite(ctx context.Context, where string, args []any) ([]Expo
 	q := `SELECT id, comment, context_json, label, status, COALESCE(issue_url,''), created_at
 FROM feedback ` + where + `
 ORDER BY id DESC LIMIT 500`
-	rows, err := s.db.QueryContext(ctx, q, args...)
+	rows, err := s.db.QueryContext(ctx, s.bind(q), args...)
 	if err != nil {
 		return nil, fmt.Errorf("store: list lite: %w", err)
 	}
@@ -577,13 +577,13 @@ ORDER BY id DESC LIMIT 500`
 // ListVerifyPending returns items on a URL that are open or applied and have
 // no green verification result yet.
 func (s *Store) ListVerifyPending(ctx context.Context, url string) ([]VerifyPendingItem, error) {
-	const q = `
+	q := `
 SELECT id, selector, context_json
 FROM feedback
 WHERE url = ? AND status IN ('open','applied')
   AND (verification_result IS NULL OR verification_result != 'green')
 ORDER BY created_at DESC`
-	rows, err := s.db.QueryContext(ctx, q, url)
+	rows, err := s.db.QueryContext(ctx, s.bind(q), url)
 	if err != nil {
 		return nil, fmt.Errorf("store: list verify pending: %w", err)
 	}
@@ -603,8 +603,8 @@ ORDER BY created_at DESC`
 // ListDedupeCandidates returns the IDs of other feedback items in repo sharing
 // a dedupe key (excluding excludeID), ordered by id.
 func (s *Store) ListDedupeCandidates(ctx context.Context, repo, key string, excludeID int64) ([]int64, error) {
-	const q = `SELECT id FROM feedback WHERE repo = ? AND dedupe_key = ? AND id != ? ORDER BY id`
-	rows, err := s.db.QueryContext(ctx, q, repo, key, excludeID)
+	q := `SELECT id FROM feedback WHERE repo = ? AND dedupe_key = ? AND id != ? ORDER BY id`
+	rows, err := s.db.QueryContext(ctx, s.bind(q), repo, key, excludeID)
 	if err != nil {
 		return nil, fmt.Errorf("store: list dedupe candidates: %w", err)
 	}
@@ -626,7 +626,7 @@ func (s *Store) ListDedupeCandidates(ctx context.Context, repo, key string, excl
 // a malformed context JSON is left untouched and an error is returned.
 func (s *Store) SetContextSummary(ctx context.Context, id int64, summary string) error {
 	var raw string
-	if err := s.db.QueryRowContext(ctx, `SELECT context_json FROM feedback WHERE id = ?`, id).Scan(&raw); err != nil {
+	if err := s.db.QueryRowContext(ctx, s.bind(`SELECT context_json FROM feedback WHERE id = ?`), id).Scan(&raw); err != nil {
 		return fmt.Errorf("store: read context for summary: %w", err)
 	}
 	m := map[string]any{}
@@ -640,7 +640,7 @@ func (s *Store) SetContextSummary(ctx context.Context, id int64, summary string)
 	if err != nil {
 		return err
 	}
-	if _, err := s.db.ExecContext(ctx, `UPDATE feedback SET context_json = ? WHERE id = ?`, string(b), id); err != nil {
+	if _, err := s.db.ExecContext(ctx, s.bind(`UPDATE feedback SET context_json = ? WHERE id = ?`), string(b), id); err != nil {
 		return fmt.Errorf("store: set summary: %w", err)
 	}
 	return nil
@@ -656,8 +656,8 @@ type FeedbackStatusItem struct {
 
 // ListStatusByURLAndUser returns status info for the given user's items on a URL.
 func (s *Store) ListStatusByURLAndUser(ctx context.Context, url, githubUser string) ([]FeedbackStatusItem, error) {
-	const q = `SELECT id, selector, status, COALESCE(issue_url,'') FROM feedback WHERE url = ? AND github_user = ? ORDER BY id`
-	rows, err := s.db.QueryContext(ctx, q, url, githubUser)
+	q := `SELECT id, selector, status, COALESCE(issue_url,'') FROM feedback WHERE url = ? AND github_user = ? ORDER BY id`
+	rows, err := s.db.QueryContext(ctx, s.bind(q), url, githubUser)
 	if err != nil {
 		return nil, fmt.Errorf("store: list status: %w", err)
 	}

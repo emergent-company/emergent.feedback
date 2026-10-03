@@ -9,7 +9,7 @@ import (
 
 func TestUpsertAndGetUserToken(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "test.db")
-	s, err := Open(path)
+	s, err := OpenSQLite(path)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}

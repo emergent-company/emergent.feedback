@@ -49,8 +49,14 @@ func main() {
 	}
 	allowedOrigins := envOr("ALLOWED_ORIGINS", "*")
 
-	// ── SQLite store ──────────────────────────────────────────────────────────
-	s, err := store.Open(dbPath)
+	// ── Store (SQLite by default, Postgres when DATABASE_URL is set) ─────────
+	var s *store.Store
+	var err error
+	if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
+		s, err = store.OpenPostgres(dsn)
+	} else {
+		s, err = store.OpenSQLite(dbPath)
+	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "fatal: open store: %v\n", err)
 		os.Exit(1)

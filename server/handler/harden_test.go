@@ -22,7 +22,7 @@ import (
 // ever stored, so userRepos always fails).
 func newHardeningHandler(t *testing.T) (*Handler, *store.Store, *echo.Echo) {
 	t.Helper()
-	s, err := store.Open(filepath.Join(t.TempDir(), "test.db"))
+	s, err := store.OpenSQLite(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("store.Open: %v", err)
 	}
@@ -63,7 +63,7 @@ func TestUploadSourcemapsFailsClosed(t *testing.T) {
 // public context setter for auth.TokenInfo).
 func runScopedFeedback(t *testing.T, scopes []string) (int, string) {
 	t.Helper()
-	s, err := store.Open(filepath.Join(t.TempDir(), "test.db"))
+	s, err := store.OpenSQLite(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("store.Open: %v", err)
 	}
