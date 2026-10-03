@@ -160,7 +160,7 @@ func llmTitle(ctx map[string]any, f store.Feedback) (string, bool) {
 	if title == "" {
 		return "", false
 	}
-	return truncate(title, 120), true
+	return truncate(title, 80), true
 }
 
 // titlePrompt builds a minimal prompt from comment + intent signals.
@@ -171,10 +171,10 @@ func titlePrompt(ctx map[string]any, f store.Feedback) string {
 	}
 	intent := getMap(ctx, "intent")
 	if action := strVal(intent["action"]); action != "" {
-		b.WriteString("Action: " + action + "\n")
+		b.WriteString("Action: " + redactSecrets(action) + "\n")
 	}
 	if expected := strVal(intent["expected"]); expected != "" {
-		b.WriteString("Expected: " + expected + "\n")
+		b.WriteString("Expected: " + redactSecrets(expected) + "\n")
 	}
 	if b.Len() == 0 {
 		return "Write a title for this feedback."

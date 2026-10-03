@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -148,7 +147,7 @@ func (h *Handler) unmapStack(ctx context.Context, repo, version string, stack []
 			continue
 		}
 		path := framePath(frame)
-		base := filepath.Base(path)
+		base := frameBase(path)
 		if base == "" || base == "." {
 			f, did := shortenFrame(frame)
 			shortened = shortened || did
@@ -181,7 +180,7 @@ func (h *Handler) unmapStack(ctx context.Context, repo, version string, stack []
 			continue
 		}
 		out = append(out, map[string]any{
-			"file":     src,
+			"file":     shortenPath(src),
 			"line":     line,
 			"column":   col,
 			"function": name,
@@ -219,6 +218,21 @@ func framePath(frame map[string]any) string {
 		}
 	}
 	return ""
+}
+
+// frameBase derives the source-map lookup basename from a frame path. It first
+// strips URL query/hash fragments and normalizes Windows backslashes so probe
+// names match the real asset file (bundle.js, not bundle.js?v=abc or the whole
+// C:\build\bundle.js path).
+func frameBase(path string) string {
+	if i := strings.IndexAny(path, "?#"); i >= 0 {
+		path = path[:i]
+	}
+	path = strings.ReplaceAll(path, "\\", "/")
+	if i := strings.LastIndexByte(path, '/'); i >= 0 {
+		return path[i+1:]
+	}
+	return path
 }
 
 func frameInt(frame map[string]any, key string, def int) int {
@@ -271,10 +285,11 @@ func shortenPath(p string) string {
 	return strings.Join(parts[len(parts)-3:], "/")
 }
 
-// absPathTokenRe matches an absolute filesystem path token in free text. The
-// leading boundary (start, whitespace, or a stack-trace delimiter) prevents
-// matching the path component of a URL, which follows a scheme/host instead.
-var absPathTokenRe = regexp.MustCompile(`(^|[\s(\"'=,@:>])((?:file://)?/[^\s"'()<>]+)`)
+// absPathTokenRe matches an absolute filesystem path token in free text
+// (POSIX `/…` or Windows `C:\…`), so build paths never leak. The leading
+// boundary (start, whitespace, or a stack-trace delimiter) prevents matching
+// the path component of a URL, which follows a scheme/host instead.
+var absPathTokenRe = regexp.MustCompile(`(^|[\s(\"'=,@:>])((?:file://)?(?:/[^\s"'()<>]+|[A-Za-z]:[\\/][^\s"'()<>]+))`)
 
 // shortenStackText shortens absolute filesystem paths embedded in a raw stack
 // trace string to their last 3 segments, leaving the rest of the text intact.

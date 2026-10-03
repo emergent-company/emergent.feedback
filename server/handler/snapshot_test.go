@@ -81,3 +81,24 @@ func TestGunzipOrRawPassthroughNonGzip(t *testing.T) {
 		t.Fatalf("non-gzip passthrough = %q, want %q", got, raw)
 	}
 }
+
+func TestGunzipOrRawPropagatesCorruptGzip(t *testing.T) {
+	var buf bytes.Buffer
+	gw := gzip.NewWriter(&buf)
+	if _, err := gw.Write([]byte(`[{"type":2}]`)); err != nil {
+		t.Fatalf("gzip write: %v", err)
+	}
+	if err := gw.Close(); err != nil {
+		t.Fatalf("gzip close: %v", err)
+	}
+	full := buf.Bytes()
+
+	// Truncate the trailer (and a little stream) so the gzip header is accepted
+	// but the body read fails — this must return an error, not the raw bytes.
+	for _, cut := range []int{8, 10} {
+		corrupt := full[:len(full)-cut]
+		if _, err := gunzipOrRaw(corrupt); err == nil {
+			t.Fatalf("corrupt gzip (cut %d) should return an error, got nil", cut)
+		}
+	}
+}

@@ -259,6 +259,47 @@ func TestReplayCreateAndGet(t *testing.T) {
 	}
 }
 
+func TestReplayGetCorruptReturns500(t *testing.T) {
+	_, _, e := newLifecycleHandler(t)
+
+	// Build a valid gzip blob, then truncate its trailer so the header is valid
+	// but the body is corrupt.
+	var buf bytes.Buffer
+	gw := gzip.NewWriter(&buf)
+	if _, err := gw.Write([]byte(`[{"type":2}]`)); err != nil {
+		t.Fatalf("gzip write: %v", err)
+	}
+	if err := gw.Close(); err != nil {
+		t.Fatalf("gzip close: %v", err)
+	}
+	corrupt := buf.Bytes()
+	corrupt = corrupt[:len(corrupt)-8]
+
+	body := `{"url":"https://app.example.com/","selector":"button","comment":"broken","repo":"owner/repo","replay":"` + base64.StdEncoding.EncodeToString(corrupt) + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/feedback", strings.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	req.Header.Set("X-Test-Login", "alice")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var out struct {
+		ID int64 `json:"id"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode create: %v", err)
+	}
+
+	req2 := httptest.NewRequest(http.MethodGet, "/feedback/"+strconv.FormatInt(out.ID, 10)+"/replay", nil)
+	req2.Header.Set("X-Test-Login", "alice")
+	rec2 := httptest.NewRecorder()
+	e.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusInternalServerError {
+		t.Fatalf("get corrupt replay status = %d, want 500: %s", rec2.Code, rec2.Body.String())
+	}
+}
+
 func TestReplayRejectOversize(t *testing.T) {
 	_, _, e := newLifecycleHandler(t)
 

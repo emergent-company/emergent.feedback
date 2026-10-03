@@ -137,7 +137,7 @@ func buildRouter(s *store.Store, ghCfg *github.AppConfig, jwtSecret, allowedOrig
 
 	auth.POST("/feedback", h.HandleCreateFeedback, feedbackLimiter)
 	auth.POST("/issue/export", h.HandleExportIssue, exportLimiter)
-	auth.POST("/sourcemaps", h.HandleUploadSourcemaps)
+	auth.POST("/sourcemaps", h.HandleUploadSourcemaps, feedbackLimiter)
 
 	// ── MCP server (API-key auth: DB keys scoped to repos, plus MCP_API_KEY bootstrap) ──
 	mcpSrv := h.MCPServer()

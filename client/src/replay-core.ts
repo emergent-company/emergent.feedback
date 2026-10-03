@@ -6,21 +6,18 @@
 // (`./replay`), so rrweb is never shipped unless replay is enabled.
 //
 // Behavior is unchanged from the previous in-bundle version: a bounded sliding
-// buffer (~last 60s), `checkoutEveryNms`, privacy-by-default masking, and
-// base64(gzip(JSON)) via CompressionStream with a plain-base64 fallback.
+// buffer (~last 60s by default), a full-snapshot cadence derived from that
+// window, privacy-by-default masking, and base64(gzip(JSON)) via
+// CompressionStream with a plain-base64 fallback. The buffer + cadence logic
+// lives in ./replay-buffer (pure, unit-testable); this module only adapts it to
+// rrweb.
 
-import { record, EventType } from "rrweb";
-import type { eventWithTime } from "rrweb";
-
-const DEFAULT_BUFFER_MS = 60_000;
-const DEFAULT_MAX_EVENTS = 5000;
-const CHECKOUT_EVERY_NMS = 30_000; // force a full snapshot every 30s → replay baseline
+import { record } from "rrweb";
+import { ReplayBuffer, checkoutEveryNms as computeCheckoutEveryNms } from "./replay-buffer";
 
 let started = false;
 let stopFn: (() => void) | undefined;
-let buffer: eventWithTime[] = [];
-let metaEvent: eventWithTime | null = null;
-let bufferMs = DEFAULT_BUFFER_MS;
+const buffer = new ReplayBuffer();
 
 /**
  * Start buffering. Idempotent; no-op in iframes; catches any rrweb init
@@ -30,12 +27,10 @@ export function startReplay(bufferMsOverride?: number): void {
   if (started) return;
   if (window.top !== window.self) return;
   try {
-    bufferMs = bufferMsOverride && bufferMsOverride > 0 ? bufferMsOverride : DEFAULT_BUFFER_MS;
-    buffer = [];
-    metaEvent = null;
+    buffer.reset(bufferMsOverride);
     stopFn = record({
-      emit: (event) => pushEvent(event),
-      checkoutEveryNms: CHECKOUT_EVERY_NMS,
+      emit: (event) => buffer.push(event),
+      checkoutEveryNms: computeCheckoutEveryNms(buffer.window),
       maskAllInputs: true,
       maskInputOptions: { password: true, email: true, tel: true },
       maskTextSelector: "[data-fo-redact]",
@@ -61,38 +56,7 @@ export function stopReplay(): void {
     stopFn = undefined;
   }
   started = false;
-  buffer = [];
-  metaEvent = null;
-}
-
-function pushEvent(event: eventWithTime): void {
-  // The first Meta event (type 4) carries replay initialization state
-  // (href/viewport); retain it separately so it can always be prepended.
-  if (event.type === EventType.Meta) {
-    metaEvent = event;
-    return;
-  }
-
-  buffer.push(event);
-
-  // Bound memory: drop events older than the buffer window (but keep the last
-  // retained event as a baseline anchor; checkoutEveryNms guarantees a full
-  // snapshot well within the window).
-  const cutoff = event.timestamp - bufferMs;
-  while (buffer.length > 1 && buffer[0].timestamp < cutoff) {
-    buffer.shift();
-  }
-  // Hard cap on event count as a second bound.
-  while (buffer.length > DEFAULT_MAX_EVENTS) {
-    buffer.shift();
-  }
-}
-
-function serializeEvents(): eventWithTime[] {
-  const events: eventWithTime[] = [];
-  if (metaEvent) events.push(metaEvent);
-  events.push(...buffer);
-  return events;
+  buffer.reset();
 }
 
 /** base64-encode bytes without a stack overflow on large buffers. */
@@ -124,7 +88,7 @@ async function tryGzip(bytes: Uint8Array): Promise<Uint8Array | undefined> {
  * `getReplayPayloadAsync` for the gzip-compressed upload path.
  */
 export function getReplayPayload(): string | undefined {
-  const events = serializeEvents();
+  const events = buffer.serialize();
   if (events.length === 0) return undefined;
   return bytesToBase64(new TextEncoder().encode(JSON.stringify(events)));
 }
@@ -135,7 +99,7 @@ export function getReplayPayload(): string | undefined {
  * which; the server treats the value as opaque base64.
  */
 export async function getReplayPayloadAsync(): Promise<string | undefined> {
-  const events = serializeEvents();
+  const events = buffer.serialize();
   if (events.length === 0) return undefined;
   const bytes = new TextEncoder().encode(JSON.stringify(events));
   const gzipped = await tryGzip(bytes);

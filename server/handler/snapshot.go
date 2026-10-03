@@ -41,12 +41,16 @@ func decodeSnapshot(b []byte) ([]byte, error) {
 func gunzipOrRaw(b []byte) ([]byte, error) {
 	gr, err := gzip.NewReader(bytes.NewReader(b))
 	if err != nil {
+		// Not gzip (bad magic/header): return the raw bytes defensively so
+		// legacy/corrupt replay data is still served verbatim.
 		return b, nil
 	}
 	defer func() { _ = gr.Close() }()
 	out, err := io.ReadAll(io.LimitReader(gr, maxDecompressedBytes+1))
 	if err != nil {
-		return b, nil
+		// The gzip header was accepted but the body is truncated/corrupt:
+		// propagate the error so callers don't serve invalid JSON.
+		return nil, err
 	}
 	if len(out) > maxDecompressedBytes {
 		return nil, errReplayTooLarge
