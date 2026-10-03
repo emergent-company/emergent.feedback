@@ -105,7 +105,7 @@ func (h *Handler) HandleCreateFeedback(c echo.Context) error {
 		return err
 	}
 
-	dedupeKey := computeDedupeKey(req.Repo, req.Selector, ctxJSON, req.Comment)
+	dedupeKey := computeDedupeKey(req.Repo, req.Selector, req.URL, ctxJSON, req.Comment)
 
 	f, err := h.Store.Create(c.Request().Context(), store.CreateParams{
 		URL:         req.URL,
@@ -136,8 +136,8 @@ func (h *Handler) HandleCreateFeedback(c echo.Context) error {
 }
 
 // computeDedupeKey returns a stable sha256 key from repo + selector +
-// fingerprint.path + normalized comment.
-func computeDedupeKey(repo, selector, contextJSON, comment string) string {
+// normalized page URL + fingerprint.path + normalized comment.
+func computeDedupeKey(repo, selector, pageURL, contextJSON, comment string) string {
 	fpPath := ""
 	if m := parseContext(contextJSON); m != nil {
 		if fp, ok := m["fingerprint"].(map[string]any); ok {
@@ -145,7 +145,7 @@ func computeDedupeKey(repo, selector, contextJSON, comment string) string {
 		}
 	}
 	normalized := normalizeComment(comment)
-	sum := sha256.Sum256([]byte(repo + "\x00" + selector + "\x00" + fpPath + "\x00" + normalized))
+	sum := sha256.Sum256([]byte(repo + "\x00" + selector + "\x00" + normalizePageURL(pageURL) + "\x00" + fpPath + "\x00" + normalized))
 	return hex.EncodeToString(sum[:])
 }
 
@@ -166,6 +166,20 @@ func (h *Handler) persistAutoTitle(id int64, comment, selector, contextJSON stri
 	persistCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = h.Store.SetContextSummary(persistCtx, id, summary)
+}
+
+// normalizePageURL returns a stable page identity for dedupe: scheme + host +
+// path, dropping query string and fragment (per-view/session noise). Unparseable
+// input is returned trimmed so distinct pages still hash distinctly.
+func normalizePageURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return strings.TrimSpace(raw)
+	}
+	u.RawQuery = ""
+	u.Fragment = ""
+	u.RawFragment = ""
+	return u.String()
 }
 
 // badgeSummary is the response shape for GET /feedback?url=...

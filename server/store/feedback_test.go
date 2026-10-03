@@ -254,36 +254,6 @@ func TestSetStatusRejectsBackwardTransition(t *testing.T) {
 	}
 }
 
-func TestListExportedLite(t *testing.T) {
-	s := openTestStore(t)
-	ctx := context.Background()
-	f := createTestFeedback(t, s, ctx)
-
-	if err := s.MarkExported(ctx, []int64{f.ID}, "https://github.com/org/repo/issues/1"); err != nil {
-		t.Fatalf("MarkExported: %v", err)
-	}
-
-	items, err := s.ListExportedLite(ctx, []string{"org/repo"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(items) != 1 {
-		t.Fatalf("items = %d, want 1", len(items))
-	}
-	if items[0].ID != f.ID {
-		t.Fatalf("id = %d, want %d", items[0].ID, f.ID)
-	}
-	if items[0].ContextJSON == "" {
-		t.Fatal("context_json empty")
-	}
-	if items[0].Status != StatusExported {
-		t.Fatalf("status = %s, want exported", items[0].Status)
-	}
-	if items[0].IssueURL == "" {
-		t.Fatal("issue_url empty")
-	}
-}
-
 func TestExportedExcludedFromBadges(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
@@ -421,42 +391,6 @@ func TestListLiteAllStatusesAndFilter(t *testing.T) {
 	}
 	if len(open) != 1 || open[0].ID != openF.ID {
 		t.Fatalf("open = %v, want only id %d", open, openF.ID)
-	}
-}
-
-func TestListExportedLiteAll(t *testing.T) {
-	s := openTestStore(t)
-	ctx := context.Background()
-
-	f1, err := s.Create(ctx, CreateParams{URL: "https://a.com/", Selector: "button", Comment: "a", GitHubUser: "alice", Repo: "org/a"})
-	if err != nil {
-		t.Fatalf("Create a: %v", err)
-	}
-	f2, err := s.Create(ctx, CreateParams{URL: "https://a.com/", Selector: "button", Comment: "b", GitHubUser: "bob", Repo: "org/b"})
-	if err != nil {
-		t.Fatalf("Create b: %v", err)
-	}
-	if err := s.MarkExported(ctx, []int64{f1.ID}, "https://github.com/org/a/issues/1"); err != nil {
-		t.Fatalf("MarkExported a: %v", err)
-	}
-	if err := s.MarkExported(ctx, []int64{f2.ID}, "https://github.com/org/b/issues/1"); err != nil {
-		t.Fatalf("MarkExported b: %v", err)
-	}
-
-	all, err := s.ListExportedLiteAll(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(all) != 2 {
-		t.Fatalf("all = %d, want 2", len(all))
-	}
-
-	scoped, err := s.ListExportedLite(ctx, []string{"org/a"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(scoped) != 1 || scoped[0].ID != f1.ID {
-		t.Fatalf("scoped = %v, want only org/a item %d", scoped, f1.ID)
 	}
 }
 

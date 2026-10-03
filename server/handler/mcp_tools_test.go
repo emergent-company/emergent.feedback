@@ -2,9 +2,11 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -170,6 +172,50 @@ func TestFeedbackListSinceDropsOldItems(t *testing.T) {
 	}
 	if len(out) != 0 {
 		t.Fatalf("expected 0 items for far-future since, got %d", len(out))
+	}
+}
+
+func callToolGetContext(t *testing.T, h *Handler, scopes []string, in feedbackIDInput) (contextOutput, error) {
+	t.Helper()
+	var out contextOutput
+	var callErr error
+	withMCPAuth(t, scopes, "test-key", func(w http.ResponseWriter, r *http.Request) {
+		_, out, callErr = h.toolGetContext(r.Context(), nil, in)
+	})
+	return out, callErr
+}
+
+func TestToolGetContextRedactsSecrets(t *testing.T) {
+	h, s := newHandlerStore(t)
+	ctx := context.Background()
+
+	ctxJSON := `{"url":"https://app.example.com/confirm?token=eyJhbGciOiJIUzI1NiJ9.abc.def","intent":{"expected":"text color: sk-abcdefghijklmnop"}}`
+	f, err := s.Create(ctx, store.CreateParams{
+		URL:         "https://app.example.com/confirm?token=eyJhbGciOiJIUzI1NiJ9.abc.def",
+		Selector:    "button",
+		Comment:     "broken",
+		ContextJSON: ctxJSON,
+		GitHubUser:  "alice",
+		Repo:        "org/repo",
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	out, err := callToolGetContext(t, h, []string{"org/repo"}, feedbackIDInput{FeedbackID: f.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := json.Marshal(out.Context)
+	got := string(b)
+	if strings.Contains(got, "eyJhbGci") {
+		t.Fatalf("url token leaked into feedback_get_context: %s", got)
+	}
+	if strings.Contains(got, "sk-abcdefghijklmnop") {
+		t.Fatalf("intent secret leaked into feedback_get_context: %s", got)
+	}
+	if !strings.Contains(got, "[redacted]") {
+		t.Fatalf("expected redacted marker in feedback_get_context: %s", got)
 	}
 }
 

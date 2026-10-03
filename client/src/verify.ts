@@ -34,8 +34,10 @@ function kebab(prop: string): string {
  *   direction/correctness of a change, so it returns amber (human confirm) on
  *   a change and red when unchanged; unknown operators return amber, never a
  *   false green.
- * - anchor_stable:   element at selector with matching fingerprint tag →
- *                    green; present but different tag → amber; missing → red.
+ * - anchor_stable:   element found (anchored) → amber (mere presence/tag-match
+ *                    cannot confirm the fix was applied); missing → red.
+ *                    Never green: it is not machine-checkable that a fix is
+ *                    correct, only that the anchor still resolves.
  * - human:           always amber ("needs human confirmation").
  */
 export function evaluateContract(contract: VerificationContract): ContractEvaluation {
@@ -121,17 +123,22 @@ export function evaluateContract(contract: VerificationContract): ContractEvalua
         if (!el) {
           return { result: "red", detail: `Element ${selector} not found` };
         }
+        // `anchor_stable` is NOT machine-checkable: finding the element (even
+        // with a matching fingerprint tag) only proves the anchor still
+        // resolves — it does not prove the fix was applied or is correct.
+        // It must never return `green`; the best it can do is `amber`
+        // ("anchored, awaiting human/agent confirmation"). Missing → `red`.
         const expectedTag = path ? lastTagOfPath(path) : undefined;
-        if (!expectedTag) {
-          return { result: "green", detail: `Element ${selector} found` };
-        }
         const actualTag = el.tagName.toLowerCase();
-        if (actualTag === expectedTag) {
-          return { result: "green", detail: `Element ${selector} found (${actualTag})` };
+        if (expectedTag && actualTag !== expectedTag) {
+          return {
+            result: "amber",
+            detail: `Element ${selector} found but tag changed: expected <${expectedTag}>, got <${actualTag}>`,
+          };
         }
         return {
           result: "amber",
-          detail: `Element ${selector} found but tag changed: expected <${expectedTag}>, got <${actualTag}>`,
+          detail: `Element ${selector} found (${actualTag}) — anchored, needs human/agent confirmation`,
         };
       }
 
@@ -171,6 +178,14 @@ export function startVerifyLoop(api: APIClient, intervalMs = 15000): () => void 
       for (const item of pending) {
         try {
           const evaluation = evaluateContract(item.contract);
+          // Post only conclusive results. `amber` = "cannot auto-verify /
+          // needs human or agent confirmation" — posting it would neither
+          // verify nor fail the item, so skip it to avoid churn and any risk
+          // of an amber→verified flip. `green` is only ever produced by a
+          // genuine machine-checkable assertion (style_assertion
+          // equals/not_equals/present); `anchor_stable`/`human`/`test_exists`
+          // and `changed` can only yield `amber`/`red`, never a false green.
+          if (evaluation.result === "amber") continue;
           await api.postVerifyResult(item.id, evaluation.result, evaluation.detail);
         } catch {
           // per-item failure tolerated

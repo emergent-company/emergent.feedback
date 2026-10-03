@@ -164,6 +164,51 @@ func TestShortenEventURL(t *testing.T) {
 	}
 }
 
+func TestShortenEventURLScrubsSecrets(t *testing.T) {
+	got := shortenEventURL("https://a.com/path?token=secretvalue&other=1")
+	if strings.Contains(got, "secretvalue") {
+		t.Fatalf("sensitive query value leaked: %q", got)
+	}
+	if !strings.Contains(got, "redacted") {
+		t.Fatalf("expected redaction marker in %q", got)
+	}
+}
+
+func TestFormatEventDetailRedactsSecrets(t *testing.T) {
+	if got := formatEventDetail("input", map[string]any{"tagName": "input", "value": "api_key=sk-abcdefghijklmnop"}); strings.Contains(got, "sk-abcdefghijklmnop") {
+		t.Fatalf("input value leaked: %q", got)
+	}
+	if got := formatEventDetail("click", map[string]any{"tagName": "button", "text": "token eyJhbGciOiJIUzI1NiJ9.abc.def"}); strings.Contains(got, "eyJhbGci") {
+		t.Fatalf("click text leaked: %q", got)
+	}
+}
+
+func TestWriteReproRedactsConsoleNetwork(t *testing.T) {
+	ctx := map[string]any{
+		"console": []any{map[string]any{"level": "error", "message": "token sk-abcdefghijklmnop leaked"}},
+		"network": []any{map[string]any{"method": "GET", "url": "https://app.example.com/api?token=eyJhbGciOiJIUzI1NiJ9.abc.def"}},
+	}
+	ctxJSON, _ := json.Marshal(ctx)
+	items := []store.Feedback{{
+		ID:          1,
+		URL:         "https://app.example.com/",
+		Selector:    "button",
+		Comment:     "x",
+		ContextJSON: string(ctxJSON),
+		GitHubUser:  "alice",
+	}}
+	_, body := buildIssueContent(items, "")
+	if strings.Contains(body, "sk-abcdefghijklmnop") {
+		t.Fatalf("console secret leaked into issue body:\n%s", body)
+	}
+	if strings.Contains(body, "eyJhbGci") {
+		t.Fatalf("network secret leaked into issue body:\n%s", body)
+	}
+	if !strings.Contains(body, "[redacted]") {
+		t.Fatalf("expected redacted marker in issue body:\n%s", body)
+	}
+}
+
 func TestParseContext(t *testing.T) {
 	if parseContext("") != nil {
 		t.Fatal("empty should be nil")
