@@ -1,0 +1,178 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://feedback.emergent-company.ai/schema/envelope.v1.json",
+  "title": "Feedback Envelope",
+  "description": "Canonical feedback envelope v1: one truth, three renderings (JSON, Markdown, behavioral preamble). See docs/ai-feedback-strategy.md §2.2.",
+  "type": "object",
+  "required": ["schema", "version", "id", "created_at", "status", "type", "summary", "actor", "target", "trust_order"],
+  "properties": {
+    "schema": { "type": "string", "const": "https://feedback.emergent-company.ai/schema/envelope.v1.json" },
+    "version": { "type": "string", "const": "1.0.0" },
+    "id": { "type": "integer" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "status": {
+      "type": "string",
+      "enum": ["open", "applied", "verified", "resolved", "exported"]
+    },
+    "type": {
+      "type": "string",
+      "enum": ["bug", "enhancement", "question", "task"]
+    },
+    "summary": { "type": "string" },
+    "applied_at": { "type": "string", "format": "date-time" },
+    "verified_at": { "type": "string", "format": "date-time" },
+    "resolved_at": { "type": "string", "format": "date-time" },
+    "actor": {
+      "type": "object",
+      "required": ["github_user"],
+      "properties": { "github_user": { "type": "string" } }
+    },
+    "target": {
+      "type": "object",
+      "properties": {
+        "element": {
+          "type": "object",
+          "properties": {
+            "tag": { "type": "string" },
+            "role": { "type": "string" },
+            "label": { "type": "string" },
+            "selector": { "type": "string" },
+            "data_component": { "type": "string" },
+            "computed_styles": { "type": "object", "additionalProperties": { "type": "string" } },
+            "fingerprint": {
+              "type": "object",
+              "properties": {
+                "attrs": { "type": "object", "additionalProperties": { "type": "string" } },
+                "path": { "type": "string" },
+                "text": { "type": "string" }
+              }
+            }
+          }
+        },
+        "region": {},
+        "selection": {},
+        "source": {
+          "type": "object",
+          "properties": {
+            "component": { "type": "string" },
+            "file": { "type": "string" },
+            "line": { "type": "integer" },
+            "column": { "type": "integer" },
+            "framework": { "type": "string" },
+            "resolution": {
+              "type": "string",
+              "enum": ["build-stamp", "fiber", "framework-meta", "dev-stamp", "none"]
+            },
+            "confidence": {
+              "type": "string",
+              "enum": ["exact", "approximate", "none"]
+            }
+          }
+        }
+      }
+    },
+    "intent": {
+      "type": "object",
+      "properties": {
+        "kind": { "type": "string", "enum": ["bug", "enhancement", "question", "task"] },
+        "action": {
+          "type": "string",
+          "enum": ["change", "add", "remove", "move", "fix", "refactor", "investigate"]
+        },
+        "expected": { "type": "string" },
+        "actual": { "type": "string" },
+        "scope": {
+          "type": "object",
+          "properties": {
+            "breadth": { "type": "string", "enum": ["element", "region", "component", "page", "multi"] },
+            "targets": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "explanation": {
+      "type": "object",
+      "properties": {
+        "text": { "type": "string" },
+        "quality": { "type": "string", "enum": ["precise", "vague", "missing"] },
+        "quality_score": { "type": "number" }
+      }
+    },
+    "repro": {
+      "type": "object",
+      "properties": {
+        "steps": { "type": "array", "items": { "type": "string" } },
+        "console": { "type": "array", "items": { "type": "object" } },
+        "network": { "type": "array", "items": { "type": "object" } },
+        "session_history": { "type": "array", "items": { "type": "object" } },
+        "replay": {}
+      }
+    },
+    "environment": {
+      "type": "object",
+      "properties": {
+        "url": { "type": "string" },
+        "viewport": {
+          "type": "object",
+          "properties": { "width": { "type": "number" }, "height": { "type": "number" } }
+        },
+        "device_pixel_ratio": { "type": "number" },
+        "user_agent": { "type": "string" },
+        "framework": { "type": "string" },
+        "css_framework": { "type": "array", "items": { "type": "string" } },
+        "branch": { "type": "string" },
+        "version": { "type": "string" },
+        "session_id": { "type": "string" },
+        "trace_id": { "type": "string" }
+      }
+    },
+    "visual": {
+      "type": "object",
+      "properties": {
+        "screenshot_ref": { "type": "string" },
+        "snapshot_ref": { "type": "string" },
+        "replay_ref": { "type": "string" }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": ["style_assertion", "anchor_stable", "test_exists", "human"]
+            },
+            "check": { "type": "object" }
+          }
+        },
+        "criteria": { "type": "string" },
+        "result": { "type": "string", "enum": ["green", "amber", "red"] },
+        "detail": { "type": "string" }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "enum": ["captured", "inferred", "stated", "absent"]
+      }
+    },
+    "trust_order": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [
+        "target.source",
+        "target.element.fingerprint",
+        "intent.expected",
+        "intent.actual",
+        "target.element.selector",
+        "visual.screenshot_ref",
+        "target.element.computed_styles",
+        "environment.css_framework",
+        "summary"
+      ]
+    }
+  }
+}

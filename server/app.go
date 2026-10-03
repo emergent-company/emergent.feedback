@@ -98,6 +98,11 @@ func buildRouter(s *store.Store, ghCfg *github.AppConfig, jwtSecret, allowedOrig
 		})
 	})
 
+	// Feedback envelope JSON Schema (public).
+	e.GET("/schema/envelope.v1.json", func(c echo.Context) error {
+		return c.Blob(http.StatusOK, "application/json", envelopeSchemaJSON)
+	})
+
 	// Feedback — public read endpoints (counts + public issue refs only, no PII)
 	e.GET("/feedback", h.HandleListFeedback)
 	e.GET("/issues", h.HandleListIssues)
@@ -106,8 +111,14 @@ func buildRouter(s *store.Store, ghCfg *github.AppConfig, jwtSecret, allowedOrig
 	auth := e.Group("", authmw.RequireAuth(jwtSecret))
 	auth.GET("/me", h.HandleMe)
 	auth.GET("/feedback/list", h.HandleListFeedbackByURL)
+	auth.GET("/feedback/verify-pending", h.HandleVerifyPending)
+	auth.GET("/feedback/status", h.HandleFeedbackStatus)
 	auth.GET("/feedback/:id", h.HandleGetFeedback)
+	auth.GET("/feedback/:id/verify", h.HandleGetVerify)
 	auth.DELETE("/feedback/:id", h.HandleDeleteFeedback)
+	auth.POST("/feedback/:id/applied", h.HandleMarkApplied)
+	auth.POST("/feedback/:id/resolve", h.HandleResolve)
+	auth.POST("/feedback/:id/verify-result", h.HandleVerifyResult)
 	auth.GET("/api/keys", h.HandleListAPIKeys)
 	auth.POST("/api/keys", h.HandleCreateAPIKey)
 	auth.DELETE("/api/keys/:id", h.HandleRevokeAPIKey)
@@ -137,13 +148,17 @@ func buildRouter(s *store.Store, ghCfg *github.AppConfig, jwtSecret, allowedOrig
 	)
 	verify := func(ctx context.Context, token string, _ *http.Request) (*mcpauth.TokenInfo, error) {
 		if mcpAPIKey != "" && subtle.ConstantTimeCompare([]byte(token), []byte(mcpAPIKey)) == 1 {
-			return &mcpauth.TokenInfo{Scopes: []string{"*"}, Expiration: time.Now().Add(time.Hour)}, nil
+			return &mcpauth.TokenInfo{Scopes: []string{"*"}, Expiration: time.Now().Add(time.Hour), UserID: "mcp-bootstrap"}, nil
 		}
 		repos, err := h.VerifyAPIKey(ctx, token)
 		if err != nil || len(repos) == 0 {
 			return nil, mcpauth.ErrInvalidToken
 		}
-		return &mcpauth.TokenInfo{Scopes: repos, Expiration: time.Now().Add(time.Hour)}, nil
+		return &mcpauth.TokenInfo{
+			Scopes:     repos,
+			Expiration: time.Now().Add(time.Hour),
+			UserID:     "api-key:" + handler.HashAPIKey(token)[:8],
+		}, nil
 	}
 	authed := mcpauth.RequireBearerToken(verify, nil)(streamable)
 	e.Any("/mcp", echo.WrapHandler(authed))

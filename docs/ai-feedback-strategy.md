@@ -5,6 +5,59 @@ Sources: `docs/competitive-analysis.md` + oracle architecture review + librarian
 
 ---
 
+## Implementation status (Phases A–C)
+
+What actually shipped (see [`docs/envelope.md`](envelope.md) for the precise,
+code-derived reference):
+
+- **Phase A — envelope + trust order + source stamp.** Envelope JSON + Markdown
+  renderer + behavioral preamble; `trust_order` + per-field `provenance`; element→source
+  resolution ladder (`data-fo-src` → React fiber → Vue → Svelte → dev stamps → `none`);
+  `feedback_get` / `feedback_list` MCP tools; `provenance`/`trust_order` stamped at
+  capture. Status: shipped.
+- **Phase B — verification contract + loop.** `feedback_verify` (style_assertion /
+  anchor_stable live; human + test_exists fallback); `feedback_mark_applied` /
+  `feedback_mark_resolved` + GitHub issue comment/close; `feedback_watch` long-poll;
+  `feedback_events` monotonic sequence; screenshot capture. Status: shipped.
+- **Phase C — forensic + replay + portability.** Detail levels (compact/standard/
+  forensic) + `response_format`; published envelope JSON Schema at
+  `GET /schema/envelope.v1.json`; reporter notify + heuristic dedupe + auto-title
+  (deterministic heuristic). Status: shipped in this PR. **Session replay,
+  source-map upload/unmapping, and optional LLM auto-title are NOT in this PR —
+  they ship in follow-up PR #8.**
+
+**Deferred (not yet implemented):** Vue/Svelte build-stamp support (the in-repo
+plugin is React JSX/TSX only); `test_exists` verification is evaluated client-side
+as `amber` (no CI runner); screenshot *marking* (arrows/boxes); `feedback://{id}`
+MCP **resource** + `fix-feedback` prompt (v2).
+
+**Deviations from this spec:**
+
+- **Status `exported` added** (Phase C) — decouples "exported to a GitHub issue"
+  from "genuinely resolved". `MarkExported` sets `exported`, not `resolved`.
+  Envelope `status` reads the persisted status and never infers
+  `applied/verified/resolved` from `issue_url`.
+- **Build plugin ships in-repo** — `plugins/vite-plugin-emergent-feedback/`
+  (React JSX/TSX; Vue/Svelte unsupported). Injects
+  `data-fo-src="<repo-relative>:<line>:<column>"`.
+- **Source-map unmap is best-effort** (Phase C — PR #8, not in this PR) — stored
+  per `(repo, version, path)`, applied only when a frame matches; on any failure
+  absolute filesystem paths are shortened to their last 3 segments (no full-path
+  leakage).
+- **Dedupe is heuristic only** — `sha256(repo+selector+fingerprint.path+normalized
+  comment)`; links `duplicate_of`, never auto-merges.
+- **Auto-title** uses a deterministic heuristic (this PR); the optional LLM is
+  async + non-blocking (2s cap, falls back to heuristic) — Phase C, PR #8.
+- **Replay is a lazy second bundle** (Phase C — PR #8, not in this PR) — main
+  `emergent-feedback.js` (~269 KB) + `emergent-feedback-replay.js` (~179 KB),
+  fetched only when `data-replay` is on.
+- **Hardening pass** — server-side `redactSecrets` on comments; source-map upload
+  fails closed (403) when scope is undeterminable (Phase C — PR #8); replay
+  decompression capped at 20MB (413) (Phase C — PR #8); `verified_at` set only for
+  `green`; deleting feedback cascades its events.
+
+---
+
 ## 0. Positioning
 
 One sentence: **we own "the agent does not search."**
@@ -64,11 +117,11 @@ Research finding: **no tool publishes both a formal data schema and explicit age
 
 ```jsonc
 {
-  "schema": "https://feedback-overlay.dev/envelope",
+  "schema": "https://feedback.emergent-company.ai/schema/envelope.v1.json",
   "version": "1.0.0",
   "id": 1847,
   "created_at": "2026-10-01T12:04:11Z",
-  "status": "open",                       // open | applied | verified | resolved
+  "status": "open",                       // open | applied | verified | resolved | exported
 
   "type": "bug",                          // bug | enhancement | question | task
 
@@ -106,7 +159,7 @@ Research finding: **no tool publishes both a formal data schema and explicit age
     "kind": "bug",
     "action": "change",                   // change | add | remove | move | fix | refactor | investigate
     "expected": "text/icon passes WCAG AA (contrast >= 4.5:1)",
-    "actual": "contrast ratio 2.1:1 (grey #999 on white)",
+    "actual": "text color: rgb(153, 153, 153)",   // client emits "<label>: <value>", not prose
     "scope": { "breadth": "element", "targets": ["[data-testid='pricing-upgrade']"] }
   },
 

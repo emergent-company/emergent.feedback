@@ -258,8 +258,8 @@ func TestAPIEndToEnd(t *testing.T) {
 		if err := json.Unmarshal(rec2.Body.Bytes(), &f); err != nil {
 			t.Fatalf("decode: %v", err)
 		}
-		if f.Status != "resolved" {
-			t.Fatalf("status = %q, want resolved", f.Status)
+		if f.Status != "exported" {
+			t.Fatalf("status = %q, want exported", f.Status)
 		}
 		if f.IssueURL != "https://github.com/owner/repo/issues/1" {
 			t.Fatalf("issue_url = %q, want mock issue url", f.IssueURL)

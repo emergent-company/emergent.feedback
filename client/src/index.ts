@@ -14,12 +14,27 @@ import { startRecording, getHistory } from "./history";
 import { getSessionId } from "./session";
 import { captureElement } from "./screenshot";
 import { captureSnapshot } from "./snapshot";
+import { resolveSource, buildFingerprint } from "./source";
+import {
+  scoreExplanation,
+  computeProvenance,
+  TRUST_ORDER,
+  type FeedbackIntent,
+  type Verification,
+  type ElementFingerprint,
+  type SourceRef,
+} from "./envelope";
+import { redactText, redactAttributes, redactElementHTML } from "./redact";
+import { startConsoleCapture, getConsoleErrors } from "./console";
+import { startVerifyLoop, stopVerifyLoop } from "./verify";
+import { startReporterNotify, stopReporterNotify } from "./notify";
 
 (function bootstrap() {
   if ((window as any).__feedbackOverlayLoaded) return;
   (window as any).__feedbackOverlayLoaded = true;
 
   startRecording();
+  startConsoleCapture();
 
   const config = readConfig();
   const api = new APIClient(config);
@@ -34,9 +49,13 @@ import { captureSnapshot } from "./snapshot";
     if (mode === "active") {
       showIndicator(config.hotkey);
       activateOverlay();
+      startVerifyLoop(api);
+      startReporterNotify(api);
     } else if (mode === "idle") {
       hideIndicator();
       deactivateOverlay();
+      stopVerifyLoop();
+      stopReporterNotify();
     } else if (mode === "capturing" || mode === "commenting") {
       hideIndicator();
     }
@@ -141,17 +160,36 @@ import { captureSnapshot } from "./snapshot";
         closeDialog();
         openFeedbackDialog(rawHierarchy[idx].element);
       },
-      onSubmit: async (comment, type: FeedbackType) => {
+      onSubmit: async (comment, type: FeedbackType, intent: FeedbackIntent) => {
         const screenshot = await captureElement(target);
         const snapshot = captureSnapshot();
+        // intent/explanation/provenance are only known at submit time — merge
+        // them into the capture-time context before shipping.
+        const contextWithIntent = {
+          ...context,
+          intent,
+          explanation: scoreExplanation(comment, intent),
+          provenance: computeProvenance({
+            intent,
+            hasScreenshot: !!screenshot,
+            hasSnapshot: !!snapshot,
+            cssFrameworks: context["cssFramework"] as string[] | undefined,
+            source: context["source"] as SourceRef | undefined,
+          }),
+          verification: buildVerification(
+            selector,
+            context["fingerprint"] as ElementFingerprint | undefined,
+            intent,
+            context["computedStyles"] as Record<string, string> | undefined
+          ),
+        };
         const result = await api.createFeedback({
           url: window.location.href,
           selector,
           comment,
-          context,
+          context: contextWithIntent,
           repo: config.repo,
           label: config.label,
-          feedbackType: type,
           screenshot,
           snapshot,
         });
@@ -257,17 +295,105 @@ import { captureSnapshot } from "./snapshot";
     return undefined;
   }
 
+  // ── Verification contract ────────────────────────────────────────────────────
+  // Maps the intent micro-form's "actual" labels (dialog.ts) to CSS props.
+  const STYLE_PROP_LABELS: [string, string][] = [
+    ["text color", "color"],
+    ["background", "backgroundColor"],
+    ["font size", "fontSize"],
+    ["weight", "fontWeight"],
+  ];
+
+  // Detect which style prop `intent.actual` was captured from, if any.
+  function detectStyleProp(
+    actual: string,
+    computedStyles: Record<string, string> | undefined
+  ): string | undefined {
+    const lower = actual.toLowerCase();
+    for (const [label, prop] of STYLE_PROP_LABELS) {
+      if (lower.startsWith(label + ":")) return prop;
+    }
+    // Fallback: exact match against a captured computed style value.
+    if (computedStyles) {
+      for (const prop of ["color", "backgroundColor", "fontSize", "fontWeight"]) {
+        if (computedStyles[prop] && computedStyles[prop] === actual) return prop;
+      }
+    }
+    return undefined;
+  }
+
+  // Extract the value after a "<label>: " prefix (defensive fallback for `before`).
+  function extractBefore(actual: string): string | undefined {
+    const idx = actual.indexOf(":");
+    if (idx >= 0) return actual.slice(idx + 1).trim();
+    return undefined;
+  }
+
+  function buildVerification(
+    selector: string,
+    fingerprint: ElementFingerprint | undefined,
+    intent: FeedbackIntent,
+    computedStyles: Record<string, string> | undefined
+  ): Verification {
+    const expected = intent.expected?.trim();
+    const actual = intent.actual?.trim();
+
+    // 1. style_assertion only when the change is actually machine-checkable:
+    //    a detectable style prop AND a recorded `before` value. `changed` can
+    //    verify "the value changed" but not a specific stated outcome (e.g.
+    //    "meets WCAG AA"), so any non-empty `expected` falls through to a
+    //    weaker contract — never a false green.
+    if (actual && !expected) {
+      const prop = detectStyleProp(actual, computedStyles);
+      if (prop) {
+        const before = computedStyles?.[prop] ?? extractBefore(actual) ?? "";
+        if (before) {
+          return {
+            contract: {
+              kind: "style_assertion",
+              check: { selector, prop, before, operator: "changed" },
+            },
+            criteria: `Change ${prop} of the selected element`,
+          };
+        }
+      }
+    }
+
+    // 2. anchor_stable when a fingerprint path exists.
+    if (fingerprint?.path) {
+      return {
+        contract: {
+          kind: "anchor_stable",
+          check: { selector, path: fingerprint.path },
+        },
+        criteria: expected || "Element stays findable via its selector and fingerprint",
+      };
+    }
+
+    // 3. human fallback.
+    return {
+      contract: { kind: "human" },
+      criteria: expected || "Human confirmation that the change is correct",
+    };
+  }
+
   function gatherContext(el: Element): Record<string, unknown> {
     const rect = el.getBoundingClientRect();
+    const source = resolveSource(el);
+    const outerHTML = redactElementHTML(el).slice(0, 4000);
+    const innerText = redactText((el as HTMLElement).innerText ?? "").slice(0, 200);
     return {
       url: window.location.href,
       viewport: { width: window.innerWidth, height: window.innerHeight },
       devicePixelRatio: window.devicePixelRatio,
       tagName: el.tagName.toLowerCase(),
       dataComponent: buildComponentPath(el) ?? undefined,
-      outerHTML: el.outerHTML?.slice(0, 4000) ?? "",
-      innerText: (el as HTMLElement).innerText?.slice(0, 200) ?? "",
+      outerHTML,
+      innerText,
       attributes: gatherAttributes(el),
+      source,
+      fingerprint: buildFingerprint(el),
+      trust_order: TRUST_ORDER,
       cssFramework: detectCSSFramework(el),
       computedStyles: gatherComputedStyles(el),
       boundingRect: {
@@ -283,6 +409,11 @@ import { captureSnapshot } from "./snapshot";
       ...(config.branch  ? { branch: config.branch }   : {}),
       ...(config.version ? { appVersion: config.version } : {}),
       sessionHistory: getHistory(),
+      repro: {
+        steps: [],
+        console: getConsoleErrors(),
+        network: [],
+      },
     };
   }
 
@@ -310,8 +441,11 @@ import { captureSnapshot } from "./snapshot";
 
   function gatherAttributes(el: Element): Record<string, string> {
     const out: Record<string, string> = {};
-    for (const attr of Array.from(el.attributes)) {
-      if (attr.value.length < 200) out[attr.name] = attr.value;
+    const kept = redactAttributes(
+      Array.from(el.attributes).map((a) => ({ name: a.name, value: a.value }))
+    );
+    for (const { name, value } of kept) {
+      if (value.length < 200) out[name] = value;
     }
     return out;
   }

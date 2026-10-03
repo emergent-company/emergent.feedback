@@ -46,7 +46,7 @@ func (h *Handler) HandleListReports(c echo.Context) error {
 			Repo:      f.Repo,
 			URL:       f.URL,
 			Selector:  f.Selector,
-			Comment:   f.Comment,
+			Comment:   redactSecrets(f.Comment),
 			IssueURL:  f.IssueURL,
 			CreatedAt: f.CreatedAt.Format("2006-01-02T15:04:05Z"),
 		})
@@ -92,11 +92,11 @@ func (h *Handler) HandleGetReport(c echo.Context) error {
 			Repo:      f.Repo,
 			URL:       f.URL,
 			Selector:  f.Selector,
-			Comment:   f.Comment,
+			Comment:   redactSecrets(f.Comment),
 			IssueURL:  f.IssueURL,
 			CreatedAt: f.CreatedAt.Format("2006-01-02T15:04:05Z"),
 		},
-		Context: m,
+		Context: redactContext(m),
 	}
 
 	if len(f.Screenshot) > 0 {

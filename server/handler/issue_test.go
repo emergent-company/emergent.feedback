@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/emergent-company/emergent.feedback/server/store"
 )
@@ -20,6 +21,44 @@ func TestSelectorShort(t *testing.T) {
 		if got := selectorShort(c.in); got != c.want {
 			t.Fatalf("selectorShort(%q) = %q, want %q", c.in, got, c.want)
 		}
+	}
+}
+
+func TestRuneTruncate(t *testing.T) {
+	if got := runeTruncate("hello", 10); got != "hello" {
+		t.Fatalf("short = %q", got)
+	}
+	if got := runeTruncate("abcdefgh", 3); got != "abc" {
+		t.Fatalf("truncate = %q, want abc", got)
+	}
+	// Multi-byte runes must not be split mid-sequence.
+	s := "héllo wörld"
+	if got := runeTruncate(s, 5); got != "héllo" {
+		t.Fatalf("rune truncate = %q, want %q", got, "héllo")
+	}
+	// Valid UTF-8 output even when a byte-boundary slice would break.
+	if !utf8.ValidString(runeTruncate("日本語のテキスト", 3)) {
+		t.Fatal("runeTruncate produced invalid UTF-8")
+	}
+}
+
+func TestSelectorShortRuneSafe(t *testing.T) {
+	// 60 multi-byte runes must not produce invalid UTF-8 or a split rune.
+	sel := "main > " + strings.Repeat("é", 80)
+	got := selectorShort(sel)
+	if !utf8.ValidString(got) {
+		t.Fatal("selectorShort produced invalid UTF-8")
+	}
+	if len([]rune(got)) != 58 { // 57 runes + "…"
+		t.Fatalf("selectorShort rune len = %d, want 58", len([]rune(got)))
+	}
+}
+
+func TestFormatEventDetailRuneSafe(t *testing.T) {
+	long := strings.Repeat("é", 80)
+	got := formatEventDetail("input", map[string]any{"tagName": "input", "value": long})
+	if !utf8.ValidString(got) {
+		t.Fatal("formatEventDetail produced invalid UTF-8")
 	}
 }
 
@@ -122,6 +161,51 @@ func TestShortenEventURL(t *testing.T) {
 		if got := shortenEventURL(c.in); got != c.want {
 			t.Fatalf("shortenEventURL(%q) = %q, want %q", c.in, got, c.want)
 		}
+	}
+}
+
+func TestShortenEventURLScrubsSecrets(t *testing.T) {
+	got := shortenEventURL("https://a.com/path?token=secretvalue&other=1")
+	if strings.Contains(got, "secretvalue") {
+		t.Fatalf("sensitive query value leaked: %q", got)
+	}
+	if !strings.Contains(got, "redacted") {
+		t.Fatalf("expected redaction marker in %q", got)
+	}
+}
+
+func TestFormatEventDetailRedactsSecrets(t *testing.T) {
+	if got := formatEventDetail("input", map[string]any{"tagName": "input", "value": "api_key=sk-abcdefghijklmnop"}); strings.Contains(got, "sk-abcdefghijklmnop") {
+		t.Fatalf("input value leaked: %q", got)
+	}
+	if got := formatEventDetail("click", map[string]any{"tagName": "button", "text": "token eyJhbGciOiJIUzI1NiJ9.abc.def"}); strings.Contains(got, "eyJhbGci") {
+		t.Fatalf("click text leaked: %q", got)
+	}
+}
+
+func TestWriteReproRedactsConsoleNetwork(t *testing.T) {
+	ctx := map[string]any{
+		"console": []any{map[string]any{"level": "error", "message": "token sk-abcdefghijklmnop leaked"}},
+		"network": []any{map[string]any{"method": "GET", "url": "https://app.example.com/api?token=eyJhbGciOiJIUzI1NiJ9.abc.def"}},
+	}
+	ctxJSON, _ := json.Marshal(ctx)
+	items := []store.Feedback{{
+		ID:          1,
+		URL:         "https://app.example.com/",
+		Selector:    "button",
+		Comment:     "x",
+		ContextJSON: string(ctxJSON),
+		GitHubUser:  "alice",
+	}}
+	_, body := buildIssueContent(items, "")
+	if strings.Contains(body, "sk-abcdefghijklmnop") {
+		t.Fatalf("console secret leaked into issue body:\n%s", body)
+	}
+	if strings.Contains(body, "eyJhbGci") {
+		t.Fatalf("network secret leaked into issue body:\n%s", body)
+	}
+	if !strings.Contains(body, "[redacted]") {
+		t.Fatalf("expected redacted marker in issue body:\n%s", body)
 	}
 }
 

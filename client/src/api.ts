@@ -1,6 +1,23 @@
 // api.ts — all fetch() calls to the emergent.feedback microservice.
 
 import type { OverlayConfig } from "./config";
+import type { VerificationContract } from "./envelope";
+
+export type VerifyResult = "green" | "amber" | "red";
+
+export interface VerifyPendingItem {
+  id: number;
+  selector: string;
+  contract: VerificationContract;
+}
+
+export interface VerifyInfo {
+  id: number;
+  selector: string;
+  contract: VerificationContract;
+  last_result: VerifyResult | null;
+  last_detail: string | null;
+}
 
 export interface FeedbackComment {
   id: number;
@@ -30,7 +47,6 @@ export interface CreateFeedbackParams {
   context: Record<string, unknown>;
   repo: string;
   label: string;
-  feedbackType?: string;
   screenshot?: string;
   snapshot?: string;
 }
@@ -45,6 +61,13 @@ export interface ExportIssueParams {
 export interface ExportIssueResult {
   issue_url: string;
   issue_number: number;
+}
+
+export interface FeedbackStatus {
+  id: number;
+  selector: string;
+  status: string;
+  issue_url: string;
 }
 
 export class APIClient {
@@ -156,5 +179,49 @@ export class APIClient {
     });
   }
 
+  /** Mark a feedback item as applied (edit landed). */
+  async markApplied(id: number, summary?: string): Promise<unknown> {
+    return this.fetchJSON(`/feedback/${id}/applied`, {
+      method: "POST",
+      body: JSON.stringify(summary ? { summary } : {}),
+    });
+  }
+
+  /** Mark a feedback item as resolved (verified done). */
+  async markResolved(id: number, summary?: string): Promise<unknown> {
+    return this.fetchJSON(`/feedback/${id}/resolve`, {
+      method: "POST",
+      body: JSON.stringify(summary ? { summary } : {}),
+    });
+  }
+
+  /** Post a live verification-contract result for a feedback item. */
+  async postVerifyResult(id: number, result: VerifyResult, detail?: string): Promise<unknown> {
+    const body: Record<string, unknown> = { result };
+    if (detail) body.detail = detail;
+    return this.fetchJSON(`/feedback/${id}/verify-result`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  }
+
+  /** List feedback items on a page whose verification contract is awaiting re-check. */
+  async getVerifyPending(url: string): Promise<VerifyPendingItem[]> {
+    return this.fetchJSON<VerifyPendingItem[]>(
+      `/feedback/verify-pending?url=${encodeURIComponent(url)}`
+    );
+  }
+
+  /** Fetch a single feedback item's verification contract and last result. */
+  async getVerify(id: number): Promise<VerifyInfo> {
+    return this.fetchJSON<VerifyInfo>(`/feedback/${id}/verify`);
+  }
+
+  /** List feedback items + statuses for a page URL. */
+  async listStatus(url: string): Promise<FeedbackStatus[]> {
+    return this.fetchJSON<FeedbackStatus[]>(
+      `/feedback/status?url=${encodeURIComponent(url)}`
+    );
+  }
 
 }

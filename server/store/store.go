@@ -93,6 +93,40 @@ CREATE TABLE IF NOT EXISTS user_tokens (
   updated_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
 );
 `},
+	{5, "feedback_lifecycle", `
+ALTER TABLE feedback ADD COLUMN applied_at TEXT;
+ALTER TABLE feedback ADD COLUMN verified_at TEXT;
+ALTER TABLE feedback ADD COLUMN resolved_at TEXT;
+ALTER TABLE feedback ADD COLUMN verification_result TEXT;
+ALTER TABLE feedback ADD COLUMN verification_detail TEXT;
+CREATE TABLE IF NOT EXISTS feedback_events (
+  seq INTEGER PRIMARY KEY AUTOINCREMENT,
+  feedback_id INTEGER NOT NULL,
+  type TEXT NOT NULL,
+  actor TEXT,
+  detail TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+);
+CREATE INDEX IF NOT EXISTS feedback_events_feedback_idx ON feedback_events(feedback_id);
+`},
+	{6, "replay", `
+ALTER TABLE feedback ADD COLUMN replay BLOB;
+ALTER TABLE feedback ADD COLUMN replay_size INTEGER;
+`},
+	{7, "sourcemaps_dedupe", `
+CREATE TABLE IF NOT EXISTS sourcemaps (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  repo TEXT NOT NULL,
+  version TEXT NOT NULL DEFAULT '',
+  path TEXT NOT NULL,
+  content BLOB NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+  UNIQUE(repo, version, path)
+);
+ALTER TABLE feedback ADD COLUMN dedupe_key TEXT;
+ALTER TABLE feedback ADD COLUMN duplicate_of INTEGER;
+CREATE INDEX IF NOT EXISTS feedback_dedupe_idx ON feedback(repo, dedupe_key);
+`},
 }
 
 // Store wraps the SQLite database connection.

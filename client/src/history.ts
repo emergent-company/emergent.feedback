@@ -2,6 +2,7 @@
 // Starts on page load, captures last N events for feedback context.
 
 import { buildSelector, nearestComponent } from "./selector";
+import { redactPII, sanitizeURL } from "./redact";
 
 export interface SessionEvent {
   type: "navigation" | "input" | "click";
@@ -29,13 +30,48 @@ function pushEvent(type: SessionEvent["type"], data: Record<string, unknown>): v
   if (events.length > MAX_EVENTS) events.shift();
 }
 
-// isSensitive reports whether an input's value should be redacted from session
-// history. Detects password fields plus common sensitive-field signals (name,
-// id, autocomplete) so tokens, card numbers, and SSNs never get recorded.
-function isSensitive(el: HTMLInputElement): boolean {
-  if (el.type === "password") return true;
-  const hay = [el.name, el.id, el.getAttribute("autocomplete") ?? ""].join(" ").toLowerCase();
-  return /(password|passwd|pwd|secret|token|api[_-]?key|credit|card|cvv|cvc|ssn|social.?security|routing|iban)/.test(hay);
+// Common sensitive-field signals (name, id, autocomplete, aria-label) so
+// tokens, card numbers, emails, phones, names, and SSNs never get recorded.
+const SENSITIVE_FIELD =
+  /(password|passwd|pwd|secret|token|api[_-]?key|credit|card|cvv|cvc|ssn|social.?security|routing|iban|email|e-mail|tel|phone|mobile|name|firstname|lastname|address|username|login|dob|birth)/;
+
+// isSensitive reports whether a control's value should be redacted from session
+// history. Treats password/email/tel inputs as sensitive regardless of name/id/
+// autocomplete, plus any control whose name/id/autocomplete/aria-label matches
+// the sensitive-field signals.
+function isSensitive(el: Element): boolean {
+  const type = (el as HTMLInputElement).type;
+  if (type === "password" || type === "email" || type === "tel") return true;
+  const hay = [
+    el.getAttribute("name") ?? "",
+    el.id,
+    el.getAttribute("autocomplete") ?? "",
+    el.getAttribute("aria-label") ?? "",
+  ]
+    .join(" ")
+    .toLowerCase();
+  return SENSITIVE_FIELD.test(hay);
+}
+
+// clickIsSensitive reports whether a clicked control's text should be redacted.
+// Extends isSensitive to cover the control's associated <label> text and, when
+// the target is itself a <label>, the control it labels.
+function clickIsSensitive(el: Element): boolean {
+  if (isSensitive(el)) return true;
+  const labels = (el as HTMLInputElement).labels;
+  if (labels && labels.length) {
+    for (const label of Array.from(labels)) {
+      if (label.textContent && SENSITIVE_FIELD.test(label.textContent.toLowerCase())) return true;
+    }
+  }
+  if (el.tagName.toLowerCase() === "label") {
+    const htmlFor = el.getAttribute("for");
+    if (htmlFor) {
+      const control = document.getElementById(htmlFor);
+      if (control && isSensitive(control)) return true;
+    }
+  }
+  return false;
 }
 
 export function startRecording(): void {
@@ -48,7 +84,7 @@ export function startRecording(): void {
   window.addEventListener("popstate", () => {
     const newUrl = window.location.href;
     if (newUrl !== currentUrl) {
-      pushEvent("navigation", { url: newUrl, previousUrl: currentUrl, title: document.title });
+      pushEvent("navigation", { url: sanitizeURL(newUrl), previousUrl: sanitizeURL(currentUrl), title: document.title });
       currentUrl = newUrl;
     }
   });
@@ -65,7 +101,7 @@ export function startRecording(): void {
       const r = origPushState(...args);
       const newUrl = window.location.href;
       if (newUrl !== prevUrl) {
-        pushEvent("navigation", { url: newUrl, previousUrl: prevUrl, title: document.title });
+        pushEvent("navigation", { url: sanitizeURL(newUrl), previousUrl: sanitizeURL(prevUrl), title: document.title });
         currentUrl = newUrl;
       }
       return r;
@@ -77,7 +113,7 @@ export function startRecording(): void {
       const r = origReplaceState(...args);
       const newUrl = window.location.href;
       if (newUrl !== prevUrl) {
-        pushEvent("navigation", { url: newUrl, previousUrl: prevUrl, title: document.title });
+        pushEvent("navigation", { url: sanitizeURL(newUrl), previousUrl: sanitizeURL(prevUrl), title: document.title });
         currentUrl = newUrl;
       }
       return r;
@@ -99,7 +135,7 @@ export function startRecording(): void {
     if (key === lastInputKey && now - lastInputTime < 500) {
       const last = events[events.length - 1];
       if (last?.type === "input") {
-        last.data.value = isSensitive(el) ? "<redacted>" : el.value;
+        last.data.value = isSensitive(el) ? "[redacted]" : redactPII(el.value);
         last.timestamp = new Date().toISOString();
         lastInputTime = now;
         return;
@@ -113,7 +149,7 @@ export function startRecording(): void {
       component,
       tagName: tag,
       inputType: el.type || "text",
-      value: isSensitive(el) ? "<redacted>" : el.value,
+      value: isSensitive(el) ? "[redacted]" : redactPII(el.value),
     });
   }, true);
 
@@ -127,7 +163,7 @@ export function startRecording(): void {
       component: nearestComponent(target),
       tagName: "select",
       inputType: "select",
-      value: el.value,
+      value: isSensitive(el) ? "[redacted]" : redactPII(el.value),
     });
   }, true);
 
@@ -137,7 +173,8 @@ export function startRecording(): void {
     const tag = target.tagName.toLowerCase();
     const role = target.getAttribute("role");
     if (tag !== "a" && tag !== "button" && role !== "button") return;
-    const text = (target.textContent || "").trim().slice(0, 80);
+    const raw = (target.textContent || "").trim().slice(0, 80);
+    const text = clickIsSensitive(target) ? "[redacted]" : redactPII(raw);
     pushEvent("click", {
       selector: buildSelector(target),
       component: nearestComponent(target),

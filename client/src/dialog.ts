@@ -1,6 +1,7 @@
 // dialog.ts — element feedback dialog (existing comments + compose) and login dialog.
 
 import type { FeedbackComment } from "./api";
+import type { FeedbackIntent, IntentAction, ScopeBreadth } from "./envelope";
 
 const DIALOG_ID = "__ef_dialog__";
 const STYLE_ID = "__ef_styles__";
@@ -34,6 +35,9 @@ function injectStyles(): void {
       flex-direction: column;
       overflow: hidden;
     }
+    /* Programmatic focus target — no visible ring on the card itself. */
+    #__ef_dialog__ .ef-card:focus,
+    #__ef_dialog__ .ef-login-card:focus { outline: none; }
     #__ef_dialog__ .ef-header {
       padding: 14px 18px 10px;
       border-bottom: 1px solid #e8e8e8;
@@ -99,7 +103,7 @@ function injectStyles(): void {
     }
     #__ef_dialog__ .ef-comment-date {
       font-size: 11px;
-      color: #999;
+      color: #767676;
     }
     #__ef_dialog__ .ef-comment-text {
       font-size: 13px;
@@ -115,6 +119,11 @@ function injectStyles(): void {
       gap: 8px;
       padding: 12px 18px;
       min-height: 0;
+      overflow-y: auto;
+    }
+    @media (max-width: 420px) {
+      #__ef_dialog__ .ef-intent-label { min-width: 0; }
+      #__ef_dialog__ .ef-hint { padding-left: 0; }
     }
 
     #__ef_dialog__ textarea {
@@ -135,7 +144,7 @@ function injectStyles(): void {
       border-color: #4f86f7;
       box-shadow: 0 0 0 3px rgba(79,134,247,0.15);
     }
-    #__ef_dialog__ textarea::placeholder { color: #aaa; }
+    #__ef_dialog__ textarea::placeholder { color: #767676; }
     #__ef_dialog__ .ef-error {
       color: #c53030;
       font-size: 12px;
@@ -210,7 +219,7 @@ function injectStyles(): void {
     }
     #__ef_dialog__ .ef-meta-toggle summary {
       font-size: 11px;
-      color: #888;
+      color: #767676;
       cursor: pointer;
       user-select: none;
       list-style: none;
@@ -235,7 +244,7 @@ function injectStyles(): void {
       line-height: 1.6;
     }
     #__ef_dialog__ .ef-meta-key {
-      color: #999;
+      color: #767676;
       white-space: nowrap;
     }
     #__ef_dialog__ .ef-meta-val {
@@ -274,7 +283,7 @@ function injectStyles(): void {
       display: inline-block;
       width: 36px;
       font-weight: 600;
-      color: #888;
+      color: #767676;
       text-transform: uppercase;
       flex-shrink: 0;
     }
@@ -310,7 +319,7 @@ function injectStyles(): void {
     }
     #__ef_dialog__ .ef-topic-label {
       font-size: 11px;
-      color: #888;
+      color: #767676;
     }
     #__ef_dialog__ .ef-topic-input {
       width: 100%;
@@ -340,7 +349,7 @@ function injectStyles(): void {
     }
     #__ef_dialog__ .ef-component-label {
       font-size: 11px;
-      color: #999;
+      color: #767676;
       white-space: nowrap;
       flex-shrink: 0;
     }
@@ -383,8 +392,126 @@ function injectStyles(): void {
       font-family: ui-monospace, "SF Mono", Menlo, monospace;
     }
     #__ef_dialog__ .ef-target-chip-label {
-      color: #999;
+      /* on #f2f2f2 chip — #767676 only clears 4.0:1 there */
+      color: #666666;
       font-family: inherit;
+    }
+
+    /* ── Intent micro-form ─────────────────────────────────────────────────── */
+    #__ef_dialog__ .ef-intent {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      flex-shrink: 0;
+    }
+    #__ef_dialog__ .ef-intent-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    #__ef_dialog__ .ef-intent-label {
+      font-size: 10px;
+      font-weight: 700;
+      color: #767676;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      min-width: 54px;
+      flex-shrink: 0;
+    }
+    #__ef_dialog__ .ef-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      flex: 1;
+      min-width: 0;
+    }
+    #__ef_dialog__ .ef-chip {
+      padding: 3px 11px;
+      border-radius: 20px;
+      border: 1.5px solid #ddd;
+      background: #fff;
+      color: #555;
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1.4;
+      font-family: inherit;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.1s, border-color 0.1s, color 0.1s;
+    }
+    #__ef_dialog__ .ef-chip:hover { border-color: #bbb; background: #fafafa; }
+    #__ef_dialog__ .ef-chip:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(79,134,247,0.2);
+    }
+    #__ef_dialog__ .ef-chip.ef-chip-on {
+      background: #eef3ff;
+      border-color: #4f86f7;
+      color: #2b5fd0;
+    }
+    #__ef_dialog__ .ef-chip.ef-chip-muted {
+      /* chip hover background is #fafafa */
+      color: #666666;
+      border-style: dashed;
+      font-weight: 400;
+    }
+    #__ef_dialog__ .ef-hint {
+      font-size: 11px;
+      color: #767676;
+      flex-basis: 100%;
+      padding-left: 62px;
+      line-height: 1.4;
+    }
+
+    /* Current (captured actual) read-out */
+    #__ef_dialog__ .ef-current {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 9px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      background: #fafafa;
+      flex: 1;
+      min-width: 0;
+    }
+    #__ef_dialog__ .ef-swatch {
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+      border: 1px solid rgba(0,0,0,0.15);
+      flex-shrink: 0;
+      overflow: hidden;
+      /* checkerboard shows through translucent colours */
+      background-image:
+        linear-gradient(45deg, #e6e6e6 25%, transparent 25%, transparent 75%, #e6e6e6 75%),
+        linear-gradient(45deg, #e6e6e6 25%, transparent 25%, transparent 75%, #e6e6e6 75%);
+      background-size: 8px 8px;
+      background-position: 0 0, 4px 4px;
+    }
+    #__ef_dialog__ .ef-swatch > span {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    #__ef_dialog__ .ef-current-prop {
+      font-size: 11px;
+      /* on #fafafa read-out background */
+      color: #666666;
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+    #__ef_dialog__ .ef-current input {
+      flex: 1;
+      min-width: 0;
+      border: none;
+      background: transparent;
+      padding: 2px 0;
+      font-size: 12px;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      color: #111;
+      outline: none;
     }
 
     /* ── Login card ────────────────────────────────────────────────────────── */
@@ -426,6 +553,53 @@ function getOrCreateDialog(): HTMLElement {
   return el;
 }
 
+// ── Modal focus management ────────────────────────────────────────────────────
+// The overlay is a custom <div> modal, so we implement the focus semantics a
+// native <dialog> would give us: move focus inside on open, keep Tab contained,
+// and return focus to the invoking element on close.
+
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), textarea:not([disabled]), ' +
+  'input:not([disabled]):not([type="hidden"]), select:not([disabled]), ' +
+  'summary, [tabindex]:not([tabindex="-1"])';
+
+let focusReturnEl: HTMLElement | null = null;
+let dialogKeydown: ((e: KeyboardEvent) => void) | null = null;
+
+function getFocusable(card: HTMLElement): HTMLElement[] {
+  return Array.from(card.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
+    .filter((el) => el.offsetParent !== null || el === document.activeElement);
+}
+
+/**
+ * Wire focus containment + restoration for a dialog card. Captures the element
+ * that currently has focus so closeDialog() can restore it, moves focus to the
+ * card itself (a stable, non-keyboard-triggering target), and traps Tab /
+ * Shift+Tab inside the card while it is open.
+ */
+function activateDialog(card: HTMLElement): void {
+  focusReturnEl = (document.activeElement as HTMLElement | null) ?? null;
+
+  dialogKeydown = (e: KeyboardEvent) => {
+    if (e.key !== "Tab") return;
+    const items = getFocusable(card);
+    if (items.length === 0) { e.preventDefault(); card.focus(); return; }
+    const first = items[0];
+    const last = items[items.length - 1];
+    const active = document.activeElement as HTMLElement | null;
+    if (!active || active === card || !card.contains(active)) {
+      e.preventDefault();
+      (e.shiftKey ? last : first).focus();
+      return;
+    }
+    if (e.shiftKey && active === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
+  };
+  document.addEventListener("keydown", dialogKeydown, true);
+
+  card.focus();
+}
+
 export type FeedbackType = "bug" | "enhancement";
 
 export interface SubmitFeedbackOptions {
@@ -440,9 +614,71 @@ export interface SubmitFeedbackOptions {
   componentHierarchy?: { name: string; isChild: boolean }[];
   selectedComponentIdx?: number;
   onComponentChange?: (index: number) => void;
-  onSubmit: (comment: string, type: FeedbackType) => Promise<number>; // returns new feedback ID
+  /** Submits a comment; resolves with the new feedback ID when known. */
+  onSubmit: (comment: string, type: FeedbackType, intent: FeedbackIntent) => Promise<number | void>;
   onExport: (ids: number[], type: FeedbackType, issueTopic: string) => Promise<void>;
   onCancel: () => void;
+}
+
+// ── Intent micro-form helpers ────────────────────────────────────────────────
+
+const INTENT_ACTIONS: { value: IntentAction; label: string }[] = [
+  { value: "change", label: "Change" },
+  { value: "add", label: "Add" },
+  { value: "remove", label: "Remove" },
+  { value: "move", label: "Move" },
+  { value: "fix", label: "Fix" },
+  { value: "refactor", label: "Refactor" },
+  { value: "investigate", label: "Investigate" },
+];
+
+/** Default action verb for a feedback type (bug → fix, enhancement → change). */
+function inferAction(type: FeedbackType): IntentAction {
+  return type === "bug" ? "fix" : "change";
+}
+
+interface ExpectedSuggestion {
+  value: string;
+  label: string;
+  /** Short structured sentence written into intent.expected when tapped. */
+  sentence: string;
+}
+
+/**
+ * Auto-suggest "what did you expect?" chips from captured element signals.
+ * Returns [] when nothing contextual applies — the caller hides the row.
+ */
+function buildExpectedSuggestions(
+  styles: Record<string, string> | undefined,
+  tagName: string
+): ExpectedSuggestion[] {
+  const out: ExpectedSuggestion[] = [];
+  const hasColor = !!styles && !!(styles["color"] || styles["backgroundColor"]);
+  const buttonish = tagName === "button" || tagName === "a" || tagName === "input";
+
+  if (hasColor) {
+    out.push({ value: "contrast", label: "More contrast", sentence: "Higher contrast — meets WCAG AA (≥ 4.5:1)" });
+    out.push({ value: "darker", label: "Darker", sentence: "Darker color" });
+    if (buttonish) out.push({ value: "match", label: "Match other buttons", sentence: "Match the style of other buttons" });
+    out.push({ value: "different-color", label: "Different color", sentence: "A different color" });
+  }
+  if (styles?.["fontSize"]) {
+    out.push({ value: "larger", label: "Larger", sentence: "Larger text" });
+    out.push({ value: "smaller", label: "Smaller", sentence: "Smaller text" });
+  }
+  return out;
+}
+
+/** Pick the single most relevant captured actual value to pre-fill intent.actual. */
+function pickCurrent(
+  styles: Record<string, string> | undefined
+): { label: string; value: string; swatch?: string } | null {
+  if (!styles) return null;
+  if (styles["color"]) return { label: "text color", value: styles["color"], swatch: styles["color"] };
+  if (styles["backgroundColor"]) return { label: "background", value: styles["backgroundColor"], swatch: styles["backgroundColor"] };
+  if (styles["fontSize"]) return { label: "font size", value: styles["fontSize"] };
+  if (styles["fontWeight"]) return { label: "weight", value: styles["fontWeight"] };
+  return null;
 }
 
 /** Shows the element feedback dialog: existing comments + compose area. */
@@ -525,11 +761,34 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
 
   const outerHTML = ctx["outerHTML"] as string | undefined;
 
+  // ── Intent micro-form pieces ───────────────────────────────────────────────
+  const tagName = String(ctx["tagName"] ?? "").toLowerCase();
+  const suggestions = buildExpectedSuggestions(styles, tagName);
+  const current = pickCurrent(styles);
+
+  const expectedRowHTML = suggestions.length > 0 ? `
+        <div class="ef-intent-row">
+          <span class="ef-intent-label">Expected</span>
+          <div class="ef-chips" id="__ef_expected__">
+            ${suggestions.map((s) => `<button type="button" class="ef-chip${s.value === "__below__" ? " ef-chip-muted" : ""}" data-expected="${s.value}" data-sentence="${escapeHtml(s.sentence)}" aria-pressed="false">${escapeHtml(s.label)}</button>`).join("")}
+          </div>
+        </div>` : "";
+
+  const currentRowHTML = current ? `
+        <div class="ef-intent-row">
+          <span class="ef-intent-label">Current</span>
+          <div class="ef-current">
+            ${current.swatch ? `<span class="ef-swatch"><span style="background:${escapeHtml(current.swatch)}"></span></span>` : ""}
+            <span class="ef-current-prop">${escapeHtml(current.label)}</span>
+            <input id="__ef_actual__" type="text" value="${escapeHtml(current.value)}" spellcheck="false" aria-label="Current value">
+          </div>
+        </div>` : "";
+
   dialog.innerHTML = `
-    <div class="ef-card">
+    <div class="ef-card" role="dialog" aria-modal="true" aria-labelledby="__ef_title__" tabindex="-1">
       <div class="ef-header">
         <div class="ef-header-top">
-          <h2>${title}</h2>
+          <h2 id="__ef_title__">${title}</h2>
           <div class="ef-user-pill">
             <img src="${escapeHtml(opts.user.avatarUrl)}" alt="">
             <span>${escapeHtml(opts.user.login)}</span>
@@ -554,13 +813,30 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
           <label class="ef-topic-label" for="__ef_topic__">Issue title</label>
           <input class="ef-topic-input" id="__ef_topic__" type="text" value="${escapeHtml(opts.defaultIssueTopic)}">
         </div>
-        <textarea id="__ef_comment__" placeholder="Add a comment…"></textarea>
         <div class="ef-type-toggle">
           <input type="radio" name="__ef_type__" id="__ef_type_bug__" value="bug">
           <label for="__ef_type_bug__">🐛 Bug</label>
           <input type="radio" name="__ef_type__" id="__ef_type_enh__" value="enhancement" checked>
           <label for="__ef_type_enh__">✨ Enhancement</label>
         </div>
+        <div class="ef-intent">
+          <div class="ef-intent-row">
+            <span class="ef-intent-label">Action</span>
+            <div class="ef-chips" id="__ef_action__"></div>
+          </div>
+          ${expectedRowHTML}
+          ${currentRowHTML}
+          <div class="ef-intent-row">
+            <span class="ef-intent-label">Scope</span>
+            <div class="ef-chips" id="__ef_scope__">
+              <button type="button" class="ef-chip ef-chip-on" data-breadth="element" aria-pressed="true">This element</button>
+              <button type="button" class="ef-chip" data-breadth="region" aria-pressed="false">Region</button>
+              <button type="button" class="ef-chip" data-breadth="multi" aria-pressed="false">Multiple</button>
+            </div>
+            <span class="ef-hint" id="__ef_scope_hint__"></span>
+          </div>
+        </div>
+        <textarea id="__ef_comment__" placeholder="Anything else? (optional)"></textarea>
         <div class="ef-error" id="__ef_err__"></div>
       </div>
       <div class="ef-footer">
@@ -571,6 +847,9 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
       </div>
     </div>
   `;
+
+  const card = dialog.querySelector<HTMLElement>(".ef-card")!;
+  activateDialog(card);
 
   const textarea = dialog.querySelector<HTMLTextAreaElement>("#__ef_comment__")!;
   const submitBtn = dialog.querySelector<HTMLButtonElement>("#__ef_submit__")!;
@@ -595,7 +874,109 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     return input?.value.trim() || opts.defaultIssueTopic;
   };
 
-  textarea.focus();
+  // ── Intent micro-form state + wiring ───────────────────────────────────────
+  const actionWrap = dialog.querySelector<HTMLElement>("#__ef_action__")!;
+  const expectedWrap = dialog.querySelector<HTMLElement>("#__ef_expected__");
+  const scopeWrap = dialog.querySelector<HTMLElement>("#__ef_scope__")!;
+  const scopeHint = dialog.querySelector<HTMLElement>("#__ef_scope_hint__")!;
+  const actualInput = dialog.querySelector<HTMLInputElement>("#__ef_actual__");
+
+  let action: IntentAction = inferAction(getType());
+  let actionTouched = false;
+  let expected = "";
+  // True once the human edits the prefilled "Current" value. Drives provenance:
+  // browser-prefilled actual is `captured`; human-edited actual is `stated`.
+  let actualEdited = false;
+  let breadth: ScopeBreadth = "element";
+
+  const renderActions = () => {
+    actionWrap.innerHTML = INTENT_ACTIONS.map((a) =>
+      `<button type="button" class="ef-chip${a.value === action ? " ef-chip-on" : ""}" data-action="${a.value}" aria-pressed="${a.value === action}">${a.label}</button>`
+    ).join("");
+  };
+  renderActions();
+
+  actionWrap.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-action]");
+    if (!btn) return;
+    action = btn.dataset.action as IntentAction;
+    actionTouched = true;
+    renderActions();
+  });
+
+  dialog.querySelectorAll<HTMLInputElement>("input[name='__ef_type__']").forEach((inp) => {
+    inp.addEventListener("change", () => {
+      if (!actionTouched) { action = inferAction(getType()); renderActions(); }
+    });
+  });
+
+  if (expectedWrap) {
+    const expBtns = Array.from(expectedWrap.querySelectorAll<HTMLButtonElement>("[data-expected]"));
+    const clearExpected = () => expBtns.forEach((b) => {
+      b.classList.remove("ef-chip-on");
+      b.setAttribute("aria-pressed", "false");
+    });
+    expBtns.forEach((btn) => btn.addEventListener("click", () => {
+      const val = btn.dataset.expected ?? "";
+      if (val === "__below__") { expected = ""; clearExpected(); textarea.focus(); return; }
+      const wasOn = btn.classList.contains("ef-chip-on");
+      clearExpected();
+      if (wasOn) { expected = ""; return; } // tap again to clear
+      btn.classList.add("ef-chip-on");
+      btn.setAttribute("aria-pressed", "true");
+      expected = btn.dataset.sentence ?? "";
+    }));
+  }
+
+  scopeWrap.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-breadth]");
+    if (!btn) return;
+    breadth = (btn.dataset.breadth ?? "element") as ScopeBreadth;
+    scopeWrap.querySelectorAll<HTMLButtonElement>("[data-breadth]").forEach((b) => {
+      const on = b === btn;
+      b.classList.toggle("ef-chip-on", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    // Honest: region/multi selection is not wired up in this build.
+    scopeHint.textContent = breadth === "element"
+      ? ""
+      : "Region/multi selection isn't captured yet — this element is recorded.";
+  });
+
+  // Any edit (including clearing the field) marks the actual value as stated.
+  actualInput?.addEventListener("input", () => { actualEdited = true; });
+  actualInput?.addEventListener("change", () => { actualEdited = true; });
+
+  /** Build the structured intent passed to onSubmit as the third argument. */
+  const buildIntent = (): FeedbackIntent => {
+    const actualVal = actualInput?.value.trim();
+    return {
+      kind: getType(),
+      action,
+      expected: expected.trim() || undefined,
+      actual: actualVal ? `${current ? current.label + ": " : ""}${actualVal}` : undefined,
+      actualEdited,
+      scope: { breadth, targets: [opts.selector] },
+    };
+  };
+
+  /**
+   * Comment text for the legacy explanation field. Falls back to a concise
+   * sentence assembled from the structured chips so a chip-only report still
+   * satisfies the server's non-empty comment contract.
+   */
+  const collectComment = (): string => {
+    const raw = textarea.value.trim();
+    if (raw) return raw;
+    const parts: string[] = [];
+    if (expected.trim()) parts.push(expected.trim());
+    const actualVal = actualInput?.value.trim();
+    if (actualEdited && actualVal && current) parts.push(`currently ${current.label}: ${actualVal}`);
+    return parts.join(" — ");
+  };
+
+  // No autofocus: the intent chips are the primary surface, and focusing the
+  // (now last) textarea would scroll them out of view and pop the mobile keyboard.
 
   const onKey = (e: KeyboardEvent) => {
     if (e.key === "Escape") {
@@ -614,13 +995,13 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   });
 
   submitBtn.addEventListener("click", async () => {
-    const comment = textarea.value.trim();
-    if (!comment) { errDiv.textContent = "Please enter a comment."; return; }
+    const comment = collectComment();
+    if (!comment) { errDiv.textContent = "Add a note or choose what you expected."; return; }
     submitBtn.disabled = true;
     submitBtn.textContent = "Submitting…";
     errDiv.textContent = "";
     try {
-      await opts.onSubmit(comment, getType());
+      await opts.onSubmit(comment, getType(), buildIntent());
       removeKey();
       closeDialog();
     } catch (err) {
@@ -636,17 +1017,17 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     submitBtn.disabled = true;
     errDiv.textContent = "";
     try {
-      const comment = textarea.value.trim();
+      const comment = collectComment();
       const type = getType();
       const topic = getIssueTopic();
       let ids = [...existingIds];
       if (comment) {
         // Submit the new comment first, then include its ID in the export.
-        const newId = await opts.onSubmit(comment, type);
-        ids = [...ids, newId];
+        const newId = await opts.onSubmit(comment, type, buildIntent());
+        if (typeof newId === "number") ids = [...ids, newId];
       }
       if (ids.length === 0) {
-        errDiv.textContent = "Nothing to export — add a comment first.";
+        errDiv.textContent = "Nothing to export — add a note or choose what you expected.";
         exportBtn.disabled = false;
         exportBtn.textContent = "Send to GitHub";
         submitBtn.disabled = false;
@@ -682,8 +1063,8 @@ export function showLoginDialog(opts: LoginDialogOptions): void {
   const dialog = getOrCreateDialog();
 
   dialog.innerHTML = `
-    <div class="ef-login-card">
-      <h2>Sign in with GitHub</h2>
+    <div class="ef-login-card" role="dialog" aria-modal="true" aria-labelledby="__ef_login_title__" tabindex="-1">
+      <h2 id="__ef_login_title__">Sign in with GitHub</h2>
       <p>Authentication required to submit feedback.</p>
       <div class="ef-login-actions">
         <button class="ef-btn-secondary" id="__ef_cancel__">Cancel</button>
@@ -692,6 +1073,9 @@ export function showLoginDialog(opts: LoginDialogOptions): void {
       <div class="ef-error" id="__ef_err__" style="margin-top:8px"></div>
     </div>
   `;
+
+  const card = dialog.querySelector<HTMLElement>(".ef-login-card")!;
+  activateDialog(card);
 
   const loginBtn = dialog.querySelector<HTMLButtonElement>("#__ef_login__")!;
   const cancelBtn = dialog.querySelector<HTMLButtonElement>("#__ef_cancel__")!;
@@ -719,7 +1103,18 @@ export function showLoginDialog(opts: LoginDialogOptions): void {
 
 export function closeDialog(): void {
   const dialog = document.getElementById(DIALOG_ID);
-  if (dialog) dialog.remove();
+  if (!dialog) return;
+  if (dialogKeydown) {
+    document.removeEventListener("keydown", dialogKeydown, true);
+    dialogKeydown = null;
+  }
+  dialog.remove();
+  // Return focus to the control that opened the dialog, if it still exists.
+  const ret = focusReturnEl;
+  focusReturnEl = null;
+  if (ret && document.contains(ret) && typeof ret.focus === "function") {
+    try { ret.focus(); } catch { /* element may have been removed */ }
+  }
 }
 
 const TOAST_ID = "__ef_toast__";

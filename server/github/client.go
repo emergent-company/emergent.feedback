@@ -285,6 +285,66 @@ func GetIssue(ctx context.Context, accessToken, repo string, number int64) (stri
 	return getIssue(ctx, apiBase, accessToken, repo, number)
 }
 
+// CommentIssue adds a comment to an existing issue.
+func CommentIssue(ctx context.Context, accessToken, repo string, number int64, body string) error {
+	parts := strings.SplitN(repo, "/", 2)
+	if len(parts) != 2 {
+		return fmt.Errorf("github: invalid repo %q (want owner/repo)", repo)
+	}
+	payload := map[string]string{"body": body}
+	b, _ := json.Marshal(payload)
+
+	url := fmt.Sprintf("%s/repos/%s/%s/issues/%d/comments", apiBase, parts[0], parts[1], number)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(b))
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("github: comment issue: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusCreated {
+		var gh struct {
+			Message string `json:"message"`
+		}
+		_ = json.NewDecoder(resp.Body).Decode(&gh)
+		return fmt.Errorf("github: comment issue: status %d: %s", resp.StatusCode, gh.Message)
+	}
+	return nil
+}
+
+// UpdateIssueState patches an issue's state ("open" or "closed").
+func UpdateIssueState(ctx context.Context, accessToken, repo string, number int64, state string) error {
+	parts := strings.SplitN(repo, "/", 2)
+	if len(parts) != 2 {
+		return fmt.Errorf("github: invalid repo %q (want owner/repo)", repo)
+	}
+	payload := map[string]string{"state": state}
+	b, _ := json.Marshal(payload)
+
+	url := fmt.Sprintf("%s/repos/%s/%s/issues/%d", apiBase, parts[0], parts[1], number)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPatch, url, bytes.NewReader(b))
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("github: update issue state: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		var gh struct {
+			Message string `json:"message"`
+		}
+		_ = json.NewDecoder(resp.Body).Decode(&gh)
+		return fmt.Errorf("github: update issue state: status %d: %s", resp.StatusCode, gh.Message)
+	}
+	return nil
+}
+
 func getIssue(ctx context.Context, base, accessToken, repo string, number int64) (string, error) {
 	parts := strings.SplitN(repo, "/", 2)
 	if len(parts) != 2 {

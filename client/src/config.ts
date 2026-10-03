@@ -56,5 +56,14 @@ export function readConfig(): OverlayConfig {
   const sessionId = tag?.dataset.sessionId?.trim() || undefined;
   const sessionIdSelector = tag?.dataset.sessionIdSelector?.trim() || undefined;
 
-  return { apiBase, repo, label, hotkey, branch, version, sessionId, sessionIdSelector };
+  return {
+    apiBase,
+    repo,
+    label,
+    hotkey,
+    branch,
+    version,
+    sessionId,
+    sessionIdSelector,
+  };
 }
