@@ -34,6 +34,8 @@ type AppConfig struct {
 	RedirectURI    string
 	PrivateKeyPEM  string // RSA private key in PEM format
 	InstallationID string // numeric installation ID on the target org/account
+	BotToken       string // optional PAT used to create issues when no GitHub App is configured
+	AuthorMode     string // "bot" (default) or "user"
 
 	keyOnce sync.Once
 	keyVal  *rsa.PrivateKey
@@ -126,12 +128,55 @@ func (c *AppConfig) InstallationToken(ctx context.Context) (string, error) {
 	return instTokenVal, nil
 }
 
+// HasApp reports whether a complete GitHub App bot is configured.
+func (c *AppConfig) HasApp() bool {
+	return c.AppID != "" && c.PrivateKeyPEM != "" && c.InstallationID != ""
+}
+
+// HasBotToken reports whether a bot PAT is configured.
+func (c *AppConfig) HasBotToken() bool { return strings.TrimSpace(c.BotToken) != "" }
+
+// issueTokenSource: "user" when AuthorMode=="user", else "app" if a full App is
+// configured, else "pat" if a bot token is set, else "user".
+func (c *AppConfig) issueTokenSource() string {
+	if c.AuthorMode == "user" {
+		return "user"
+	}
+	if c.HasApp() {
+		return "app"
+	}
+	if c.HasBotToken() {
+		return "pat"
+	}
+	return "user"
+}
+
+// UseUserToken reports whether the reporter's own token is required to author issues.
+func (c *AppConfig) UseUserToken() bool { return c.issueTokenSource() == "user" }
+
+// IssueAuthorToken returns the token to create issues with. userToken is the
+// reporter's token, used in "user" mode (and as the final fallback).
+func (c *AppConfig) IssueAuthorToken(ctx context.Context, userToken string) (string, error) {
+	switch c.issueTokenSource() {
+	case "app":
+		return c.InstallationToken(ctx)
+	case "pat":
+		return strings.TrimSpace(c.BotToken), nil
+	default:
+		if userToken == "" {
+			return "", fmt.Errorf("github: no issue author token available (configure a GitHub App, GH_BOT_TOKEN, or sign in with GitHub)")
+		}
+		return userToken, nil
+	}
+}
+
 // AuthCodeURL builds the GitHub App OAuth authorization URL.
 // GitHub Apps use a slightly different URL from OAuth Apps.
 func (c *AppConfig) AuthCodeURL(state string) string {
 	v := url.Values{}
 	v.Set("client_id", c.ClientID)
 	v.Set("redirect_uri", c.RedirectURI)
+	v.Set("scope", "repo")
 	v.Set("state", state)
 	return "https://github.com/login/oauth/authorize?" + v.Encode()
 }
