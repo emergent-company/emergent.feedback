@@ -43,7 +43,8 @@ type Options struct {
 	StaticFS fs.FS
 	// EnvelopeSchema is the feedback envelope JSON Schema served at /schema/envelope.v1.json. Required.
 	EnvelopeSchema []byte
-	// Extend lets an edition mount extra routes/middleware after the core routes.
+	// Extend mounts extra routes after the core routes are registered. Middleware
+	// added inside Extend applies only to routes registered after it.
 	Extend func(e *echo.Echo, s *store.Store) error
 }
 
@@ -51,6 +52,9 @@ type Options struct {
 func BuildRouter(opts Options) (*echo.Echo, error) {
 	if opts.StaticFS == nil {
 		return nil, errors.New("app: StaticFS is required")
+	}
+	if opts.EnvelopeSchema == nil {
+		return nil, errors.New("app: EnvelopeSchema is required")
 	}
 	e := echo.New()
 	e.HideBanner = true
@@ -203,7 +207,7 @@ func BuildRouter(opts Options) (*echo.Echo, error) {
 }
 
 // originAllowed reports whether the request Origin matches the ALLOWED_ORIGINS
-// allowlist. "*" (or an empty list) allows any origin.
+// allowlist. "*" allows any origin; an empty list allows none.
 func originAllowed(origin, allowlist string) bool {
 	for _, allowed := range strings.Split(allowlist, ",") {
 		allowed = strings.TrimSpace(allowed)

@@ -101,3 +101,79 @@ func TestBuildRouterExtendHook(t *testing.T) {
 		t.Fatalf("GET /__ext body = %q, want %q", rec.Body.String(), sentinel)
 	}
 }
+
+func TestBuildRouterRegistersAllRoutes(t *testing.T) {
+	s, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	defer func() { _ = s.Close() }()
+
+	e, err := BuildRouter(Options{
+		Store:          s,
+		GitHub:         &github.AppConfig{},
+		JWTSecret:      "test-secret",
+		AllowedOrigins: "*",
+		MCPAPIKey:      "",
+		StaticFS:       fstest.MapFS{},
+		EnvelopeSchema: []byte("{}"),
+	})
+	if err != nil {
+		t.Fatalf("BuildRouter: %v", err)
+	}
+
+	registered := map[string]bool{}
+	pathAny := map[string]bool{}
+	for _, r := range e.Routes() {
+		registered[r.Method+" "+r.Path] = true
+		pathAny[r.Path] = true
+	}
+
+	expected := []string{
+		// Public
+		"GET /panel",
+		"GET /",
+		"GET /emergent-feedback.js",
+		"GET /emergent-feedback-replay.js",
+		"GET /static/*",
+		"GET /auth/github",
+		"GET /auth/callback",
+		"GET /health",
+		"GET /schema/envelope.v1.json",
+		"GET /feedback",
+		"GET /issues",
+		// Authenticated
+		"GET /me",
+		"GET /feedback/list",
+		"GET /feedback/verify-pending",
+		"GET /feedback/status",
+		"GET /feedback/:id",
+		"GET /feedback/:id/verify",
+		"GET /feedback/:id/replay",
+		"DELETE /feedback/:id",
+		"POST /feedback/:id/applied",
+		"POST /feedback/:id/resolve",
+		"POST /feedback/:id/verify-result",
+		"GET /api/keys",
+		"POST /api/keys",
+		"DELETE /api/keys/:id",
+		"GET /api/repos",
+		"GET /api/reports",
+		"GET /api/reports/:id",
+		// Rate-limited writes
+		"POST /feedback",
+		"POST /issue/export",
+		"POST /sourcemaps",
+	}
+
+	for _, want := range expected {
+		if !registered[want] {
+			t.Errorf("missing route %q", want)
+		}
+	}
+
+	// MCP is registered via e.Any — any method is acceptable.
+	if !pathAny["/mcp"] {
+		t.Errorf("missing MCP route /mcp")
+	}
+}
