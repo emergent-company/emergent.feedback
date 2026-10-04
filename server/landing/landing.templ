@@ -377,9 +377,9 @@ templ LandingPage() {
 							The same server that powers the managed tier ships as a container. Bring your own database, keep every byte of feedback inside your network.
 						</p>
 						<p class="mt-4 text-sm text-base-content/60">
-							Issues are filed by a GitHub App or a fine-grained bot token — or by each reporter's own token. Login uses GitHub OAuth credentials (a GitHub App or OAuth App both work).
+							Issues are filed by a GitHub App or a fine-grained bot token — or by each reporter's own token. Reporter-token filing needs a GitHub OAuth App with repo scope, or a GitHub App whose Issues permission is read &amp; write. Login uses GitHub OAuth credentials.
 						</p>
-						@ui.Alert(ui.AlertProps{Type: ui.AlertWarning, Style: ui.AlertStyleSoft, Message: "Set GitHub OAuth credentials for sign-in, plus a GitHub App, bot token, or per-reporter tokens for issue filing."})
+						@ui.Alert(ui.AlertProps{Type: ui.AlertWarning, Style: ui.AlertStyleSoft, Message: "Set GitHub OAuth credentials for sign-in, plus a GitHub App, bot token, or reporter tokens (OAuth App repo scope, or GitHub App Issues read & write)."})
 					</div>
 					<div>
 						<p class="mb-2 font-mono text-xs uppercase tracking-widest text-base-content/50">Client</p>

@@ -723,6 +723,8 @@ func (h *Handler) syncIssueStates(ctx context.Context, issues []store.GitHubIssu
 			break
 		}
 		if !tokenReady {
+			// Issue-state sync is server-side and requires a bot credential; in
+			// user mode it degrades to keeping the last-known state.
 			t, err := h.githubBotToken(ctx)
 			if err != nil {
 				// Can't authenticate to GitHub right now; keep last known state.

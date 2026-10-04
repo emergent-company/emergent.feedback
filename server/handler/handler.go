@@ -28,3 +28,12 @@ func New(s *store.Store, ghCfg *github.AppConfig, jwtSecret string) *Handler {
 func (h *Handler) githubBotToken(ctx context.Context) (string, error) {
 	return h.GHConfig.IssueAuthorToken(ctx, "")
 }
+
+// tokenForGitHubAction picks the token for a GitHub call tied to feedback owned
+// by login: the reporter's own token in user mode, otherwise the bot credential.
+func (h *Handler) tokenForGitHubAction(ctx context.Context, login string) (string, error) {
+	if h.GHConfig.UseUserToken() {
+		return h.userTokenFor(ctx, login)
+	}
+	return h.githubBotToken(ctx)
+}

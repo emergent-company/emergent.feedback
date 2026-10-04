@@ -172,6 +172,11 @@ func (c *AppConfig) IssueAuthorToken(ctx context.Context, userToken string) (str
 
 // AuthCodeURL builds the GitHub App OAuth authorization URL.
 // GitHub Apps use a slightly different URL from OAuth Apps.
+//
+// The "repo" scope below applies only to OAuth App sign-in. GitHub Apps ignore
+// the scope parameter — their user-token permissions come from the App's
+// repository permissions. In ISSUE_AUTHOR_MODE=user with a GitHub App, that App
+// must have its "Issues" repository permission set to Read & write.
 func (c *AppConfig) AuthCodeURL(state string) string {
 	v := url.Values{}
 	v.Set("client_id", c.ClientID)

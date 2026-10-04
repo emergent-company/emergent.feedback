@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -69,6 +70,15 @@ func (h *Handler) userToken(c echo.Context) (string, error) {
 		return "", echo.NewHTTPError(http.StatusUnauthorized, "failed to decrypt GitHub token")
 	}
 	return token, nil
+}
+
+// userTokenFor returns the decrypted GitHub token stored for login, if any.
+func (h *Handler) userTokenFor(ctx context.Context, login string) (string, error) {
+	enc, err := h.Store.GetUserToken(ctx, login)
+	if err != nil {
+		return "", err
+	}
+	return decryptToken(enc, h.JWTSecret)
 }
 
 // userRepos returns the authenticated user's GitHub repos (full_name list).
