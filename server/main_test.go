@@ -57,8 +57,6 @@ func TestSourcemapsRouteRateLimited(t *testing.T) {
 		JWTSecret:      "test-secret",
 		AllowedOrigins: "*",
 		MCPAPIKey:      "",
-		StaticFS:       testStaticFS(t),
-		EnvelopeSchema: envelopeSchemaJSON,
 	})
 	if err != nil {
 		t.Fatalf("BuildRouter: %v", err)
