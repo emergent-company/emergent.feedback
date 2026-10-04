@@ -344,7 +344,7 @@ func (h *Handler) commentOnIssue(ctx context.Context, f store.Feedback, body str
 	if !ok {
 		return fmt.Errorf("cannot parse issue number from %q", f.IssueURL)
 	}
-	token, err := h.GHConfig.InstallationToken(ctx)
+	token, err := h.tokenForGitHubAction(ctx, f.GitHubUser)
 	if err != nil {
 		return err
 	}
@@ -360,7 +360,7 @@ func (h *Handler) closeIssue(ctx context.Context, f store.Feedback) error {
 	if !ok {
 		return fmt.Errorf("cannot parse issue number from %q", f.IssueURL)
 	}
-	token, err := h.GHConfig.InstallationToken(ctx)
+	token, err := h.tokenForGitHubAction(ctx, f.GitHubUser)
 	if err != nil {
 		return err
 	}

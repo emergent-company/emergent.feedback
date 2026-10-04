@@ -77,9 +77,9 @@ services:
     environment:
       PORT: "8080"
       DB_PATH: /data/feedback-overlay.db
-      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID}
-      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
-      GITHUB_REDIRECT_URI: https://your-domain.com/auth/callback
+      GH_APP_CLIENT_ID: ${GH_APP_CLIENT_ID}
+      GH_APP_CLIENT_SECRET: ${GH_APP_CLIENT_SECRET}
+      GH_REDIRECT_URI: https://your-domain.com/auth/callback
       JWT_SECRET: ${JWT_SECRET}
 
 volumes:
@@ -89,8 +89,8 @@ volumes:
 ### 3. .env
 
 ```env
-GITHUB_CLIENT_ID=<id>
-GITHUB_CLIENT_SECRET=<secret>
+GH_APP_CLIENT_ID=<id>
+GH_APP_CLIENT_SECRET=<secret>
 JWT_SECRET=<openssl rand -hex 32>
 ```
 
@@ -117,10 +117,12 @@ docker compose up -d
 |----------|---------|-------------|
 | `PORT` | `8080` | HTTP port |
 | `DB_PATH` | `./feedback-overlay.db` | SQLite path |
-| `GITHUB_CLIENT_ID` | — | OAuth client ID |
-| `GITHUB_CLIENT_SECRET` | — | OAuth client secret |
-| `GITHUB_REDIRECT_URI` | — | Must match OAuth callback |
+| `GH_APP_CLIENT_ID` | — | OAuth client ID |
+| `GH_APP_CLIENT_SECRET` | — | OAuth client secret |
+| `GH_REDIRECT_URI` | — | Must match OAuth callback |
 | `JWT_SECRET` | — | Session JWT signing key |
+| `ISSUE_AUTHOR_MODE` | `bot` | Issue author: `bot` (GitHub App or `GH_BOT_TOKEN`) or `user` (reporter's token — needs an OAuth App with `repo` scope, or a GitHub App with "Issues" read & write) |
+| `GH_BOT_TOKEN` | — | Optional fine-grained PAT to author issues when no GitHub App is configured |
 
 ## GitHub labels
 

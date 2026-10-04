@@ -87,14 +87,23 @@ func (h *Handler) HandleExportIssue(c echo.Context) error {
 		title = req.Title
 	}
 
-	// Use a server-side GitHub App installation token — not subject to org OAuth restrictions.
-	installToken, err := h.GHConfig.InstallationToken(ctx)
+	// Resolve the issue author: a GitHub App, a bot PAT, or (fallback) the
+	// reporter's own token, depending on ISSUE_AUTHOR_MODE / configuration.
+	var userToken string
+	if h.GHConfig.UseUserToken() {
+		t, uerr := h.userToken(c)
+		if uerr != nil {
+			return uerr
+		}
+		userToken = t
+	}
+	authorToken, err := h.GHConfig.IssueAuthorToken(ctx, userToken)
 	if err != nil {
-		c.Logger().Errorf("get installation token: %v", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get installation token")
+		c.Logger().Errorf("resolve issue author token: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to resolve GitHub token for issue creation")
 	}
 
-	result, err := github.CreateIssue(ctx, installToken, github.CreateIssueParams{
+	result, err := github.CreateIssue(ctx, authorToken, github.CreateIssueParams{
 		Repo:   req.Repo,
 		Title:  title,
 		Body:   body,
@@ -714,7 +723,9 @@ func (h *Handler) syncIssueStates(ctx context.Context, issues []store.GitHubIssu
 			break
 		}
 		if !tokenReady {
-			t, err := h.GHConfig.InstallationToken(ctx)
+			// Issue-state sync is server-side and requires a bot credential; in
+			// user mode it degrades to keeping the last-known state.
+			t, err := h.githubBotToken(ctx)
 			if err != nil {
 				// Can't authenticate to GitHub right now; keep last known state.
 				break

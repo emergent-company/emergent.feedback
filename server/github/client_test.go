@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 )
 
@@ -41,5 +42,29 @@ func TestGetIssueNon200(t *testing.T) {
 
 	if _, err := getIssue(context.Background(), srv.URL, "tok", "org/repo", 1); err == nil {
 		t.Fatal("expected error for non-200")
+	}
+}
+
+func TestAuthCodeURL(t *testing.T) {
+	cfg := &AppConfig{
+		ClientID:    "client-123",
+		RedirectURI: "https://example.test/auth/callback",
+	}
+	u, err := url.Parse(cfg.AuthCodeURL("state-abc"))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	q := u.Query()
+	if got := q.Get("scope"); got != "repo" {
+		t.Errorf("scope = %q, want repo", got)
+	}
+	if got := q.Get("client_id"); got != "client-123" {
+		t.Errorf("client_id = %q, want client-123", got)
+	}
+	if got := q.Get("redirect_uri"); got != "https://example.test/auth/callback" {
+		t.Errorf("redirect_uri = %q, want https://example.test/auth/callback", got)
+	}
+	if got := q.Get("state"); got != "state-abc" {
+		t.Errorf("state = %q, want state-abc", got)
 	}
 }
