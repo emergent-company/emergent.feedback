@@ -1,10 +1,14 @@
-package main
+package app
 
 import (
 	"context"
 	"crypto/subtle"
+	"errors"
 	"io/fs"
 	"net/http"
+	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/emergent-company/emergent.feedback/server/github"
@@ -22,8 +26,36 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// buildRouter assembles the Echo router with all middleware and routes.
-func buildRouter(s *store.Store, ghCfg *github.AppConfig, jwtSecret, allowedOrigins, mcpAPIKey string) *echo.Echo {
+// Version and Commit are injected at build time via -ldflags.
+var (
+	Version = "dev"
+	Commit  = "unknown"
+)
+
+// Options configures BuildRouter.
+type Options struct {
+	Store          *store.Store
+	GitHub         *github.AppConfig
+	JWTSecret      string
+	AllowedOrigins string
+	MCPAPIKey      string
+	// StaticFS serves the embedded client bundles. Required.
+	StaticFS fs.FS
+	// EnvelopeSchema is the feedback envelope JSON Schema served at /schema/envelope.v1.json. Required.
+	EnvelopeSchema []byte
+	// Extend mounts extra routes after the core routes are registered. Middleware
+	// added inside Extend applies only to routes registered after it.
+	Extend func(e *echo.Echo, s *store.Store) error
+}
+
+// BuildRouter assembles the Echo router with all middleware and routes.
+func BuildRouter(opts Options) (*echo.Echo, error) {
+	if opts.StaticFS == nil {
+		return nil, errors.New("app: StaticFS is required")
+	}
+	if opts.EnvelopeSchema == nil {
+		return nil, errors.New("app: EnvelopeSchema is required")
+	}
 	e := echo.New()
 	e.HideBanner = true
 	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
@@ -47,7 +79,7 @@ func buildRouter(s *store.Store, ghCfg *github.AppConfig, jwtSecret, allowedOrig
 			if origin == "" {
 				return next(c)
 			}
-			if !originAllowed(origin, allowedOrigins) {
+			if !originAllowed(origin, opts.AllowedOrigins) {
 				return next(c)
 			}
 			h := c.Response().Header()
@@ -64,7 +96,7 @@ func buildRouter(s *store.Store, ghCfg *github.AppConfig, jwtSecret, allowedOrig
 	})
 
 	// ── Static: serve embedded emergent-feedback.js ────────────────────────────
-	staticFS, _ := fs.Sub(staticFiles, "static")
+	staticFS := opts.StaticFS
 	e.GET("/emergent-feedback.js", echo.WrapHandler(http.FileServer(http.FS(staticFS))))
 	e.GET("/emergent-feedback-replay.js", echo.WrapHandler(http.FileServer(http.FS(staticFS))))
 
@@ -72,7 +104,7 @@ func buildRouter(s *store.Store, ghCfg *github.AppConfig, jwtSecret, allowedOrig
 	e.GET("/static/*", echo.WrapHandler(staticfs.Handler("/static/")))
 
 	// ── Routes ────────────────────────────────────────────────────────────────
-	h := handler.New(s, ghCfg, jwtSecret)
+	h := handler.New(opts.Store, opts.GitHub, opts.JWTSecret)
 
 	// Panel (public; go-daisy Templ page)
 	e.GET("/panel", func(c echo.Context) error {
@@ -101,7 +133,7 @@ func buildRouter(s *store.Store, ghCfg *github.AppConfig, jwtSecret, allowedOrig
 
 	// Feedback envelope JSON Schema (public).
 	e.GET("/schema/envelope.v1.json", func(c echo.Context) error {
-		return c.Blob(http.StatusOK, "application/json", envelopeSchemaJSON)
+		return c.Blob(http.StatusOK, "application/json", opts.EnvelopeSchema)
 	})
 
 	// Feedback — public read endpoints (counts + public issue refs only, no PII)
@@ -109,7 +141,7 @@ func buildRouter(s *store.Store, ghCfg *github.AppConfig, jwtSecret, allowedOrig
 	e.GET("/issues", h.HandleListIssues)
 
 	// Authenticated routes
-	auth := e.Group("", authmw.RequireAuth(jwtSecret))
+	auth := e.Group("", authmw.RequireAuth(opts.JWTSecret))
 	auth.GET("/me", h.HandleMe)
 	auth.GET("/feedback/list", h.HandleListFeedbackByURL)
 	auth.GET("/feedback/verify-pending", h.HandleVerifyPending)
@@ -150,7 +182,7 @@ func buildRouter(s *store.Store, ghCfg *github.AppConfig, jwtSecret, allowedOrig
 		},
 	)
 	verify := func(ctx context.Context, token string, _ *http.Request) (*mcpauth.TokenInfo, error) {
-		if mcpAPIKey != "" && subtle.ConstantTimeCompare([]byte(token), []byte(mcpAPIKey)) == 1 {
+		if opts.MCPAPIKey != "" && subtle.ConstantTimeCompare([]byte(token), []byte(opts.MCPAPIKey)) == 1 {
 			return &mcpauth.TokenInfo{Scopes: []string{"*"}, Expiration: time.Now().Add(time.Hour), UserID: "mcp-bootstrap"}, nil
 		}
 		repos, err := h.VerifyAPIKey(ctx, token)
@@ -166,5 +198,43 @@ func buildRouter(s *store.Store, ghCfg *github.AppConfig, jwtSecret, allowedOrig
 	authed := mcpauth.RequireBearerToken(verify, nil)(streamable)
 	e.Any("/mcp", echo.WrapHandler(authed))
 
-	return e
+	if opts.Extend != nil {
+		if err := opts.Extend(e, opts.Store); err != nil {
+			return nil, err
+		}
+	}
+	return e, nil
+}
+
+// originAllowed reports whether the request Origin matches the ALLOWED_ORIGINS
+// allowlist. "*" allows any origin; an empty list allows none.
+func originAllowed(origin, allowlist string) bool {
+	for _, allowed := range strings.Split(allowlist, ",") {
+		allowed = strings.TrimSpace(allowed)
+		if allowed == "*" {
+			return true
+		}
+		if allowed == origin {
+			return true
+		}
+	}
+	return false
+}
+
+// envFloatOr reads a float environment variable, falling back to def when the
+// variable is empty or not parseable as a float.
+func envFloatOr(key string, def float64) float64 {
+	if v := os.Getenv(key); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return f
+		}
+	}
+	return def
+}
+
+func envOr(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
 }

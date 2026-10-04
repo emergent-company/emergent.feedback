@@ -10,6 +10,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -18,6 +19,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/emergent-company/emergent.feedback/server/app"
 	"github.com/emergent-company/emergent.feedback/server/github"
 	authmw "github.com/emergent-company/emergent.feedback/server/middleware"
 	"github.com/emergent-company/emergent.feedback/server/store"
@@ -86,7 +88,10 @@ func TestAPIEndToEnd(t *testing.T) {
 	github.SetBaseURLForTesting(mock.URL)
 
 	const jwtSecret = "test-secret"
-	e := buildRouter(s, ghCfg, jwtSecret, "*", "")
+	e, err := app.BuildRouter(app.Options{Store: s, GitHub: ghCfg, JWTSecret: jwtSecret, AllowedOrigins: "*", MCPAPIKey: "", StaticFS: testStaticFS(t), EnvelopeSchema: envelopeSchemaJSON})
+	if err != nil {
+		t.Fatalf("BuildRouter: %v", err)
+	}
 
 	jwt, err := authmw.IssueToken(jwtSecret, "alice", "")
 	if err != nil {
@@ -378,6 +383,15 @@ func int64Str(n int64) string {
 	return strconv.FormatInt(n, 10)
 }
 
+func testStaticFS(t *testing.T) fs.FS {
+	t.Helper()
+	sub, err := fs.Sub(staticFiles, "static")
+	if err != nil {
+		t.Fatalf("static fs: %v", err)
+	}
+	return sub
+}
+
 func TestLandingPage(t *testing.T) {
 	s, err := store.OpenSQLite(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
@@ -385,7 +399,10 @@ func TestLandingPage(t *testing.T) {
 	}
 	defer func() { _ = s.Close() }()
 
-	e := buildRouter(s, &github.AppConfig{}, "test-secret", "*", "")
+	e, err := app.BuildRouter(app.Options{Store: s, GitHub: &github.AppConfig{}, JWTSecret: "test-secret", AllowedOrigins: "*", MCPAPIKey: "", StaticFS: testStaticFS(t), EnvelopeSchema: envelopeSchemaJSON})
+	if err != nil {
+		t.Fatalf("BuildRouter: %v", err)
+	}
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()

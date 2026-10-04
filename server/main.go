@@ -3,11 +3,11 @@ package main
 import (
 	"embed"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
-	"strconv"
-	"strings"
 
+	"github.com/emergent-company/emergent.feedback/server/app"
 	"github.com/emergent-company/emergent.feedback/server/github"
 	"github.com/emergent-company/emergent.feedback/server/store"
 )
@@ -17,12 +17,6 @@ var staticFiles embed.FS
 
 //go:embed schema/envelope.v1.json
 var envelopeSchemaJSON []byte
-
-// Version and Commit are injected at build time via -ldflags.
-var (
-	Version = "dev"
-	Commit  = "unknown"
-)
 
 func main() {
 	// ── Configuration from environment variables ──────────────────────────────
@@ -73,42 +67,34 @@ func main() {
 		InstallationID: ghInstallID,
 	}
 
-	e := buildRouter(s, ghCfg, jwtSecret, allowedOrigins, os.Getenv("MCP_API_KEY"))
+	staticFS, err := fs.Sub(staticFiles, "static")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fatal: static fs: %v\n", err)
+		os.Exit(1)
+	}
+	e, err := app.BuildRouter(app.Options{
+		Store:          s,
+		GitHub:         ghCfg,
+		JWTSecret:      jwtSecret,
+		AllowedOrigins: allowedOrigins,
+		MCPAPIKey:      os.Getenv("MCP_API_KEY"),
+		StaticFS:       staticFS,
+		EnvelopeSchema: envelopeSchemaJSON,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fatal: build router: %v\n", err)
+		os.Exit(1)
+	}
 
 	// ── Start ─────────────────────────────────────────────────────────────────
-	fmt.Printf("emergent-feedback %s (%s) listening on :%s\n", Version, Commit, port)
+	fmt.Printf("emergent-feedback %s (%s) listening on :%s\n", app.Version, app.Commit, port)
 	if err := e.Start(":" + port); err != nil && err != http.ErrServerClosed {
 		fmt.Fprintf(os.Stderr, "fatal: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-// originAllowed reports whether the request Origin matches the ALLOWED_ORIGINS
-// allowlist. "*" (or an empty list) allows any origin.
-func originAllowed(origin, allowlist string) bool {
-	for _, allowed := range strings.Split(allowlist, ",") {
-		allowed = strings.TrimSpace(allowed)
-		if allowed == "*" {
-			return true
-		}
-		if allowed == origin {
-			return true
-		}
-	}
-	return false
-}
-
-// envFloatOr reads a float environment variable, falling back to def when the
-// variable is empty or not parseable as a float.
-func envFloatOr(key string, def float64) float64 {
-	if v := os.Getenv(key); v != "" {
-		if f, err := strconv.ParseFloat(v, 64); err == nil {
-			return f
-		}
-	}
-	return def
-}
-
+// envOr reads a string environment variable, falling back to def when empty.
 func envOr(key, def string) string {
 	if v := os.Getenv(key); v != "" {
 		return v

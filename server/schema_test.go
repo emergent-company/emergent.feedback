@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/emergent-company/emergent.feedback/server/app"
 	"github.com/emergent-company/emergent.feedback/server/github"
 	"github.com/emergent-company/emergent.feedback/server/handler"
 	"github.com/emergent-company/emergent.feedback/server/store"
@@ -23,7 +24,10 @@ func TestSchemaRoute(t *testing.T) {
 	}
 	defer func() { _ = s.Close() }()
 
-	e := buildRouter(s, &github.AppConfig{}, "test-secret", "*", "")
+	e, err := app.BuildRouter(app.Options{Store: s, GitHub: &github.AppConfig{}, JWTSecret: "test-secret", AllowedOrigins: "*", MCPAPIKey: "", StaticFS: testStaticFS(t), EnvelopeSchema: envelopeSchemaJSON})
+	if err != nil {
+		t.Fatalf("BuildRouter: %v", err)
+	}
 
 	req := httptest.NewRequest(http.MethodGet, "/schema/envelope.v1.json", nil)
 	rec := httptest.NewRecorder()
