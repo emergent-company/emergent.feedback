@@ -75,7 +75,7 @@ func (d dialect) nowExpr() string {
 
 func (d dialect) groupConcat(col string) string {
 	if d == dialectPostgres {
-		return "STRING_AGG(" + col + "::text, ',')"
+		return "STRING_AGG(" + col + "::text, ',' ORDER BY " + col + ")"
 	}
 	return "GROUP_CONCAT(" + col + ")"
 }
@@ -399,8 +399,8 @@ func (s *Store) Dialect() ext.Dialect {
 func (s *Store) Migrate(ctx context.Context, extra []ext.Migration) error {
 	mig := append([]ext.Migration(nil), extra...)
 	sort.Slice(mig, func(i, j int) bool { return mig[i].Version < mig[j].Version })
-	return withMigrationLock(ctx, s.db, s.d, func() error {
-		applied, err := appliedVersions(ctx, s.db, s.d)
+	return withMigrationConn(ctx, s.db, s.d, func(conn *sql.Conn) error {
+		applied, err := appliedVersions(ctx, conn, s.d)
 		if err != nil {
 			return err
 		}
@@ -411,7 +411,7 @@ func (s *Store) Migrate(ctx context.Context, extra []ext.Migration) error {
 			if applied[m.Version] {
 				continue // idempotent rerun
 			}
-			if err := applyMigration(ctx, s.db, s.d, migration{version: m.Version, name: m.Name, stmts: m.Statements}); err != nil {
+			if err := applyMigration(ctx, conn, s.d, migration{version: m.Version, name: m.Name, stmts: m.Statements}); err != nil {
 				return err
 			}
 			applied[m.Version] = true
@@ -423,39 +423,48 @@ func (s *Store) Migrate(ctx context.Context, extra []ext.Migration) error {
 const migrationLockKey int64 = 0x656d6665 // "emfe"
 const extensionMinVersion = 1000
 
-func withMigrationLock(ctx context.Context, db *sql.DB, d dialect, fn func() error) error {
+// withMigrationConn pins a single connection for the whole migration run so a
+// Postgres advisory lock and its unlock happen on the same session.
+func withMigrationConn(ctx context.Context, db *sql.DB, d dialect, fn func(*sql.Conn) error) error {
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("store: acquire migration connection: %w", err)
+	}
+	defer func() { _ = conn.Close() }()
 	if d == dialectPostgres {
-		if _, err := db.ExecContext(ctx, `SELECT pg_advisory_lock($1)`, migrationLockKey); err != nil {
+		if _, err := conn.ExecContext(ctx, `SELECT pg_advisory_lock($1)`, migrationLockKey); err != nil {
 			return fmt.Errorf("store: acquire migration lock: %w", err)
 		}
-		defer func() { _, _ = db.ExecContext(context.Background(), `SELECT pg_advisory_unlock($1)`, migrationLockKey) }()
+		defer func() {
+			_, _ = conn.ExecContext(context.Background(), `SELECT pg_advisory_unlock($1)`, migrationLockKey)
+		}()
 	}
-	return fn()
+	return fn(conn)
 }
 
-func appliedVersions(ctx context.Context, db *sql.DB, d dialect) (map[int]bool, error) {
-	rows, err := db.QueryContext(ctx, d.rebind(`SELECT version FROM schema_migrations`))
+func appliedVersions(ctx context.Context, conn *sql.Conn, d dialect) (map[int]bool, error) {
+	rows, err := conn.QueryContext(ctx, d.rebind(`SELECT version FROM schema_migrations`))
 	if err != nil {
 		return nil, fmt.Errorf("store: read schema versions: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 	applied := map[int]bool{}
 	for rows.Next() {
-		var v int
+		var v int64
 		if err := rows.Scan(&v); err != nil {
 			return nil, fmt.Errorf("store: scan schema version: %w", err)
 		}
-		applied[v] = true
+		applied[int(v)] = true
 	}
 	return applied, rows.Err()
 }
 
 func migrate(ctx context.Context, db *sql.DB, d dialect) error {
-	return withMigrationLock(ctx, db, d, func() error {
-		if _, err := db.ExecContext(ctx, d.schemaMigrationsDDL()); err != nil {
+	return withMigrationConn(ctx, db, d, func(conn *sql.Conn) error {
+		if _, err := conn.ExecContext(ctx, d.schemaMigrationsDDL()); err != nil {
 			return fmt.Errorf("store: create schema_migrations: %w", err)
 		}
-		applied, err := appliedVersions(ctx, db, d)
+		applied, err := appliedVersions(ctx, conn, d)
 		if err != nil {
 			return err
 		}
@@ -463,7 +472,7 @@ func migrate(ctx context.Context, db *sql.DB, d dialect) error {
 			if applied[m.version] {
 				continue
 			}
-			if err := applyMigration(ctx, db, d, m); err != nil {
+			if err := applyMigration(ctx, conn, d, m); err != nil {
 				return err
 			}
 		}
@@ -471,8 +480,8 @@ func migrate(ctx context.Context, db *sql.DB, d dialect) error {
 	})
 }
 
-func applyMigration(ctx context.Context, db *sql.DB, d dialect, m migration) error {
-	tx, err := db.BeginTx(ctx, nil)
+func applyMigration(ctx context.Context, conn *sql.Conn, d dialect, m migration) error {
+	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("store: begin migration %d: %w", m.version, err)
 	}

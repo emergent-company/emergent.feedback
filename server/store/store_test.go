@@ -60,11 +60,16 @@ func TestMigrateUpgradeFromV4(t *testing.T) {
 	if _, err := db.ExecContext(ctx, dialectSQLite.schemaMigrationsDDL()); err != nil {
 		t.Fatalf("schema_migrations: %v", err)
 	}
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatalf("conn: %v", err)
+	}
 	for _, m := range sqliteMigrations[:4] {
-		if err := applyMigration(ctx, db, dialectSQLite, m); err != nil {
+		if err := applyMigration(ctx, conn, dialectSQLite, m); err != nil {
 			t.Fatalf("migration %d: %v", m.version, err)
 		}
 	}
+	_ = conn.Close()
 	_ = db.Close()
 
 	// Reopen via Open, which applies migration 5.
