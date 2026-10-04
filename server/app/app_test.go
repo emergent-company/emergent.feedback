@@ -58,14 +58,105 @@ func TestEnvFloatOr(t *testing.T) {
 	})
 }
 
-func TestBuildRouterRequiresStaticFS(t *testing.T) {
-	if _, err := BuildRouter(Options{}); err == nil {
-		t.Fatal("expected error for nil StaticFS, got nil")
+func TestBuildRouterDefaultsStaticFS(t *testing.T) {
+	s, err := store.OpenSQLite(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatalf("store.OpenSQLite: %v", err)
+	}
+	defer func() { _ = s.Close() }()
+
+	// StaticFS and EnvelopeSchema are intentionally left nil to exercise the defaults.
+	e, err := BuildRouter(Options{
+		Store:          s,
+		GitHub:         &github.AppConfig{},
+		JWTSecret:      "test-secret",
+		AllowedOrigins: "*",
+		MCPAPIKey:      "",
+	})
+	if err != nil {
+		t.Fatalf("BuildRouter: %v", err)
+	}
+
+	for _, path := range []string{"/emergent-feedback.js", "/schema/envelope.v1.json"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Errorf("GET %s status = %d, want 200", path, rec.Code)
+		}
 	}
 }
 
+func setRequiredEnv(t *testing.T, dbPath string) {
+	t.Helper()
+	t.Setenv("JWT_SECRET", "test-secret")
+	t.Setenv("GH_APP_CLIENT_ID", "client-id")
+	t.Setenv("GH_APP_CLIENT_SECRET", "client-secret")
+	t.Setenv("GH_REDIRECT_URI", "https://example.test/callback")
+	t.Setenv("GH_APP_ID", "")
+	t.Setenv("GH_INSTALLATION_ID", "")
+	t.Setenv("GH_APP_PRIVATE_KEY", "")
+	t.Setenv("GH_APP_PRIVATE_KEY_PATH", "")
+	t.Setenv("DB_PATH", dbPath)
+	t.Setenv("DATABASE_URL", "")
+}
+
+func TestOptionsFromEnv(t *testing.T) {
+	t.Run("missing required var", func(t *testing.T) {
+		t.Setenv("JWT_SECRET", "test-secret")
+		t.Setenv("GH_APP_CLIENT_ID", "") // missing
+		t.Setenv("GH_APP_CLIENT_SECRET", "s")
+		t.Setenv("GH_REDIRECT_URI", "https://example.test/cb")
+		t.Setenv("DATABASE_URL", "")
+		_, cleanup, err := OptionsFromEnv()
+		if err == nil {
+			t.Fatal("expected error for missing GH_APP_CLIENT_ID, got nil")
+		}
+		if cleanup == nil {
+			t.Fatal("cleanup is nil on error path")
+		}
+	})
+
+	t.Run("defaults", func(t *testing.T) {
+		dbPath := filepath.Join(t.TempDir(), "fb.db")
+		setRequiredEnv(t, dbPath)
+		opts, cleanup, err := OptionsFromEnv()
+		if err != nil {
+			t.Fatalf("OptionsFromEnv: %v", err)
+		}
+		if opts.Port != "8080" {
+			t.Fatalf("Port = %q, want 8080", opts.Port)
+		}
+		if opts.AllowedOrigins != "*" {
+			t.Fatalf("AllowedOrigins = %q, want *", opts.AllowedOrigins)
+		}
+		if opts.Store == nil {
+			t.Fatal("Store is nil")
+		}
+		cleanup() // must not panic
+	})
+
+	t.Run("overrides", func(t *testing.T) {
+		dbPath := filepath.Join(t.TempDir(), "fb.db")
+		setRequiredEnv(t, dbPath)
+		t.Setenv("PORT", "9090")
+		t.Setenv("ALLOWED_ORIGINS", "https://a.example.com")
+		opts, cleanup, err := OptionsFromEnv()
+		if err != nil {
+			t.Fatalf("OptionsFromEnv: %v", err)
+		}
+		if opts.Port != "9090" {
+			t.Fatalf("Port = %q, want 9090", opts.Port)
+		}
+		if opts.AllowedOrigins != "https://a.example.com" {
+			t.Fatalf("AllowedOrigins = %q, want https://a.example.com", opts.AllowedOrigins)
+		}
+		cleanup()
+	})
+}
+
 func TestBuildRouterExtendHook(t *testing.T) {
-	s, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	s, err := store.OpenSQLite(filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {
 		t.Fatalf("store.Open: %v", err)
 	}
@@ -103,7 +194,7 @@ func TestBuildRouterExtendHook(t *testing.T) {
 }
 
 func TestBuildRouterRegistersAllRoutes(t *testing.T) {
-	s, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	s, err := store.OpenSQLite(filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {
 		t.Fatalf("store.Open: %v", err)
 	}

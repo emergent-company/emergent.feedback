@@ -3,7 +3,7 @@ package app
 import (
 	"context"
 	"crypto/subtle"
-	"errors"
+	"fmt"
 	"io/fs"
 	"net/http"
 	"os"
@@ -39,9 +39,10 @@ type Options struct {
 	JWTSecret      string
 	AllowedOrigins string
 	MCPAPIKey      string
-	// StaticFS serves the embedded client bundles. Required.
+	Port           string
+	// StaticFS serves the embedded client bundles. Optional; defaults to the embedded bundle.
 	StaticFS fs.FS
-	// EnvelopeSchema is the feedback envelope JSON Schema served at /schema/envelope.v1.json. Required.
+	// EnvelopeSchema is the feedback envelope JSON Schema served at /schema/envelope.v1.json. Optional; defaults to the embedded schema.
 	EnvelopeSchema []byte
 	// Extend mounts extra routes after the core routes are registered. Middleware
 	// added inside Extend applies only to routes registered after it.
@@ -50,11 +51,13 @@ type Options struct {
 
 // BuildRouter assembles the Echo router with all middleware and routes.
 func BuildRouter(opts Options) (*echo.Echo, error) {
-	if opts.StaticFS == nil {
-		return nil, errors.New("app: StaticFS is required")
+	staticFS := opts.StaticFS
+	if staticFS == nil {
+		staticFS = DefaultStaticFS()
 	}
-	if opts.EnvelopeSchema == nil {
-		return nil, errors.New("app: EnvelopeSchema is required")
+	envelopeSchema := opts.EnvelopeSchema
+	if envelopeSchema == nil {
+		envelopeSchema = DefaultEnvelopeSchema()
 	}
 	e := echo.New()
 	e.HideBanner = true
@@ -96,7 +99,6 @@ func BuildRouter(opts Options) (*echo.Echo, error) {
 	})
 
 	// ── Static: serve embedded emergent-feedback.js ────────────────────────────
-	staticFS := opts.StaticFS
 	e.GET("/emergent-feedback.js", echo.WrapHandler(http.FileServer(http.FS(staticFS))))
 	e.GET("/emergent-feedback-replay.js", echo.WrapHandler(http.FileServer(http.FS(staticFS))))
 
@@ -133,7 +135,7 @@ func BuildRouter(opts Options) (*echo.Echo, error) {
 
 	// Feedback envelope JSON Schema (public).
 	e.GET("/schema/envelope.v1.json", func(c echo.Context) error {
-		return c.Blob(http.StatusOK, "application/json", opts.EnvelopeSchema)
+		return c.Blob(http.StatusOK, "application/json", envelopeSchema)
 	})
 
 	// Feedback — public read endpoints (counts + public issue refs only, no PII)
@@ -237,4 +239,77 @@ func envOr(key, def string) string {
 		return v
 	}
 	return def
+}
+
+func requiredEnv(key string) (string, error) {
+	v := os.Getenv(key)
+	if v == "" {
+		return "", fmt.Errorf("%q is required", key)
+	}
+	return v, nil
+}
+
+func OptionsFromEnv() (Options, func(), error) {
+	jwtSecret, err := requiredEnv("JWT_SECRET")
+	if err != nil {
+		return Options{}, func() {}, err
+	}
+	clientID, err := requiredEnv("GH_APP_CLIENT_ID")
+	if err != nil {
+		return Options{}, func() {}, err
+	}
+	clientSecret, err := requiredEnv("GH_APP_CLIENT_SECRET")
+	if err != nil {
+		return Options{}, func() {}, err
+	}
+	redirectURI, err := requiredEnv("GH_REDIRECT_URI")
+	if err != nil {
+		return Options{}, func() {}, err
+	}
+
+	appID := envOr("GH_APP_ID", "")
+	installID := envOr("GH_INSTALLATION_ID", "")
+	botToken := envOr("GH_BOT_TOKEN", "")
+	authorMode := envOr("ISSUE_AUTHOR_MODE", "bot")
+
+	var privateKey string
+	if keyPath := os.Getenv("GH_APP_PRIVATE_KEY_PATH"); keyPath != "" {
+		data, rerr := os.ReadFile(keyPath)
+		if rerr != nil {
+			return Options{}, func() {}, fmt.Errorf("read GH_APP_PRIVATE_KEY_PATH: %w", rerr)
+		}
+		privateKey = string(data)
+	} else {
+		privateKey = os.Getenv("GH_APP_PRIVATE_KEY")
+	}
+
+	switch authorMode {
+	case "", "bot":
+		authorMode = "bot"
+	case "user":
+	default:
+		return Options{}, func() {}, fmt.Errorf("ISSUE_AUTHOR_MODE must be one of \"bot\" or \"user\" (got %q)", authorMode)
+	}
+	if authorMode == "bot" && botToken == "" && (appID == "" || privateKey == "" || installID == "") {
+		fmt.Fprintln(os.Stderr, "warning: no GitHub App or GH_BOT_TOKEN configured; issues will be authored by each reporter's own GitHub token")
+	}
+
+	var s *store.Store
+	if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
+		s, err = store.OpenPostgres(dsn)
+	} else {
+		s, err = store.OpenSQLite(envOr("DB_PATH", "/data/feedback-overlay.db"))
+	}
+	if err != nil {
+		return Options{}, func() {}, err
+	}
+
+	return Options{
+		Store:          s,
+		GitHub:         &github.AppConfig{AppID: appID, ClientID: clientID, ClientSecret: clientSecret, RedirectURI: redirectURI, PrivateKeyPEM: privateKey, InstallationID: installID, BotToken: botToken, AuthorMode: authorMode},
+		JWTSecret:      jwtSecret,
+		AllowedOrigins: envOr("ALLOWED_ORIGINS", "*"),
+		MCPAPIKey:      os.Getenv("MCP_API_KEY"),
+		Port:           envOr("PORT", "8080"),
+	}, func() { _ = s.Close() }, nil
 }

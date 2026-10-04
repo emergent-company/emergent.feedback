@@ -24,7 +24,7 @@ func TestSchemaRoute(t *testing.T) {
 	}
 	defer func() { _ = s.Close() }()
 
-	e, err := app.BuildRouter(app.Options{Store: s, GitHub: &github.AppConfig{}, JWTSecret: "test-secret", AllowedOrigins: "*", MCPAPIKey: "", StaticFS: testStaticFS(t), EnvelopeSchema: envelopeSchemaJSON})
+	e, err := app.BuildRouter(app.Options{Store: s, GitHub: &github.AppConfig{}, JWTSecret: "test-secret", AllowedOrigins: "*", MCPAPIKey: ""})
 	if err != nil {
 		t.Fatalf("BuildRouter: %v", err)
 	}
@@ -56,14 +56,14 @@ func TestSchemaEmbedMatchesDocs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read docs schema: %v", err)
 	}
-	if string(disk) != string(envelopeSchemaJSON) {
+	if string(disk) != string(app.DefaultEnvelopeSchema()) {
 		t.Fatal("embedded schema differs from docs/schema/envelope.v1.json")
 	}
 }
 
 func TestEnvelopeValidatesAgainstSchema(t *testing.T) {
 	var schema jsonschema.Schema
-	if err := json.Unmarshal(envelopeSchemaJSON, &schema); err != nil {
+	if err := json.Unmarshal(app.DefaultEnvelopeSchema(), &schema); err != nil {
 		t.Fatalf("parse schema: %v", err)
 	}
 	resolved, err := schema.Resolve(nil)
