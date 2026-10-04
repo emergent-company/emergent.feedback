@@ -45,7 +45,7 @@ func encryptTokenForTest(plain, jwtSecret string) []byte {
 
 func TestAPIEndToEnd(t *testing.T) {
 	// ── Setup ──────────────────────────────────────────────────────────────────
-	s, err := store.Open(filepath.Join(t.TempDir(), "test.db"))
+	s, err := store.OpenSQLite(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("store.Open: %v", err)
 	}
@@ -379,7 +379,7 @@ func int64Str(n int64) string {
 }
 
 func TestLandingPage(t *testing.T) {
-	s, err := store.Open(filepath.Join(t.TempDir(), "test.db"))
+	s, err := store.OpenSQLite(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("store.Open: %v", err)
 	}

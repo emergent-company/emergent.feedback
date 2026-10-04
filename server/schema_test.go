@@ -17,7 +17,7 @@ import (
 )
 
 func TestSchemaRoute(t *testing.T) {
-	s, err := store.Open(filepath.Join(t.TempDir(), "test.db"))
+	s, err := store.OpenSQLite(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("store.Open: %v", err)
 	}

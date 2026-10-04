@@ -89,7 +89,7 @@ func TestRateLimitBlocksExcess(t *testing.T) {
 }
 
 func TestSourcemapsRouteRateLimited(t *testing.T) {
-	s, err := store.Open(filepath.Join(t.TempDir(), "test.db"))
+	s, err := store.OpenSQLite(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("store.Open: %v", err)
 	}

@@ -26,11 +26,11 @@ type GitHubIssue struct {
 // CreateGitHubIssue inserts a new GitHub issue record. Silently ignores
 // duplicates (same issue_number + repo) so re-exports don't fail.
 func (s *Store) CreateGitHubIssue(ctx context.Context, p GitHubIssue) error {
-	const q = `
+	q := `
 INSERT INTO github_issues (issue_number, issue_url, repo, title, page_url, selector, state, feedback_ids)
 VALUES (?, ?, ?, ?, ?, ?, 'open', ?)
 ON CONFLICT DO NOTHING`
-	_, err := s.db.ExecContext(ctx, q,
+	_, err := s.db.ExecContext(ctx, s.bind(q),
 		p.IssueNumber, p.IssueURL, p.Repo, p.Title, p.PageURL, p.Selector, p.FeedbackIDs,
 	)
 	if err != nil {
@@ -42,7 +42,7 @@ ON CONFLICT DO NOTHING`
 // GetGitHubIssueByNumber returns the most recent GitHub issue record for a
 // given issue number.
 func (s *Store) GetGitHubIssueByNumber(ctx context.Context, issueNumber int64) (GitHubIssue, error) {
-	const q = `
+	q := `
 SELECT id, issue_number, issue_url, repo, title, page_url, selector, state, created_at, synced_at, COALESCE(feedback_ids,'')
 FROM github_issues
 WHERE issue_number = ?
@@ -50,7 +50,7 @@ ORDER BY id DESC LIMIT 1`
 
 	var gi GitHubIssue
 	var createdAt, syncedAt string
-	err := s.db.QueryRowContext(ctx, q, issueNumber).Scan(
+	err := s.db.QueryRowContext(ctx, s.bind(q), issueNumber).Scan(
 		&gi.ID, &gi.IssueNumber, &gi.IssueURL, &gi.Repo, &gi.Title,
 		&gi.PageURL, &gi.Selector, &gi.State, &createdAt, &syncedAt, &gi.FeedbackIDs,
 	)
@@ -67,13 +67,13 @@ ORDER BY id DESC LIMIT 1`
 
 // ListOpenGitHubIssuesByURL returns all open GitHub issues recorded for a page URL.
 func (s *Store) ListOpenGitHubIssuesByURL(ctx context.Context, pageURL string) ([]GitHubIssue, error) {
-	const q = `
+	q := `
 SELECT id, issue_number, issue_url, repo, title, page_url, selector, state, created_at, synced_at
 FROM github_issues
 WHERE page_url = ? AND state = 'open'
 ORDER BY issue_number DESC`
 
-	rows, err := s.db.QueryContext(ctx, q, pageURL)
+	rows, err := s.db.QueryContext(ctx, s.bind(q), pageURL)
 	if err != nil {
 		return nil, fmt.Errorf("store: list github issues: %w", err)
 	}
@@ -98,10 +98,9 @@ ORDER BY issue_number DESC`
 
 // SetGitHubIssueState updates the state of a GitHub issue (e.g. "open" → "closed").
 func (s *Store) SetGitHubIssueState(ctx context.Context, issueNumber int64, repo, state string) error {
-	const q = `
-UPDATE github_issues SET state = ?, synced_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')
+	q := `UPDATE github_issues SET state = ?, synced_at = ` + s.d.nowExpr() + `
 WHERE issue_number = ? AND repo = ?`
-	_, err := s.db.ExecContext(ctx, q, state, issueNumber, repo)
+	_, err := s.db.ExecContext(ctx, s.bind(q), state, issueNumber, repo)
 	if err != nil {
 		return fmt.Errorf("store: set github issue state: %w", err)
 	}

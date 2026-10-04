@@ -9,7 +9,7 @@ import (
 
 func TestCreateAndLookupAPIKey(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "test.db")
-	s, err := Open(path)
+	s, err := OpenSQLite(path)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestCreateAndLookupAPIKey(t *testing.T) {
 
 func TestRevokeAPIKeyNotOwned(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "test.db")
-	s, err := Open(path)
+	s, err := OpenSQLite(path)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}

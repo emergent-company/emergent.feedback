@@ -18,7 +18,7 @@ import (
 // newHandlerStore builds a Handler backed by a temp-store.
 func newHandlerStore(t *testing.T) (*Handler, *store.Store) {
 	t.Helper()
-	s, err := store.Open(filepath.Join(t.TempDir(), "test.db"))
+	s, err := store.OpenSQLite(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("store.Open: %v", err)
 	}

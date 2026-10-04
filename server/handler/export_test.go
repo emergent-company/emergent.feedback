@@ -19,7 +19,7 @@ import (
 // middleware (no GitHub token is stored, so userRepos always fails).
 func newExportHandler(t *testing.T) (*Handler, *store.Store, *echo.Echo) {
 	t.Helper()
-	s, err := store.Open(filepath.Join(t.TempDir(), "test.db"))
+	s, err := store.OpenSQLite(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("store.Open: %v", err)
 	}
