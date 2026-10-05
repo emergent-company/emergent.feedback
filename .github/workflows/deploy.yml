@@ -153,7 +153,7 @@ jobs:
         run: |
           ssh feedback-server "echo '${{ secrets.GHCR_PAT }}' | docker login ghcr.io -u '${{ secrets.GHCR_USER }}' --password-stdin"
           ssh feedback-server "cd /opt/stacks/feedback-overlay && docker compose pull emergent-feedback"
-          ssh feedback-server "cd /opt/stacks/feedback-overlay && docker compose up -d --no-deps emergent-feedback"
+          ssh feedback-server "cd /opt/stacks/feedback-overlay && docker compose up -d --no-deps --remove-orphans emergent-feedback"
 
       - name: Wait for health check
         id: health
