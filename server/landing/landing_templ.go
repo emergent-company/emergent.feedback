@@ -15,6 +15,10 @@ import "github.com/emergent-company/go-daisy/components/ui"
 // purchased Scalo daisyUI 5 template). go-daisy's app.css provides the base;
 // scalo.css layers the Scalo theme + custom components on top. The overlay
 // itself is loaded at the very bottom so visitors can try it live on this page.
+//
+// Layout note: every top-level section (nav, hero, sections, footer) uses the
+// same `mx-auto w-full max-w-6xl px-4` content column so the page reads as one
+// aligned grid. Inner prose is narrowed independently (max-w-2xl / 3xl).
 func LandingPage(version string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -36,7 +40,7 @@ func LandingPage(version string) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<!doctype html><html lang=\"en\" data-theme=\"scalo\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>emergent.feedback</title><meta name=\"description\" content=\"emergent.feedback turns vague bug reports into fully-contextual GitHub issues. Drop in one script tag, hold the hotkey, click the broken element, and the exact selector, environment and screenshot land in GitHub.\"><link rel=\"stylesheet\" href=\"/static/css/app.css\"><link rel=\"stylesheet\" href=\"/static/css/scalo.css\"></head><body class=\"min-h-screen bg-base-100 text-base-content antialiased\"><!-- ── Nav ─────────────────────────────────────────────────────────── --><header class=\"sticky top-0 z-30 border-b border-base-300/60 bg-base-100/80 backdrop-blur\"><div class=\"mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-3\"><a href=\"/\" class=\"flex items-center gap-2\"><span class=\"grid size-7 place-items-center rounded-lg bg-primary\" aria-hidden=\"true\"><span class=\"size-3 rounded-[3px] bg-primary-content\"></span></span> <span class=\"text-sm font-semibold tracking-tight\">emergent.feedback</span></a><nav class=\"hidden items-center gap-1 md:flex\" aria-label=\"Primary\"><a href=\"#how-it-works\" class=\"btn btn-ghost btn-sm\">How it works</a> <a href=\"#what-it-captures\" class=\"btn btn-ghost btn-sm\">What it captures</a> <a href=\"#pricing\" class=\"btn btn-ghost btn-sm\">Pricing</a> <a href=\"#self-host\" class=\"btn btn-ghost btn-sm\">Self-host</a></nav><div class=\"flex items-center gap-2\"><a href=\"/panel\" class=\"btn btn-ghost btn-sm hidden sm:inline-flex\">Panel</a>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<!doctype html><html lang=\"en\" data-theme=\"scalo\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>emergent.feedback</title><meta name=\"description\" content=\"emergent.feedback turns vague bug reports into fully-contextual GitHub issues. Drop in one script tag, hold the hotkey, click the broken element, and the exact selector, environment and screenshot land in GitHub.\"><link rel=\"stylesheet\" href=\"/static/css/app.css\"><link rel=\"stylesheet\" href=\"/static/css/scalo.css\"></head><body class=\"min-h-screen bg-base-100 text-base-content antialiased\"><!-- ── Nav ─────────────────────────────────────────────────────────── --><header class=\"sticky top-0 z-30 border-b border-base-300/60 bg-base-100/80 backdrop-blur\"><div class=\"mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-3\"><a href=\"/\" class=\"flex items-center gap-2\"><span class=\"grid size-7 place-items-center rounded-lg bg-primary\" aria-hidden=\"true\"><span class=\"size-3 rounded-[3px] bg-primary-content\"></span></span> <span class=\"text-sm font-semibold tracking-tight\">emergent.feedback</span></a><nav class=\"hidden items-center gap-1 lg:flex\" aria-label=\"Primary\"><a href=\"#how-it-works\" class=\"btn btn-ghost btn-sm\">How it works</a> <a href=\"#what-it-captures\" class=\"btn btn-ghost btn-sm\">What it captures</a> <a href=\"#mcp\" class=\"btn btn-ghost btn-sm\">MCP</a> <a href=\"#pricing\" class=\"btn btn-ghost btn-sm\">Pricing</a> <a href=\"#self-host\" class=\"btn btn-ghost btn-sm\">Self-host</a></nav><div class=\"flex items-center gap-2\"><a href=\"https://github.com/emergent-company/emergent.feedback\" aria-label=\"GitHub\" target=\"_blank\" rel=\"noopener noreferrer\" class=\"btn btn-ghost btn-sm btn-square\"><svg viewBox=\"0 0 24 24\" fill=\"currentColor\" class=\"size-5\" aria-hidden=\"true\"><path d=\"M12 .5C5.37.5 0 5.87 0 12.5c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58 0-.29-.01-1.05-.02-2.06-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.2.08 1.84 1.24 1.84 1.24 1.07 1.84 2.81 1.31 3.5 1 .11-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6.01 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.8 5.63-5.48 5.92.43.37.81 1.1.81 2.22 0 1.6-.01 2.9-.01 3.29 0 .32.22.7.83.58A12.01 12.01 0 0 0 24 12.5C24 5.87 18.63.5 12 .5z\"></path></svg></a><div id=\"nav-auth-out\" class=\"flex items-center gap-2\"><a href=\"/auth/github\" class=\"btn btn-ghost btn-sm hidden sm:inline-flex\">Sign in</a> <a href=\"/auth/github\" class=\"btn btn-primary btn-sm\">Sign up</a></div><div id=\"nav-auth-in\" class=\"hidden\"><a href=\"/panel\" class=\"btn btn-primary btn-sm\">Go to dashboard</a></div></div></div></header><!-- ── Hero ────────────────────────────────────────────────────────── --><!-- Ported from Scalo's storage-page hero (scalo.daisyui.com/storage):\n\t\t     pill → centered display headline with a gradient swash behind the\n\t\t     highlighted word → subcopy → dual CTA → three check lines →\n\t\t     code-drawn product window with floating capture/share cards → 4-up\n\t\t     stat row. Every visual is HTML/CSS + inline SVG so no binary assets\n\t\t     from the purchased template enter this repo. --><section class=\"relative overflow-hidden border-b border-base-300/60\" aria-labelledby=\"hero-title\"><!-- Code-drawn atmosphere: radial glow, faint grid, bottom fade. --><div class=\"hero-glow pointer-events-none absolute inset-x-0 -top-40 -z-3 h-[900px] opacity-70\" aria-hidden=\"true\"></div><div class=\"hero-grid pointer-events-none absolute inset-0 -z-2\" aria-hidden=\"true\"></div><div class=\"hero-fade-bottom pointer-events-none absolute inset-x-0 bottom-0 -z-1 h-24\" aria-hidden=\"true\"></div><div class=\"relative mx-auto w-full max-w-6xl px-4 pb-20 pt-16 sm:pt-24 lg:pt-32\"><div class=\"flex flex-col items-center text-center\"><!-- 1. Pill --><span class=\"inline-flex items-center gap-2 rounded-full border border-base-300/60 bg-base-200/40 px-3 py-1 text-xs font-medium text-base-content/80 transition-all duration-700 starting:opacity-0\">Element-level feedback <svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"size-3.5 text-primary\" aria-hidden=\"true\"><path d=\"M5 12h14\"></path><path d=\"m12 5 7 7-7 7\"></path></svg> GitHub issues</span><!-- 2. Display headline with decorative swash behind the highlighted word. --><h1 id=\"hero-title\" class=\"mt-5 max-w-4xl text-3xl font-extrabold leading-tight tracking-tight text-base-content transition-all duration-1000 starting:scale-105 starting:blur sm:text-4xl lg:text-5xl xl:text-6xl\">Every bug report, down to the <span class=\"relative inline-block\"><span class=\"swash pointer-events-none absolute -inset-x-2 inset-y-0 -z-1\" aria-hidden=\"true\"></span> <span class=\"relative text-primary\">exact element</span></span></h1><!-- 3. Subcopy --><p class=\"mt-6 max-w-2xl text-base text-base-content/70 transition-all delay-500 duration-700 starting:opacity-0 sm:text-lg\">Never hunt the DOM again. Hold one hotkey, click the broken element, and a fully-contextual GitHub issue is filed for you — selector, styles, viewport and screenshot included.</p><!-- 4. CTA: primary GitHub link, plus Try it which enters the live overlay's comment mode. --><div class=\"mt-8 flex flex-col items-center gap-3 transition-all delay-1000 duration-1000 starting:opacity-0 starting:blur-sm sm:flex-row sm:gap-5\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -52,39 +56,30 @@ func LandingPage(version string) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "GitHub")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<svg viewBox=\"0 0 24 24\" fill=\"currentColor\" class=\"size-4.5\" aria-hidden=\"true\"><path d=\"M12 .5C5.37.5 0 5.87 0 12.5c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58 0-.29-.01-1.05-.02-2.06-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.2.08 1.84 1.24 1.84 1.24 1.07 1.84 2.81 1.31 3.5 1 .11-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6.01 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.8 5.63-5.48 5.92.43.37.81 1.1.81 2.22 0 1.6-.01 2.9-.01 3.29 0 .32.22.7.83.58A12.01 12.01 0 0 0 24 12.5C24 5.87 18.63.5 12 .5z\"></path></svg> Get started on GitHub <span class=\"pointer-events-none absolute inset-x-1 top-1.5 -z-1 h-full animate-background-shift bg-linear-to-r from-primary to-secondary opacity-60 blur-md transition-all duration-500 group-hover:inset-x-0 group-hover:opacity-90 group-hover:blur-lg\" aria-hidden=\"true\"></span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/emergent.feedback", Variant: ui.ButtonPrimary, Size: ui.ButtonSM, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/emergent.feedback", Variant: ui.ButtonPrimary, Size: ui.ButtonLG, ExtraClass: "group relative gap-2.5 border-0 bg-linear-to-r from-primary to-secondary text-base font-medium text-primary-content sm:text-lg", Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</div></div></header><!-- ── Hero ────────────────────────────────────────────────────────── --><!-- Ported from Scalo's storage-page hero (scalo.daisyui.com/storage):\n\t\t     pill → centered display headline with a gradient swash behind the\n\t\t     highlighted word → subcopy → dual CTA → three check lines →\n\t\t     code-drawn product window with floating capture/share cards → 4-up\n\t\t     stat row. Every visual is HTML/CSS + lucide icons so no binary assets\n\t\t     from the purchased template enter this repo. --><section class=\"relative overflow-hidden border-b border-base-300/60\" aria-labelledby=\"hero-title\"><!-- Code-drawn atmosphere: radial glow, faint grid, bottom fade. --><div class=\"hero-glow pointer-events-none absolute inset-x-0 -top-40 -z-3 h-[900px] opacity-70\" aria-hidden=\"true\"></div><div class=\"hero-grid pointer-events-none absolute inset-0 -z-2\" aria-hidden=\"true\"></div><div class=\"hero-fade-bottom pointer-events-none absolute inset-x-0 bottom-0 -z-1 h-24\" aria-hidden=\"true\"></div><div class=\"relative mx-auto w-full max-w-6xl px-4 pb-20 pt-16 sm:pt-24 lg:pt-32\"><div class=\"flex flex-col items-center text-center\"><!-- 1. Pill --><span class=\"inline-flex items-center gap-2 rounded-full border border-base-300/60 bg-base-200/40 px-3 py-1 text-xs font-medium text-base-content/80 transition-all duration-700 starting:opacity-0\">Element-level feedback <span class=\"iconify lucide--arrow-right size-3.5 text-primary\" aria-hidden=\"true\"></span> GitHub issues</span><!-- 2. Display headline with decorative swash behind the highlighted word. --><h1 id=\"hero-title\" class=\"mt-5 max-w-4xl text-3xl font-extrabold leading-tight tracking-tight text-base-content transition-all duration-1000 starting:scale-105 starting:blur sm:text-4xl lg:text-5xl xl:text-6xl\">Every bug report, down to the <span class=\"relative inline-block\"><span class=\"swash pointer-events-none absolute -inset-x-2 inset-y-0 -z-1\" aria-hidden=\"true\"></span> <span class=\"relative text-primary\">exact element</span></span></h1><!-- 3. Subcopy --><p class=\"mt-6 max-w-2xl text-base text-base-content/70 transition-all delay-500 duration-700 starting:opacity-0 sm:text-lg\">Never hunt the DOM again. Hold one hotkey, click the broken element, and a fully-contextual GitHub issue is filed for you — selector, styles, viewport and screenshot included.</p><!-- 4. Dual CTA --><div class=\"mt-8 flex flex-col items-center gap-3 transition-all delay-1000 duration-1000 starting:opacity-0 starting:blur-sm sm:flex-row sm:gap-5\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<button type=\"button\" id=\"try-it\" onclick=\"window.EmergentFeedback && window.EmergentFeedback.start()\" class=\"btn btn-outline btn-lg gap-2.5 text-base font-medium sm:text-lg\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"size-4.5\" aria-hidden=\"true\"><polygon points=\"6 3 20 12 6 21 6 3\"></polygon></svg> Try it</button></div><!-- 5. Three check lines --><ul class=\"mt-8 flex flex-col items-center gap-2 text-sm text-base-content transition-all delay-1000 duration-1000 starting:opacity-0 sm:flex-row sm:flex-wrap sm:justify-center sm:gap-x-6\"><li class=\"flex items-center gap-2\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"size-4 shrink-0\" aria-hidden=\"true\"><path d=\"M20 6 9 17l-5-5\"></path></svg> Drop in one script tag</li><li class=\"flex items-center gap-2\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"size-4 shrink-0\" aria-hidden=\"true\"><path d=\"M20 6 9 17l-5-5\"></path></svg> Framework-aware capture</li><li class=\"flex items-center gap-2\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"size-4 shrink-0\" aria-hidden=\"true\"><path d=\"M20 6 9 17l-5-5\"></path></svg> Files straight to GitHub</li></ul><p class=\"mt-4 text-xs text-base-content/50 transition-all delay-1000 duration-1000 starting:opacity-0\">Hold Alt+Shift, or press “Try it”, to open the overlay and click any element right here.</p></div><!-- 6. Code-drawn product window with floating capture / share cards. --><div class=\"mt-14 transition-all delay-1500 duration-1000 starting:opacity-0 md:mt-20\" role=\"img\" aria-label=\"Diagram of the emergent.feedback overlay: a tester selects a checkout button, a card shows the capture in progress (selector, styles and screenshot), and a second card confirms the issue was filed to GitHub.\"><div class=\"relative mx-auto max-w-4xl\"><div class=\"relative overflow-hidden rounded-xl bg-linear-to-r from-primary/25 via-secondary/20 to-accent/25 p-1.5 shadow-2xl shadow-primary/10\"><div class=\"overflow-hidden rounded-lg border border-base-300/60 bg-base-100\"><!-- window bar --><div class=\"flex items-center gap-3 border-b border-base-300/60 bg-base-200/50 px-4 py-3\"><div class=\"flex items-center gap-1.5\" aria-hidden=\"true\"><span class=\"size-2.5 rounded-full bg-error/70\"></span> <span class=\"size-2.5 rounded-full bg-warning/70\"></span> <span class=\"size-2.5 rounded-full bg-success/70\"></span></div><div class=\"flex min-w-0 flex-1 items-center gap-2 rounded-md border border-base-300/60 bg-base-100 px-3 py-1 text-xs text-base-content/50\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"size-3 shrink-0\" aria-hidden=\"true\"><rect width=\"14\" height=\"11\" x=\"5\" y=\"11\" rx=\"2\" ry=\"2\"></rect><path d=\"M7 11V7a5 5 0 0 1 10 0v4\"></path></svg> <span class=\"truncate font-mono\">app.example.com/checkout</span></div><span class=\"badge badge-primary badge-sm gap-1.5\"><span class=\"size-1.5 animate-pulse rounded-full bg-primary-content\" aria-hidden=\"true\"></span> Overlay armed</span></div><!-- fake app page --><div class=\"relative min-h-[280px] bg-base-200/20 p-6 sm:min-h-[340px]\"><div class=\"flex items-center justify-between\"><div class=\"space-y-1.5\"><div class=\"h-2.5 w-28 rounded-full bg-base-300\"></div><div class=\"h-2 w-20 rounded-full bg-base-300/60\"></div></div><div class=\"flex -space-x-2\" aria-hidden=\"true\"><span class=\"size-6 rounded-full border-2 border-base-100 bg-primary/50\"></span> <span class=\"size-6 rounded-full border-2 border-base-100 bg-secondary/50\"></span> <span class=\"size-6 rounded-full border-2 border-base-100 bg-accent/50\"></span></div></div><div class=\"mt-5 space-y-2.5\" aria-hidden=\"true\"><div class=\"h-2 w-full rounded-full bg-base-300/50\"></div><div class=\"h-2 w-5/6 rounded-full bg-base-300/50\"></div><div class=\"h-2 w-2/3 rounded-full bg-base-300/50\"></div></div><!-- selected element --><div class=\"relative mx-auto mt-8 max-w-md\"><div class=\"rounded-lg border border-base-300 bg-base-100 p-4 shadow-sm\"><div class=\"flex items-center justify-between gap-4\"><div class=\"space-y-1.5\"><div class=\"h-2 w-16 rounded-full bg-base-300/70\"></div><div class=\"h-2 w-24 rounded-full bg-base-300/50\"></div></div><div class=\"h-7 w-24 rounded-md bg-primary/70\"></div></div></div><div class=\"pointer-events-none absolute -inset-1 rounded-lg ring-2 ring-primary ring-offset-2 ring-offset-base-100\"></div><div class=\"absolute -top-3 left-4 flex items-center gap-1 rounded-md bg-primary px-2 py-0.5 text-[11px] font-medium text-primary-content shadow\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"size-3\" aria-hidden=\"true\"><path d=\"m8 2 1.88 1.88\"></path><path d=\"M14.12 3.88 16 2\"></path><path d=\"M9 7.13v-1a3.003 3.003 0 1 1 6 0v1\"></path><path d=\"M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6\"></path><path d=\"M12 20v-9\"></path><path d=\"M6.53 9C4.6 8.8 3 7.1 3 5\"></path><path d=\"M6 13H2\"></path><path d=\"M6.53 15c-1.93.2-3.53 1.9-3.53 4\"></path><path d=\"M18 5c0 2.1-1.6 3.8-3.53 4\"></path><path d=\"M22 13h-4\"></path><path d=\"M18.53 19c0-2.1-1.6-3.8-3.53-4\"></path></svg> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Var3 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-			if !templ_7745c5c3_IsBuffer {
-				defer func() {
-					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err == nil {
-						templ_7745c5c3_Err = templ_7745c5c3_BufErr
-					}
-				}()
-			}
-			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<span class=\"iconify lucide--github size-4.5\" aria-hidden=\"true\"></span> Get started on GitHub <span class=\"pointer-events-none absolute inset-x-1 top-1.5 -z-1 h-full animate-background-shift bg-linear-to-r from-primary to-secondary opacity-60 blur-md transition-all duration-500 group-hover:inset-x-0 group-hover:opacity-90 group-hover:blur-lg\" aria-hidden=\"true\"></span>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			return nil
-		})
-		templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/emergent.feedback", Variant: ui.ButtonPrimary, Size: ui.ButtonLG, ExtraClass: "group relative gap-2.5 border-0 bg-linear-to-r from-primary to-secondary text-base font-medium text-primary-content sm:text-lg", Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var3), templ_7745c5c3_Buffer)
+		var templ_7745c5c3_Var3 string
+		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs("button[data-component=\"checkout\"]")
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `server/landing/landing.templ`, Line: 180, Col: 50}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</div></div></div></div></div><!-- Floating: capture in progress (top-right) --><div class=\"card absolute -top-6 -right-2 hidden w-56 animate-float border border-base-300/60 bg-base-100 p-4 shadow-xl motion-reduce:animate-none sm:block sm:-right-6 lg:-right-10\"><p class=\"text-sm font-medium\">Capturing <span class=\"break-all text-primary underline decoration-primary/40 decoration-2 underline-offset-2\">button.btn-primary</span></p><p class=\"mt-1 text-xs text-base-content/60\">Selector, styles + screenshot</p><div class=\"mt-2 flex flex-col gap-1.5\" aria-hidden=\"true\"><div class=\"skeleton h-2.5 w-1/2 rounded\"></div><div class=\"skeleton h-2.5 w-3/4 rounded\"></div></div><div class=\"mt-3 flex items-end justify-between gap-2\"><div class=\"tooltip\" data-tip=\"In process\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"size-4 animate-spin text-base-content/60\" aria-hidden=\"true\"><path d=\"M21 12a9 9 0 1 1-6.219-8.56\"></path></svg></div><span class=\"btn btn-sm btn-error border-0\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"size-4\" aria-hidden=\"true\"><path d=\"M10 10l4 4\"></path><path d=\"m14 10-4 4\"></path><rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\"></rect></svg> Cancel</span></div></div><!-- Floating: filed to GitHub (bottom-left) --><div class=\"card absolute -bottom-8 -left-2 hidden w-60 animate-float border border-base-300/60 bg-base-100 p-4 shadow-xl [animation-delay:-3s] motion-reduce:animate-none sm:block sm:-left-6 lg:-left-10\"><p class=\"text-sm font-medium\">Issue filed to GitHub</p><p class=\"mt-1 text-xs text-base-content/60\">Shared with your repo’s team</p><div class=\"-space-x-3 mt-3 flex items-center\" aria-hidden=\"true\"><span class=\"size-8 rounded-full border-2 border-base-100 bg-linear-to-br from-primary/80 to-secondary/70\"></span> <span class=\"size-8 rounded-full border-2 border-base-100 bg-linear-to-br from-secondary/80 to-accent/70\"></span> <span class=\"size-8 rounded-full border-2 border-base-100 bg-linear-to-br from-accent/80 to-primary/70\"></span> <span class=\"flex size-8 items-center justify-center rounded-full border-2 border-base-100 bg-base-200 text-xs font-medium\">+4</span></div><div class=\"mt-3 flex items-end justify-between gap-2\"><div class=\"tooltip flex items-center rounded-full bg-success/10 p-1.5 text-success\" data-tip=\"Shared successfully\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"size-3.5\" aria-hidden=\"true\"><path d=\"M20 6 9 17l-5-5\"></path></svg></div><span class=\"btn btn-sm btn-soft ms-auto\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"size-4\" aria-hidden=\"true\"><rect width=\"14\" height=\"14\" x=\"8\" y=\"8\" rx=\"2\" ry=\"2\"></rect><path d=\"M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2\"></path></svg> Copy Link</span></div></div><div class=\"pointer-events-none absolute inset-x-10 -bottom-6 -z-1 h-24 rounded-full bg-secondary/20 blur-3xl\" aria-hidden=\"true\"></div></div></div><!-- 7. Stats --><div class=\"mx-auto mt-16 grid max-w-4xl grid-cols-2 gap-8 md:mt-20 md:grid-cols-4\"><div class=\"flex flex-col items-center gap-1\"><p class=\"text-3xl font-semibold tracking-tight\">1</p><p class=\"text-sm text-base-content/60\">script tag</p></div><div class=\"flex flex-col items-center gap-1\"><p class=\"text-3xl font-semibold tracking-tight\">6</p><p class=\"text-sm text-base-content/60\">frameworks</p></div><div class=\"flex flex-col items-center gap-1\"><p class=\"text-3xl font-semibold tracking-tight\">100%</p><p class=\"text-sm text-base-content/60\">self-hostable</p></div><div class=\"flex flex-col items-center gap-1\"><p class=\"text-3xl font-semibold tracking-tight\">0</p><p class=\"text-sm text-base-content/60\">widgets</p></div></div></div></section><!-- ── The problem ─────────────────────────────────────────────────── --><section class=\"border-b border-base-300/60 bg-base-200/30\" aria-labelledby=\"problem-title\"><div class=\"mx-auto w-full max-w-6xl px-4 py-16 md:py-20\"><div class=\"mx-auto max-w-2xl text-center\"><div class=\"flex items-center justify-center gap-2\"><span class=\"h-4 w-0.5 rounded-full bg-primary/60\" aria-hidden=\"true\"></span><p class=\"font-mono text-sm font-medium text-base-content/60\">The problem</p><span class=\"h-4 w-0.5 rounded-full bg-primary/60\" aria-hidden=\"true\"></span></div><h2 id=\"problem-title\" class=\"mt-4 text-3xl font-semibold tracking-tight sm:text-4xl\">Bug reports lose the one thing you actually need</h2><p class=\"mt-4 text-base text-base-content/70\">By the time a vague report reaches a developer, the context is gone. Everyone guesses, and the fix slips a sprint.</p></div><div class=\"mt-12 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4\"><div class=\"card group border border-base-300/60 bg-base-200/20 p-5 transition-colors hover:border-base-300 hover:bg-base-200/40\"><span class=\"inline-flex size-11 items-center justify-center rounded-lg bg-error/10 text-error\" aria-hidden=\"true\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"size-5\"><path d=\"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z\"></path><path d=\"M12 9v4\"></path><path d=\"M12 17h.01\"></path></svg></span><h3 class=\"mt-4 text-base font-medium\">Vague reports</h3><p class=\"mt-1.5 text-sm text-base-content/70\">“The button doesn’t work.” No steps, no page, no idea which button. A round-trip just to reproduce.</p></div><div class=\"card group border border-base-300/60 bg-base-200/20 p-5 transition-colors hover:border-base-300 hover:bg-base-200/40\"><span class=\"inline-flex size-11 items-center justify-center rounded-lg bg-warning/10 text-warning\" aria-hidden=\"true\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"size-5\"><path d=\"m3 3 7.07 16.97 2.51-7.39 7.39-2.51L3 3z\"></path><path d=\"m13 13 6 6\"></path></svg></span><h3 class=\"mt-4 text-base font-medium\">No selector or element</h3><p class=\"mt-1.5 text-sm text-base-content/70\">Developers hunt through the DOM by hand. The failing element is never named, so guesses pile up.</p></div><div class=\"card group border border-base-300/60 bg-base-200/20 p-5 transition-colors hover:border-base-300 hover:bg-base-200/40\"><span class=\"inline-flex size-11 items-center justify-center rounded-lg bg-secondary/10 text-secondary\" aria-hidden=\"true\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"size-5\"><path d=\"M18 8V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h8\"></path><path d=\"M10 19v-3.96 3.15\"></path><path d=\"M7 19h5\"></path><rect width=\"6\" height=\"10\" x=\"16\" y=\"12\" rx=\"2\"></rect></svg></span><h3 class=\"mt-4 text-base font-medium\">Unknown viewport and framework</h3><p class=\"mt-1.5 text-sm text-base-content/70\">Mobile-only? Tailwind or MUI? Without the environment, every fix is shot in the dark.</p></div><div class=\"card group border border-base-300/60 bg-base-200/20 p-5 transition-colors hover:border-base-300 hover:bg-base-200/40\"><span class=\"inline-flex size-11 items-center justify-center rounded-lg bg-primary/10 text-primary\" aria-hidden=\"true\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"size-5\"><line x1=\"2\" x2=\"22\" y1=\"2\" y2=\"22\"></line><path d=\"M10.41 10.41a2 2 0 1 1-2.83-2.83\"></path><line x1=\"13.5\" x2=\"6\" y1=\"13.5\" y2=\"21\"></line><line x1=\"18\" x2=\"21\" y1=\"12\" y2=\"15\"></line><path d=\"M3.59 3.59A1.99 1.99 0 0 0 3 5v14a2 2 0 0 0 2 2h14c.55 0 1.052-.22 1.41-.59\"></path><path d=\"M21 15V5a2 2 0 0 0-2-2H9\"></path></svg></span><h3 class=\"mt-4 text-base font-medium\">Screenshot-only, “works on my machine”</h3><p class=\"mt-1.5 text-sm text-base-content/70\">A PNG proves something broke but carries no styles, no DOM and nothing an agent can act on.</p></div></div></div></section><!-- ── How it works ────────────────────────────────────────────────── --><section id=\"how-it-works\" class=\"border-b border-base-300/60\"><div class=\"mx-auto w-full max-w-6xl px-4 py-16 md:py-20\"><div class=\"max-w-2xl\"><p class=\"font-mono text-xs uppercase tracking-widest text-base-content/50\">How it works</p><h2 class=\"mt-2 text-3xl font-semibold tracking-tight\">Four steps from click to issue</h2><p class=\"mt-3 text-base text-base-content/70\">No widgets to mount, no SDK to learn. The overlay lives over your app and gets out of the way.</p></div><ul class=\"steps steps-vertical mt-10 lg:steps-horizontal\"><li class=\"step step-primary\">Add the script tag</li><li class=\"step step-primary\">Hold the hotkey and click the element</li><li class=\"step step-primary\">Comment or tag it Bug/Enhancement</li><li class=\"step step-primary\">The issue lands in GitHub with full context</li></ul><p class=\"mt-8 text-sm text-base-content/60\">Press <kbd class=\"kbd kbd-sm\">Alt</kbd> + <kbd class=\"kbd kbd-sm\">Shift</kbd> on this page and try it yourself.</p></div></section><!-- ── What gets captured ──────────────────────────────────────────── --><section id=\"what-it-captures\" class=\"border-b border-base-300/60 bg-base-200/30\"><div class=\"mx-auto w-full max-w-6xl px-4 py-16 md:py-20\"><div class=\"max-w-2xl\"><p class=\"font-mono text-xs uppercase tracking-widest text-base-content/50\">What gets captured</p><h2 class=\"mt-2 text-3xl font-semibold tracking-tight\">Everything a fix needs, captured automatically</h2><p class=\"mt-3 text-base text-base-content/70\">Each report bundles the element, its environment and its story into one structured payload.</p></div><div class=\"mt-10 grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -100,30 +95,51 @@ func LandingPage(version string) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<span class=\"iconify lucide--play size-4.5\" aria-hidden=\"true\"></span> Self-host")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<div class=\"flex items-center gap-2\"><h3 class=\"card-title text-base\">Element</h3>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = ui.Badge(ui.BadgeProps{Label: "DOM", Variant: ui.BadgeGhost, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM}).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</div><ul class=\"mt-1 flex flex-col gap-1.5 text-sm text-base-content/70\"><li>CSS selector</li><li>data-component</li><li>Computed styles</li><li>Outer HTML</li></ul>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "#self-host", Variant: ui.ButtonGhost, Size: ui.ButtonLG, ExtraClass: "gap-2.5 text-base font-medium sm:text-lg"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var4), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = ui.Card("", nil).Render(templ.WithChildren(ctx, templ_7745c5c3_Var4), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</div><!-- 5. Three check lines --><ul class=\"mt-8 flex flex-col items-center gap-2 text-sm text-base-content transition-all delay-1000 duration-1000 starting:opacity-0 sm:flex-row sm:flex-wrap sm:justify-center sm:gap-x-6\"><li class=\"flex items-center gap-2\"><span class=\"iconify lucide--check size-4 shrink-0\" aria-hidden=\"true\"></span> Drop in one script tag</li><li class=\"flex items-center gap-2\"><span class=\"iconify lucide--check size-4 shrink-0\" aria-hidden=\"true\"></span> Framework-aware capture</li><li class=\"flex items-center gap-2\"><span class=\"iconify lucide--check size-4 shrink-0\" aria-hidden=\"true\"></span> Files straight to GitHub</li></ul><p class=\"mt-4 text-xs text-base-content/50 transition-all delay-1000 duration-1000 starting:opacity-0\">Hold Alt+Shift and click any element to try the overlay right here.</p></div><!-- 6. Code-drawn product window with floating capture / share cards. --><div class=\"mt-14 transition-all delay-1500 duration-1000 starting:opacity-0 md:mt-20\" role=\"img\" aria-label=\"Diagram of the emergent.feedback overlay: a tester selects a checkout button, a card shows the capture in progress (selector, styles and screenshot), and a second card confirms the issue was filed to GitHub.\"><div class=\"relative mx-auto max-w-4xl\"><div class=\"relative overflow-hidden rounded-xl bg-linear-to-r from-primary/25 via-secondary/20 to-accent/25 p-1.5 shadow-2xl shadow-primary/10\"><div class=\"overflow-hidden rounded-lg border border-base-300/60 bg-base-100\"><!-- window bar --><div class=\"flex items-center gap-3 border-b border-base-300/60 bg-base-200/50 px-4 py-3\"><div class=\"flex items-center gap-1.5\" aria-hidden=\"true\"><span class=\"size-2.5 rounded-full bg-error/70\"></span> <span class=\"size-2.5 rounded-full bg-warning/70\"></span> <span class=\"size-2.5 rounded-full bg-success/70\"></span></div><div class=\"flex min-w-0 flex-1 items-center gap-2 rounded-md border border-base-300/60 bg-base-100 px-3 py-1 text-xs text-base-content/50\"><span class=\"iconify lucide--lock size-3 shrink-0\" aria-hidden=\"true\"></span> <span class=\"truncate font-mono\">app.example.com/checkout</span></div><span class=\"badge badge-primary badge-sm gap-1.5\"><span class=\"size-1.5 animate-pulse rounded-full bg-primary-content\" aria-hidden=\"true\"></span> Overlay armed</span></div><!-- fake app page --><div class=\"relative min-h-[280px] bg-base-200/20 p-6 sm:min-h-[340px]\"><div class=\"flex items-center justify-between\"><div class=\"space-y-1.5\"><div class=\"h-2.5 w-28 rounded-full bg-base-300\"></div><div class=\"h-2 w-20 rounded-full bg-base-300/60\"></div></div><div class=\"flex -space-x-2\" aria-hidden=\"true\"><span class=\"size-6 rounded-full border-2 border-base-100 bg-primary/50\"></span> <span class=\"size-6 rounded-full border-2 border-base-100 bg-secondary/50\"></span> <span class=\"size-6 rounded-full border-2 border-base-100 bg-accent/50\"></span></div></div><div class=\"mt-5 space-y-2.5\" aria-hidden=\"true\"><div class=\"h-2 w-full rounded-full bg-base-300/50\"></div><div class=\"h-2 w-5/6 rounded-full bg-base-300/50\"></div><div class=\"h-2 w-2/3 rounded-full bg-base-300/50\"></div></div><!-- selected element --><div class=\"relative mx-auto mt-8 max-w-md\"><div class=\"rounded-lg border border-base-300 bg-base-100 p-4 shadow-sm\"><div class=\"flex items-center justify-between gap-4\"><div class=\"space-y-1.5\"><div class=\"h-2 w-16 rounded-full bg-base-300/70\"></div><div class=\"h-2 w-24 rounded-full bg-base-300/50\"></div></div><div class=\"h-7 w-24 rounded-md bg-primary/70\"></div></div></div><div class=\"pointer-events-none absolute -inset-1 rounded-lg ring-2 ring-primary ring-offset-2 ring-offset-base-100\"></div><div class=\"absolute -top-3 left-4 flex items-center gap-1 rounded-md bg-primary px-2 py-0.5 text-[11px] font-medium text-primary-content shadow\"><span class=\"iconify lucide--bug size-3\" aria-hidden=\"true\"></span> ")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var5 string
-		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs("button[data-component=\"checkout\"]")
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `server/landing/landing.templ`, Line: 169, Col: 50}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "</div></div></div></div></div><!-- Floating: capture in progress (top-right) --><div class=\"card absolute -top-6 -right-2 hidden w-56 animate-float border border-base-300/60 bg-base-100 p-4 shadow-xl motion-reduce:animate-none sm:block sm:-right-6 lg:-right-10\"><p class=\"text-sm font-medium\">Capturing <span class=\"break-all text-primary underline decoration-primary/40 decoration-2 underline-offset-2\">button.btn-primary</span></p><p class=\"mt-1 text-xs text-base-content/60\">Selector, styles + screenshot</p><div class=\"mt-2 flex flex-col gap-1.5\" aria-hidden=\"true\"><div class=\"skeleton h-2.5 w-1/2 rounded\"></div><div class=\"skeleton h-2.5 w-3/4 rounded\"></div></div><div class=\"mt-3 flex items-end justify-between gap-2\"><div class=\"tooltip\" data-tip=\"In process\"><span class=\"iconify lucide--loader block size-4 animate-spin text-base-content/60\" aria-hidden=\"true\"></span></div><span class=\"btn btn-sm btn-error border-0\"><span class=\"iconify lucide--x-square size-4\" aria-hidden=\"true\"></span> Cancel</span></div></div><!-- Floating: filed to GitHub (bottom-left) --><div class=\"card absolute -bottom-8 -left-2 hidden w-60 animate-float border border-base-300/60 bg-base-100 p-4 shadow-xl [animation-delay:-3s] motion-reduce:animate-none sm:block sm:-left-6 lg:-left-10\"><p class=\"text-sm font-medium\">Issue filed to GitHub</p><p class=\"mt-1 text-xs text-base-content/60\">Shared with your repo’s team</p><div class=\"-space-x-3 mt-3 flex items-center\" aria-hidden=\"true\"><span class=\"size-8 rounded-full border-2 border-base-100 bg-linear-to-br from-primary/80 to-secondary/70\"></span> <span class=\"size-8 rounded-full border-2 border-base-100 bg-linear-to-br from-secondary/80 to-accent/70\"></span> <span class=\"size-8 rounded-full border-2 border-base-100 bg-linear-to-br from-accent/80 to-primary/70\"></span> <span class=\"flex size-8 items-center justify-center rounded-full border-2 border-base-100 bg-base-200 text-xs font-medium\">+4</span></div><div class=\"mt-3 flex items-end justify-between gap-2\"><div class=\"tooltip flex items-center rounded-full bg-success/10 p-1.5 text-success\" data-tip=\"Shared successfully\"><span class=\"iconify lucide--check size-3.5\" aria-hidden=\"true\"></span></div><span class=\"btn btn-sm btn-soft ms-auto\"><span class=\"iconify lucide--copy size-4\" aria-hidden=\"true\"></span> Copy Link</span></div></div><div class=\"pointer-events-none absolute inset-x-10 -bottom-6 -z-1 h-24 rounded-full bg-secondary/20 blur-3xl\" aria-hidden=\"true\"></div></div></div><!-- 7. Stats --><div class=\"mx-auto mt-16 grid max-w-4xl grid-cols-2 gap-8 md:mt-20 md:grid-cols-4\"><div class=\"flex flex-col items-center gap-1\"><p class=\"text-3xl font-semibold tracking-tight\">1</p><p class=\"text-sm text-base-content/60\">script tag</p></div><div class=\"flex flex-col items-center gap-1\"><p class=\"text-3xl font-semibold tracking-tight\">6</p><p class=\"text-sm text-base-content/60\">frameworks</p></div><div class=\"flex flex-col items-center gap-1\"><p class=\"text-3xl font-semibold tracking-tight\">100%</p><p class=\"text-sm text-base-content/60\">self-hostable</p></div><div class=\"flex flex-col items-center gap-1\"><p class=\"text-3xl font-semibold tracking-tight\">0</p><p class=\"text-sm text-base-content/60\">widgets</p></div></div></div></section><!-- ── The problem ─────────────────────────────────────────────────── --><section class=\"border-b border-base-300/60 bg-base-200/30\"><div class=\"mx-auto w-full max-w-5xl px-4 py-16 md:py-20\"><div class=\"max-w-2xl\"><p class=\"font-mono text-xs uppercase tracking-widest text-base-content/50\">The problem</p><h2 class=\"mt-2 text-3xl font-semibold tracking-tight\">Bug reports lose the one thing you actually need</h2><p class=\"mt-3 text-base text-base-content/70\">By the time a vague report reaches a developer, the context is gone. Everyone guesses, and the fix slips a sprint.</p></div><div class=\"mt-10 grid grid-cols-1 gap-5 sm:grid-cols-2\">")
+		templ_7745c5c3_Var5 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+			if !templ_7745c5c3_IsBuffer {
+				defer func() {
+					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err == nil {
+						templ_7745c5c3_Err = templ_7745c5c3_BufErr
+					}
+				}()
+			}
+			ctx = templ.InitializeContext(ctx)
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<div class=\"flex items-center gap-2\"><h3 class=\"card-title text-base\">Environment</h3>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = ui.Badge(ui.BadgeProps{Label: "Runtime", Variant: ui.BadgeGhost, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM}).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</div><ul class=\"mt-1 flex flex-col gap-1.5 text-sm text-base-content/70\"><li>URL</li><li>Viewport</li><li>Device pixel ratio</li><li>User agent</li><li>Timestamp</li></ul>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			return nil
+		})
+		templ_7745c5c3_Err = ui.Card("", nil).Render(templ.WithChildren(ctx, templ_7745c5c3_Var5), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -139,7 +155,15 @@ func LandingPage(version string) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<h3 class=\"card-title text-base\">Vague reports</h3><p class=\"text-sm text-base-content/70\">“The button doesn’t work.” No steps, no page, no idea which button. A round-trip just to reproduce.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<div class=\"flex items-center gap-2\"><h3 class=\"card-title text-base\">Framework</h3>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = ui.Badge(ui.BadgeProps{Label: "Detected", Variant: ui.BadgeGhost, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM}).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</div><p class=\"mt-1 text-sm text-base-content/70\">Tailwind, DaisyUI, Bootstrap, MUI, Chakra, Radix and shadcn are recognised on the fly.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -161,7 +185,15 @@ func LandingPage(version string) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<h3 class=\"card-title text-base\">No selector or element</h3><p class=\"text-sm text-base-content/70\">Developers hunt through the DOM by hand. The failing element is never named, so guesses pile up.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<div class=\"flex items-center gap-2\"><h3 class=\"card-title text-base\">Correlation</h3>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = ui.Badge(ui.BadgeProps{Label: "Linked", Variant: ui.BadgeGhost, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM}).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</div><ul class=\"mt-1 flex flex-col gap-1.5 text-sm text-base-content/70\"><li>Session ID</li><li>Application trace ID</li><li>Session history</li></ul>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -183,13 +215,33 @@ func LandingPage(version string) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<h3 class=\"card-title text-base\">Unknown viewport and framework</h3><p class=\"text-sm text-base-content/70\">Mobile-only? Tailwind or MUI? Without the environment, every fix is shot in the dark.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "<div class=\"flex items-center gap-2\"><h3 class=\"card-title text-base\">Visual</h3>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = ui.Badge(ui.BadgeProps{Label: "Proof", Variant: ui.BadgeGhost, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM}).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</div><ul class=\"mt-1 flex flex-col gap-1.5 text-sm text-base-content/70\"><li>Element screenshot</li><li>Redacted DOM snapshot</li><li>Available to agents via MCP</li></ul>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
 		templ_7745c5c3_Err = ui.Card("", nil).Render(templ.WithChildren(ctx, templ_7745c5c3_Var8), templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</div></div></section><!-- ── The issue it produces ───────────────────────────────────────── --><section class=\"border-b border-base-300/60\"><div class=\"mx-auto w-full max-w-6xl px-4 py-16 md:py-20\"><div class=\"max-w-2xl\"><p class=\"font-mono text-xs uppercase tracking-widest text-base-content/50\">The output</p><h2 class=\"mt-2 text-3xl font-semibold tracking-tight\">The issue it produces</h2><p class=\"mt-3 text-base text-base-content/70\">A developer opens the ticket and starts fixing — nothing to chase, nothing to ask.</p></div><div class=\"mockup-browser mt-10 border border-base-300 bg-base-200\"><div class=\"mockup-browser-toolbar\"><div class=\"input\">github.com/emergent-company/emergent.feedback/issues/42</div></div><div class=\"border-t border-base-300 bg-base-100 p-5\"><div class=\"flex flex-wrap items-center gap-2\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = ui.Badge(ui.BadgeProps{Label: "Bug", Variant: ui.BadgeError, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM}).Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<h3 class=\"text-base font-semibold\">Checkout button ignores clicks on mobile Safari</h3></div><div class=\"mockup-code mt-4 w-full text-xs\"><pre data-prefix=\"URL\"><code>https://app.example.com/checkout</code></pre><pre data-prefix=\"Branch\"><code>release/2.4</code></pre><pre data-prefix=\"Viewport\"><code>390 × 844 · DPR 3 (iPhone, Safari)</code></pre><pre data-prefix=\"Selector\"><code>main &gt; section.cart &gt; button.btn.btn-primary[data-component=\"checkout\"]</code></pre><pre data-prefix=\"Styles\"><code>&#123; display: flex; pointer-events: none; z-index: 0 &#125;</code></pre><pre data-prefix=\"Trace\"><code>session=8f2c19 · trace=4b7ae01</code></pre></div><p class=\"mt-4 text-sm text-base-content/70\">“On mobile the primary button never fires. Desktop is fine.” — captured with element screenshot, redacted DOM snapshot and session history attached.</p></div></div></div></section><!-- ── Built for testers / developers ──────────────────────────────── --><section class=\"border-b border-base-300/60 bg-base-200/30\"><div class=\"mx-auto w-full max-w-6xl px-4 py-16 md:py-20\"><div class=\"grid grid-cols-1 gap-6 md:grid-cols-2\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -205,17 +257,17 @@ func LandingPage(version string) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<h3 class=\"card-title text-base\">Screenshot-only, “works on my machine”</h3><p class=\"text-sm text-base-content/70\">A PNG proves something broke but carries no styles, no DOM and nothing an agent can act on.</p>")
+			templ_7745c5c3_Err = ui.Badge(ui.BadgeProps{Label: "Built for testers", Variant: ui.BadgeSecondary, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM}).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, " <h2 class=\"card-title mt-2 text-xl\">Report what you see, not what you guess</h2><ul class=\"mt-2 flex flex-col gap-2.5 text-sm text-base-content/75\"><li>Hold one hotkey instead of writing a bug essay</li><li>Point at the exact element that misbehaved</li><li>Tag it Bug or Enhancement in the moment</li><li>Nothing to install or configure per page</li><li>Works on staging and production alike</li></ul>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
 		templ_7745c5c3_Err = ui.Card("", nil).Render(templ.WithChildren(ctx, templ_7745c5c3_Var9), templ_7745c5c3_Buffer)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</div></div></section><!-- ── How it works ────────────────────────────────────────────────── --><section id=\"how-it-works\" class=\"border-b border-base-300/60\"><div class=\"mx-auto w-full max-w-5xl px-4 py-16 md:py-20\"><div class=\"max-w-2xl\"><p class=\"font-mono text-xs uppercase tracking-widest text-base-content/50\">How it works</p><h2 class=\"mt-2 text-3xl font-semibold tracking-tight\">Four steps from click to issue</h2><p class=\"mt-3 text-base text-base-content/70\">No widgets to mount, no SDK to learn. The overlay lives over your app and gets out of the way.</p></div><ul class=\"steps steps-vertical mt-10 lg:steps-horizontal\"><li class=\"step step-primary\">Add the script tag</li><li class=\"step step-primary\">Hold the hotkey and click the element</li><li class=\"step step-primary\">Comment or tag it Bug/Enhancement</li><li class=\"step step-primary\">The issue lands in GitHub with full context</li></ul><p class=\"mt-8 text-sm text-base-content/60\">Press <kbd class=\"kbd kbd-sm\">Alt</kbd> + <kbd class=\"kbd kbd-sm\">Shift</kbd> on this page and try it yourself.</p></div></section><!-- ── What gets captured ──────────────────────────────────────────── --><section id=\"what-it-captures\" class=\"border-b border-base-300/60 bg-base-200/30\"><div class=\"mx-auto w-full max-w-6xl px-4 py-16 md:py-20\"><div class=\"max-w-2xl\"><p class=\"font-mono text-xs uppercase tracking-widest text-base-content/50\">What gets captured</p><h2 class=\"mt-2 text-3xl font-semibold tracking-tight\">Everything a fix needs, captured automatically</h2><p class=\"mt-3 text-base text-base-content/70\">Each report bundles the element, its environment and its story into one structured payload.</p></div><div class=\"mt-10 grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -231,15 +283,11 @@ func LandingPage(version string) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "<div class=\"flex items-center gap-2\"><h3 class=\"card-title text-base\">Element</h3>")
+			templ_7745c5c3_Err = ui.Badge(ui.BadgeProps{Label: "Built for developers", Variant: ui.BadgeAccent, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM}).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = ui.Badge(ui.BadgeProps{Label: "DOM", Variant: ui.BadgeGhost, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM}).Render(ctx, templ_7745c5c3_Buffer)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</div><ul class=\"mt-1 flex flex-col gap-1.5 text-sm text-base-content/70\"><li>CSS selector</li><li>data-component</li><li>Computed styles</li><li>Outer HTML</li></ul>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, " <h2 class=\"card-title mt-2 text-xl\">Debug with the context already attached</h2><ul class=\"mt-2 flex flex-col gap-2.5 text-sm text-base-content/75\"><li>Exact selector and computed styles in the ticket</li><li>Viewport, DPR and user agent captured for you</li><li>Framework and data-component hints baked in</li><li>Session and trace IDs to correlate with logs</li><li>Issues land in GitHub, right next to the code</li></ul>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -249,63 +297,72 @@ func LandingPage(version string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Var11 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-			if !templ_7745c5c3_IsBuffer {
-				defer func() {
-					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err == nil {
-						templ_7745c5c3_Err = templ_7745c5c3_BufErr
-					}
-				}()
-			}
-			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "<div class=\"flex items-center gap-2\"><h3 class=\"card-title text-base\">Environment</h3>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = ui.Badge(ui.BadgeProps{Label: "Runtime", Variant: ui.BadgeGhost, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM}).Render(ctx, templ_7745c5c3_Buffer)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "</div><ul class=\"mt-1 flex flex-col gap-1.5 text-sm text-base-content/70\"><li>URL</li><li>Viewport</li><li>Device pixel ratio</li><li>User agent</li><li>Timestamp</li></ul>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			return nil
-		})
-		templ_7745c5c3_Err = ui.Card("", nil).Render(templ.WithChildren(ctx, templ_7745c5c3_Var11), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "</div></div></section><!-- ── MCP server (headline feature) ──────────────────────────────── --><section id=\"mcp\" class=\"relative overflow-hidden border-b border-base-300/60\" aria-labelledby=\"mcp-title\"><div class=\"hero-glow pointer-events-none absolute inset-x-0 -top-48 -z-1 h-[720px] opacity-40\" aria-hidden=\"true\"></div><div class=\"relative mx-auto w-full max-w-6xl px-4 py-16 md:py-24\"><div class=\"mx-auto max-w-3xl text-center\"><div class=\"flex items-center justify-center gap-2\"><span class=\"h-4 w-0.5 rounded-full bg-primary/60\" aria-hidden=\"true\"></span><p class=\"font-mono text-sm font-medium text-base-content/60\">Agent-ready</p><span class=\"h-4 w-0.5 rounded-full bg-primary/60\" aria-hidden=\"true\"></span></div><h2 id=\"mcp-title\" class=\"mt-4 text-3xl font-semibold tracking-tight sm:text-4xl lg:text-5xl\"><span class=\"bg-linear-to-r from-primary to-secondary bg-clip-text text-transparent\">MCP server</span></h2><p class=\"mt-5 text-base text-base-content/70 sm:text-lg\">emergent.feedback ships a built-in MCP server so AI agents can pull any feedback item with its full context — selector, computed styles, screenshot, redacted DOM snapshot, replay and lifecycle — and act on it.</p><div class=\"mt-5 flex flex-wrap items-center justify-center gap-2\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Var12 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-			if !templ_7745c5c3_IsBuffer {
-				defer func() {
-					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err == nil {
-						templ_7745c5c3_Err = templ_7745c5c3_BufErr
-					}
-				}()
-			}
-			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<div class=\"flex items-center gap-2\"><h3 class=\"card-title text-base\">Framework</h3>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = ui.Badge(ui.BadgeProps{Label: "Detected", Variant: ui.BadgeGhost, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM}).Render(ctx, templ_7745c5c3_Buffer)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "</div><p class=\"mt-1 text-sm text-base-content/70\">Tailwind, DaisyUI, Bootstrap, MUI, Chakra, Radix and shadcn are recognised on the fly.</p>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			return nil
-		})
-		templ_7745c5c3_Err = ui.Card("", nil).Render(templ.WithChildren(ctx, templ_7745c5c3_Var12), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = ui.Badge(ui.BadgeProps{Label: "Streamable HTTP", Variant: ui.BadgePrimary, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM}).Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = ui.Badge(ui.BadgeProps{Label: "Repo-scoped keys", Variant: ui.BadgeGhost, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM}).Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = ui.Badge(ui.BadgeProps{Label: "Built in", Variant: ui.BadgeGhost, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM}).Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "</div></div><!-- Tools, grouped by read vs lifecycle. --><div class=\"mt-12 grid grid-cols-1 gap-5 lg:grid-cols-2\"><div class=\"card border border-base-300/60 bg-base-100 p-6\"><div class=\"flex items-center justify-between gap-3\"><div class=\"flex items-center gap-2\"><span class=\"inline-flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary\" aria-hidden=\"true\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"size-4\"><path d=\"M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z\"></path><path d=\"M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z\"></path></svg></span><h3 class=\"text-sm font-semibold uppercase tracking-wide text-base-content/60\">Read</h3></div><span class=\"badge badge-primary badge-soft badge-sm\">7 tools</span></div><ul class=\"mt-4 flex flex-wrap gap-2\"><li><code class=\"rounded-md border border-base-300/60 bg-base-300/40 px-2 py-1 font-mono text-xs\">feedback_list</code></li><li><code class=\"rounded-md border border-base-300/60 bg-base-300/40 px-2 py-1 font-mono text-xs\">feedback_get</code></li><li><code class=\"rounded-md border border-base-300/60 bg-base-300/40 px-2 py-1 font-mono text-xs\">feedback_get_context</code></li><li><code class=\"rounded-md border border-base-300/60 bg-base-300/40 px-2 py-1 font-mono text-xs\">feedback_get_screenshot</code></li><li><code class=\"rounded-md border border-base-300/60 bg-base-300/40 px-2 py-1 font-mono text-xs\">feedback_get_snapshot</code></li><li><code class=\"rounded-md border border-base-300/60 bg-base-300/40 px-2 py-1 font-mono text-xs\">feedback_get_replay</code></li><li><code class=\"rounded-md border border-base-300/60 bg-base-300/40 px-2 py-1 font-mono text-xs\">feedback_list_for_issue</code></li></ul><p class=\"mt-4 text-sm text-base-content/70\">List reports, fetch one, and pull its context, screenshot, DOM snapshot or replay — or find everything filed against a GitHub issue.</p></div><div class=\"card border border-base-300/60 bg-base-100 p-6\"><div class=\"flex items-center justify-between gap-3\"><div class=\"flex items-center gap-2\"><span class=\"inline-flex size-8 items-center justify-center rounded-lg bg-secondary/10 text-secondary\" aria-hidden=\"true\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"size-4\"><path d=\"M21 12a9 9 0 1 1-6.219-8.56\"></path><path d=\"M21 3v6h-6\"></path></svg></span><h3 class=\"text-sm font-semibold uppercase tracking-wide text-base-content/60\">Lifecycle</h3></div><span class=\"badge badge-secondary badge-soft badge-sm\">4 tools</span></div><ul class=\"mt-4 flex flex-wrap gap-2\"><li><code class=\"rounded-md border border-base-300/60 bg-base-300/40 px-2 py-1 font-mono text-xs\">feedback_mark_applied</code></li><li><code class=\"rounded-md border border-base-300/60 bg-base-300/40 px-2 py-1 font-mono text-xs\">feedback_mark_resolved</code></li><li><code class=\"rounded-md border border-base-300/60 bg-base-300/40 px-2 py-1 font-mono text-xs\">feedback_verify</code></li><li><code class=\"rounded-md border border-base-300/60 bg-base-300/40 px-2 py-1 font-mono text-xs\">feedback_watch</code></li></ul><p class=\"mt-4 text-sm text-base-content/70\">Close the loop: mark work applied, resolve a report, verify it against the running app, or watch for new feedback as it arrives.</p></div></div><!-- Endpoint + auth. --><div class=\"mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2\"><div class=\"card border border-base-300/60 bg-base-100 p-6\"><div class=\"flex items-center gap-2\"><span class=\"inline-flex size-8 items-center justify-center rounded-lg bg-accent/10 text-accent\" aria-hidden=\"true\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"size-4\"><path d=\"M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71\"></path><path d=\"M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71\"></path></svg></span><h3 class=\"text-base font-medium\">Endpoint</h3></div><p class=\"mt-3 text-sm text-base-content/70\">One streamable HTTP endpoint. Point your agent at it and it is ready to pull context.</p><div class=\"mt-4 flex items-center gap-2 rounded-lg border border-base-300/60 bg-base-300/40 px-3 py-2.5\"><code class=\"min-w-0 flex-1 break-all font-mono text-xs\">https://feedback.emergent-company.ai/mcp</code></div></div><div class=\"card border border-base-300/60 bg-base-100 p-6\"><div class=\"flex items-center gap-2\"><span class=\"inline-flex size-8 items-center justify-center rounded-lg bg-warning/10 text-warning\" aria-hidden=\"true\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"size-4\"><path d=\"M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z\"></path><circle cx=\"16.5\" cy=\"7.5\" r=\".5\" fill=\"currentColor\"></circle></svg></span><h3 class=\"text-base font-medium\">Repo-scoped API key</h3></div><p class=\"mt-3 text-sm text-base-content/70\">Authenticate with a key created in the panel, sent as a bearer header. Each key is limited to the repositories you select, so a leaked key only ever exposes the repos you named.</p><div class=\"mockup-code mt-4 w-full text-xs\"><pre data-prefix=\"↳\"><code>Authorization: Bearer &lt;TOKEN&gt;</code></pre></div><a href=\"/panel\" class=\"link link-primary mt-3 inline-block text-sm\">Create a key in the panel →</a></div></div><!-- Install instructions. --><div class=\"mt-14\"><div class=\"mx-auto max-w-2xl text-center\"><h3 class=\"text-2xl font-semibold tracking-tight\">Connect your agent</h3><p class=\"mt-3 text-base text-base-content/70\">Three verified ways to register the server. Swap the token placeholder for a key from the panel.</p></div><div class=\"mt-8 grid grid-cols-1 gap-5 lg:grid-cols-3\"><!-- Claude Code (CLI) --><div class=\"card border border-base-300/60 bg-base-100 p-5\"><div class=\"flex items-center gap-2\"><span class=\"inline-flex size-7 items-center justify-center rounded-md bg-base-300/50 font-mono text-xs text-base-content/70\" aria-hidden=\"true\">&gt;_</span><h4 class=\"text-sm font-semibold\">Claude Code (CLI)</h4></div><p class=\"mt-1 text-xs text-base-content/60\">Register for your user account in one line.</p><div class=\"mockup-code mt-3 w-full text-xs\"><pre data-prefix=\"$\"><code>claude mcp add --transport http feedback https://feedback.emergent-company.ai/mcp --header \"Authorization: Bearer &lt;TOKEN&gt;\" --scope user</code></pre></div></div><!-- Project .mcp.json --><div class=\"card border border-base-300/60 bg-base-100 p-5\"><div class=\"flex items-center gap-2\"><span class=\"inline-flex size-7 items-center justify-center rounded-md bg-base-300/50 font-mono text-[11px] text-base-content/70\" aria-hidden=\"true\">&#123; &#125;</span><h4 class=\"text-sm font-semibold\">Claude Code (project)</h4></div><p class=\"mt-1 text-xs text-base-content/60\">Commit <code class=\"font-mono\">.mcp.json</code> at the repo root.</p><div class=\"mockup-code mt-3 w-full text-[11px]\"><pre><code>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var11 string
+		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(`{
+  "mcpServers": {
+    "feedback": {
+      "type": "http",
+      "url": "https://feedback.emergent-company.ai/mcp",
+      "headers": { "Authorization": "Bearer ${FEEDBACK_MCP_TOKEN}" }
+    }
+  }
+}`)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `server/landing/landing.templ`, Line: 579, Col: 2}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "</code></pre></div></div><!-- Cursor --><div class=\"card border border-base-300/60 bg-base-100 p-5\"><div class=\"flex items-center gap-2\"><span class=\"inline-flex size-7 items-center justify-center rounded-md bg-base-300/50 font-mono text-[11px] text-base-content/70\" aria-hidden=\"true\">&#123; &#125;</span><h4 class=\"text-sm font-semibold\">Cursor</h4></div><p class=\"mt-1 text-xs text-base-content/60\">Add to <code class=\"font-mono\">.cursor/mcp.json</code>.</p><div class=\"mockup-code mt-3 w-full text-[11px]\"><pre><code>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var12 string
+		templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(`{
+  "mcpServers": {
+    "feedback": {
+      "url": "https://feedback.emergent-company.ai/mcp",
+      "headers": { "Authorization": "Bearer ${env:FEEDBACK_MCP_TOKEN}" }
+    }
+  }
+}`)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `server/landing/landing.templ`, Line: 597, Col: 2}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "</code></pre></div></div></div><div role=\"alert\" class=\"alert alert-info alert-soft mt-8 text-sm\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"size-5\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"10\"></circle><path d=\"M12 16v-4\"></path><path d=\"M12 8h.01\"></path></svg> <span>Claude Desktop’s config is stdio-only, so remote HTTP goes through the Connectors UI or the <code class=\"font-mono\">mcp-remote</code> bridge.</span></div></div></div></section><!-- ── Pricing ─────────────────────────────────────────────────────── --><section id=\"pricing\" class=\"border-b border-base-300/60 bg-base-200/30\"><div class=\"mx-auto w-full max-w-6xl px-4 py-16 md:py-20\"><div class=\"max-w-2xl\"><p class=\"font-mono text-xs uppercase tracking-widest text-base-content/50\">Pricing</p><h2 class=\"mt-2 text-3xl font-semibold tracking-tight\">Start free, self-hosted, forever</h2><p class=\"mt-3 text-base text-base-content/70\">The open-source tier is complete. Managed hosting is there when you would rather not run it yourself.</p></div><div class=\"mt-10 grid grid-cols-1 items-stretch gap-6 md:grid-cols-3\"><div class=\"card border-2 border-primary bg-base-100 shadow-lg\"><div class=\"card-body\"><div class=\"flex items-center justify-between gap-2\"><h3 class=\"card-title text-lg\">Community</h3>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = ui.Badge(ui.BadgeProps{Label: "Start here", Variant: ui.BadgePrimary, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM}).Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "</div><p class=\"mt-2 text-4xl font-semibold tracking-tight\">$0</p><p class=\"text-sm text-base-content/60\">Self-host, everything included.</p><ul class=\"mt-4 flex flex-1 flex-col gap-2 text-sm text-base-content/75\"><li>Full overlay + server source</li><li>GitHub issue filing</li><li>All capture fields and screenshots</li><li>MCP server and scoped API keys</li><li>Community support</li></ul><div class=\"card-actions mt-6\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -321,21 +378,17 @@ func LandingPage(version string) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "<div class=\"flex items-center gap-2\"><h3 class=\"card-title text-base\">Correlation</h3>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = ui.Badge(ui.BadgeProps{Label: "Linked", Variant: ui.BadgeGhost, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM}).Render(ctx, templ_7745c5c3_Buffer)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "</div><ul class=\"mt-1 flex flex-col gap-1.5 text-sm text-base-content/70\"><li>Session ID</li><li>Application trace ID</li><li>Session history</li></ul>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "Get started")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = ui.Card("", nil).Render(templ.WithChildren(ctx, templ_7745c5c3_Var13), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/emergent.feedback", Variant: ui.ButtonPrimary, Block: true, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var13), templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "</div></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -351,59 +404,39 @@ func LandingPage(version string) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<div class=\"flex items-center gap-2\"><h3 class=\"card-title text-base\">Visual</h3>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "<h3 class=\"card-title text-lg\">Cloud</h3><p class=\"mt-2 text-4xl font-semibold tracking-tight\">Contact</p><p class=\"text-sm text-base-content/60\">Managed hosting, zero ops.</p><ul class=\"mt-4 flex flex-1 flex-col gap-2 text-sm text-base-content/75\"><li>We run the server and upgrades</li><li>Managed database and backups</li><li>Usage dashboard</li><li>Email support</li></ul><div class=\"card-actions mt-6\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = ui.Badge(ui.BadgeProps{Label: "Proof", Variant: ui.BadgeGhost, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM}).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Var15 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+				if !templ_7745c5c3_IsBuffer {
+					defer func() {
+						templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+						if templ_7745c5c3_Err == nil {
+							templ_7745c5c3_Err = templ_7745c5c3_BufErr
+						}
+					}()
+				}
+				ctx = templ.InitializeContext(ctx)
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "Talk to us")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				return nil
+			})
+			templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/emergent.feedback/issues/new", Variant: ui.ButtonOutline, Block: true, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var15), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "</div><ul class=\"mt-1 flex flex-col gap-1.5 text-sm text-base-content/70\"><li>Element screenshot</li><li>Redacted DOM snapshot</li><li>Available to agents via MCP</li></ul>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
 		templ_7745c5c3_Err = ui.Card("", nil).Render(templ.WithChildren(ctx, templ_7745c5c3_Var14), templ_7745c5c3_Buffer)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "</div></div></section><!-- ── The issue it produces ───────────────────────────────────────── --><section class=\"border-b border-base-300/60\"><div class=\"mx-auto w-full max-w-5xl px-4 py-16 md:py-20\"><div class=\"max-w-2xl\"><p class=\"font-mono text-xs uppercase tracking-widest text-base-content/50\">The output</p><h2 class=\"mt-2 text-3xl font-semibold tracking-tight\">The issue it produces</h2><p class=\"mt-3 text-base text-base-content/70\">A developer opens the ticket and starts fixing — nothing to chase, nothing to ask.</p></div><div class=\"mockup-browser mt-10 border border-base-300 bg-base-200\"><div class=\"mockup-browser-toolbar\"><div class=\"input\">github.com/emergent-company/emergent.feedback/issues/42</div></div><div class=\"border-t border-base-300 bg-base-100 p-5\"><div class=\"flex flex-wrap items-center gap-2\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = ui.Badge(ui.BadgeProps{Label: "Bug", Variant: ui.BadgeError, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM}).Render(ctx, templ_7745c5c3_Buffer)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "<h3 class=\"text-base font-semibold\">Checkout button ignores clicks on mobile Safari</h3></div><div class=\"mockup-code mt-4 w-full text-xs\"><pre data-prefix=\"URL\"><code>https://app.example.com/checkout</code></pre><pre data-prefix=\"Branch\"><code>release/2.4</code></pre><pre data-prefix=\"Viewport\"><code>390 × 844 · DPR 3 (iPhone, Safari)</code></pre><pre data-prefix=\"Selector\"><code>main &gt; section.cart &gt; button.btn.btn-primary[data-component=\"checkout\"]</code></pre><pre data-prefix=\"Styles\"><code>&#123; display: flex; pointer-events: none; z-index: 0 &#125;</code></pre><pre data-prefix=\"Trace\"><code>session=8f2c19 · trace=4b7ae01</code></pre></div><p class=\"mt-4 text-sm text-base-content/70\">“On mobile the primary button never fires. Desktop is fine.” — captured with element screenshot, redacted DOM snapshot and session history attached.</p></div></div></div></section><!-- ── Built for testers / developers ──────────────────────────────── --><section class=\"border-b border-base-300/60 bg-base-200/30\"><div class=\"mx-auto w-full max-w-5xl px-4 py-16 md:py-20\"><div class=\"grid grid-cols-1 gap-6 md:grid-cols-2\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Var15 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-			if !templ_7745c5c3_IsBuffer {
-				defer func() {
-					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err == nil {
-						templ_7745c5c3_Err = templ_7745c5c3_BufErr
-					}
-				}()
-			}
-			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = ui.Badge(ui.BadgeProps{Label: "Built for testers", Variant: ui.BadgeSecondary, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM}).Render(ctx, templ_7745c5c3_Buffer)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, " <h2 class=\"card-title mt-2 text-xl\">Report what you see, not what you guess</h2><ul class=\"mt-2 flex flex-col gap-2.5 text-sm text-base-content/75\"><li>Hold one hotkey instead of writing a bug essay</li><li>Point at the exact element that misbehaved</li><li>Tag it Bug or Enhancement in the moment</li><li>Nothing to install or configure per page</li><li>Works on staging and production alike</li></ul>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			return nil
-		})
-		templ_7745c5c3_Err = ui.Card("", nil).Render(templ.WithChildren(ctx, templ_7745c5c3_Var15), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -419,11 +452,33 @@ func LandingPage(version string) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = ui.Badge(ui.BadgeProps{Label: "Built for developers", Variant: ui.BadgeAccent, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM}).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<h3 class=\"card-title text-lg\">Enterprise</h3><p class=\"mt-2 text-4xl font-semibold tracking-tight\">Contact</p><p class=\"text-sm text-base-content/60\">Controls for larger teams.</p><ul class=\"mt-4 flex flex-1 flex-col gap-2 text-sm text-base-content/75\"><li>SSO and audit logs</li><li>Scheduled backups</li><li>Uptime SLA</li><li>Priority support</li></ul><div class=\"card-actions mt-6\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, " <h2 class=\"card-title mt-2 text-xl\">Debug with the context already attached</h2><ul class=\"mt-2 flex flex-col gap-2.5 text-sm text-base-content/75\"><li>Exact selector and computed styles in the ticket</li><li>Viewport, DPR and user agent captured for you</li><li>Framework and data-component hints baked in</li><li>Session and trace IDs to correlate with logs</li><li>Issues land in GitHub, right next to the code</li></ul>")
+			templ_7745c5c3_Var17 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+				if !templ_7745c5c3_IsBuffer {
+					defer func() {
+						templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+						if templ_7745c5c3_Err == nil {
+							templ_7745c5c3_Err = templ_7745c5c3_BufErr
+						}
+					}()
+				}
+				ctx = templ.InitializeContext(ctx)
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "Talk to us")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				return nil
+			})
+			templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/emergent.feedback/issues/new", Variant: ui.ButtonOutline, Block: true, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var17), templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -433,29 +488,15 @@ func LandingPage(version string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "</div></div></section><!-- ── Agent-ready (MCP) ───────────────────────────────────────────── --><section class=\"border-b border-base-300/60\"><div class=\"mx-auto w-full max-w-5xl px-4 py-16 md:py-20\"><div class=\"max-w-2xl\"><p class=\"font-mono text-xs uppercase tracking-widest text-base-content/50\">Agent-ready</p><h2 class=\"mt-2 text-3xl font-semibold tracking-tight\">Let coding agents read the report</h2><p class=\"mt-3 text-base text-base-content/70\">Expose feedback to your agents over MCP. Repo-scoped API keys mean an agent only ever sees the repositories you allow.</p></div><div class=\"mt-8 grid grid-cols-1 gap-5 lg:grid-cols-2\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "</div></div></section><!-- ── Self-host ───────────────────────────────────────────────────── --><section id=\"self-host\" class=\"border-b border-base-300/60\"><div class=\"mx-auto w-full max-w-6xl px-4 py-16 md:py-20\"><div class=\"grid grid-cols-1 items-start gap-10 md:grid-cols-2\"><div><p class=\"font-mono text-xs uppercase tracking-widest text-base-content/50\">Self-host</p><h2 class=\"mt-2 text-3xl font-semibold tracking-tight\">Run it on your own infrastructure</h2><p class=\"mt-3 text-base text-base-content/70\">The same server that powers the managed tier ships as a container. Bring your own database, keep every byte of feedback inside your network.</p><p class=\"mt-4 text-sm text-base-content/60\">Issues are filed by a GitHub App or a fine-grained bot token — or by each reporter's own token. Reporter-token filing needs a GitHub OAuth App with repo scope, or a GitHub App whose Issues permission is read &amp; write. Login uses GitHub OAuth credentials.</p>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Var17 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-			if !templ_7745c5c3_IsBuffer {
-				defer func() {
-					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err == nil {
-						templ_7745c5c3_Err = templ_7745c5c3_BufErr
-					}
-				}()
-			}
-			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "<h3 class=\"text-sm font-semibold uppercase tracking-wide text-base-content/60\">MCP tools</h3><ul class=\"flex flex-col gap-2\"><li><code class=\"rounded-md bg-base-300/60 px-2 py-1 font-mono text-sm\">feedback_get_context</code></li><li><code class=\"rounded-md bg-base-300/60 px-2 py-1 font-mono text-sm\">feedback_get_screenshot</code></li><li><code class=\"rounded-md bg-base-300/60 px-2 py-1 font-mono text-sm\">feedback_get_snapshot</code></li><li><code class=\"rounded-md bg-base-300/60 px-2 py-1 font-mono text-sm\">feedback_list_for_issue</code></li></ul>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			return nil
-		})
-		templ_7745c5c3_Err = ui.CardRaw("border border-base-300 bg-base-200/50 shadow-none", "gap-2", nil).Render(templ.WithChildren(ctx, templ_7745c5c3_Var17), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = ui.Alert(ui.AlertProps{Type: ui.AlertWarning, Style: ui.AlertStyleSoft, Message: "Set GitHub OAuth credentials for sign-in, plus a GitHub App, bot token, or reporter tokens (OAuth App repo scope, or GitHub App Issues read & write)."}).Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "<div class=\"mt-6\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -471,185 +512,43 @@ func LandingPage(version string) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<h3 class=\"text-sm font-semibold uppercase tracking-wide text-base-content/60\">Repo-scoped API keys</h3><p class=\"text-sm text-base-content/75\">Create a key per agent, limited to the repositories you select. Keys are shown once and can be revoked at any time — a leaked key only ever exposes the repos you named.</p><a href=\"/panel\" class=\"link link-primary mt-1 text-sm\">Manage keys in the panel →</a>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "<svg viewBox=\"0 0 24 24\" fill=\"currentColor\" class=\"size-4.5\" aria-hidden=\"true\"><path d=\"M12 .5C5.37.5 0 5.87 0 12.5c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58 0-.29-.01-1.05-.02-2.06-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.2.08 1.84 1.24 1.84 1.24 1.07 1.84 2.81 1.31 3.5 1 .11-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6.01 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.8 5.63-5.48 5.92.43.37.81 1.1.81 2.22 0 1.6-.01 2.9-.01 3.29 0 .32.22.7.83.58A12.01 12.01 0 0 0 24 12.5C24 5.87 18.63.5 12 .5z\"></path></svg> Go to GitHub")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = ui.CardRaw("border border-base-300 bg-base-200/50 shadow-none", "gap-2", nil).Render(templ.WithChildren(ctx, templ_7745c5c3_Var18), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/emergent.feedback", Variant: ui.ButtonPrimary, Size: ui.ButtonLG, ExtraClass: "gap-2.5 text-base font-medium", Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var18), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "</div></div></section><!-- ── Pricing ─────────────────────────────────────────────────────── --><section id=\"pricing\" class=\"border-b border-base-300/60 bg-base-200/30\"><div class=\"mx-auto w-full max-w-6xl px-4 py-16 md:py-20\"><div class=\"max-w-2xl\"><p class=\"font-mono text-xs uppercase tracking-widest text-base-content/50\">Pricing</p><h2 class=\"mt-2 text-3xl font-semibold tracking-tight\">Start free, self-hosted, forever</h2><p class=\"mt-3 text-base text-base-content/70\">The open-source tier is complete. Managed hosting is there when you would rather not run it yourself.</p></div><div class=\"mt-10 grid grid-cols-1 items-stretch gap-6 md:grid-cols-3\"><div class=\"card border-2 border-primary bg-base-100 shadow-lg\"><div class=\"card-body\"><div class=\"flex items-center justify-between gap-2\"><h3 class=\"card-title text-lg\">Community</h3>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "</div></div><div><p class=\"mb-2 font-mono text-xs uppercase tracking-widest text-base-content/50\">Client</p><div class=\"mockup-code w-full text-sm\"><pre data-prefix=\"&lt;/&gt;\"><code>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = ui.Badge(ui.BadgeProps{Label: "Start here", Variant: ui.BadgePrimary, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM}).Render(ctx, templ_7745c5c3_Buffer)
+		var templ_7745c5c3_Var19 string
+		templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs("<script src=\"https://feedback.your-domain.com/emergent-feedback.js\" data-api=\"https://feedback.your-domain.com\" data-repo=\"owner/repo\" async></script>")
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `server/landing/landing.templ`, Line: 703, Col: 202}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "</div><p class=\"mt-2 text-4xl font-semibold tracking-tight\">$0</p><p class=\"text-sm text-base-content/60\">Self-host, everything included.</p><ul class=\"mt-4 flex flex-1 flex-col gap-2 text-sm text-base-content/75\"><li>Full overlay + server source</li><li>GitHub issue filing</li><li>All capture fields and screenshots</li><li>MCP server and scoped API keys</li><li>Community support</li></ul><div class=\"card-actions mt-6\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "</code></pre></div><p class=\"mt-4 text-sm text-base-content/60\">Container images, deployment notes and configuration live in the repository.</p></div></div></div></section><!-- ── FAQ ─────────────────────────────────────────────────────────── --><section class=\"border-b border-base-300/60 bg-base-200/30\"><div class=\"mx-auto w-full max-w-6xl px-4 py-16 md:py-20\"><div class=\"mx-auto max-w-3xl\"><div class=\"max-w-2xl\"><p class=\"font-mono text-xs uppercase tracking-widest text-base-content/50\">FAQ</p><h2 class=\"mt-2 text-3xl font-semibold tracking-tight\">Questions, answered</h2></div><div class=\"mt-8 flex flex-col gap-3\"><div class=\"collapse collapse-arrow border border-base-300 bg-base-100\"><input type=\"radio\" name=\"faq\" checked=\"checked\" aria-label=\"What happens to my data, and what gets redacted?\"><div class=\"collapse-title font-medium\">What happens to my data, and what gets redacted?</div><div class=\"collapse-content text-sm text-base-content/75\"><p>Captures are redacted on the way out: sensitive attributes and query parameters are stripped from the DOM snapshot, and sensitive input values (passwords, tokens, keys) are removed from session history. The selected element's HTML and its screenshot are captured as-is, so check them before you file.</p></div></div><div class=\"collapse collapse-arrow border border-base-300 bg-base-100\"><input type=\"radio\" name=\"faq\" aria-label=\"Can I change the hotkey?\"><div class=\"collapse-title font-medium\">Can I change the hotkey?</div><div class=\"collapse-content text-sm text-base-content/75\"><p>Yes. The default is Alt+Shift, and you can override it with a data attribute on the script tag so it never collides with your own shortcuts.</p></div></div><div class=\"collapse collapse-arrow border border-base-300 bg-base-100\"><input type=\"radio\" name=\"faq\" aria-label=\"Which auth providers are supported today?\"><div class=\"collapse-title font-medium\">Which auth providers are supported today?</div><div class=\"collapse-content text-sm text-base-content/75\"><p>GitHub only, for now. Sign-in and issue filing share the same GitHub App, so there is nothing else to configure. More providers are on the roadmap.</p></div></div></div></div></div></section><!-- ── Footer ──────────────────────────────────────────────────────── --><footer class=\"bg-base-200/60\"><div class=\"mx-auto flex w-full max-w-6xl flex-col items-start gap-6 px-4 py-12 sm:flex-row sm:items-center sm:justify-between\"><div class=\"flex items-center gap-2\"><span class=\"grid size-6 place-items-center rounded-md bg-primary\" aria-hidden=\"true\"><span class=\"size-2.5 rounded-[3px] bg-primary-content\"></span></span> <span class=\"text-sm font-semibold tracking-tight\">emergent.feedback</span> <span class=\"ml-2 font-mono text-xs text-base-content/40\">v")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Var19 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-			if !templ_7745c5c3_IsBuffer {
-				defer func() {
-					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err == nil {
-						templ_7745c5c3_Err = templ_7745c5c3_BufErr
-					}
-				}()
-			}
-			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "Get started")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			return nil
-		})
-		templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/emergent.feedback", Variant: ui.ButtonPrimary, Block: true, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var19), templ_7745c5c3_Buffer)
+		var templ_7745c5c3_Var20 string
+		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(version)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `server/landing/landing.templ`, Line: 754, Col: 73}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "</div></div></div>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Var20 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-			if !templ_7745c5c3_IsBuffer {
-				defer func() {
-					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err == nil {
-						templ_7745c5c3_Err = templ_7745c5c3_BufErr
-					}
-				}()
-			}
-			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "<h3 class=\"card-title text-lg\">Cloud</h3><p class=\"mt-2 text-4xl font-semibold tracking-tight\">Contact</p><p class=\"text-sm text-base-content/60\">Managed hosting, zero ops.</p><ul class=\"mt-4 flex flex-1 flex-col gap-2 text-sm text-base-content/75\"><li>We run the server and upgrades</li><li>Managed database and backups</li><li>Usage dashboard</li><li>Email support</li></ul><div class=\"card-actions mt-6\">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Var21 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-				if !templ_7745c5c3_IsBuffer {
-					defer func() {
-						templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-						if templ_7745c5c3_Err == nil {
-							templ_7745c5c3_Err = templ_7745c5c3_BufErr
-						}
-					}()
-				}
-				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "Talk to us")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				return nil
-			})
-			templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/emergent.feedback/issues/new", Variant: ui.ButtonOutline, Block: true, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var21), templ_7745c5c3_Buffer)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "</div>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			return nil
-		})
-		templ_7745c5c3_Err = ui.Card("", nil).Render(templ.WithChildren(ctx, templ_7745c5c3_Var20), templ_7745c5c3_Buffer)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Var22 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-			if !templ_7745c5c3_IsBuffer {
-				defer func() {
-					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err == nil {
-						templ_7745c5c3_Err = templ_7745c5c3_BufErr
-					}
-				}()
-			}
-			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "<h3 class=\"card-title text-lg\">Enterprise</h3><p class=\"mt-2 text-4xl font-semibold tracking-tight\">Contact</p><p class=\"text-sm text-base-content/60\">Controls for larger teams.</p><ul class=\"mt-4 flex flex-1 flex-col gap-2 text-sm text-base-content/75\"><li>SSO and audit logs</li><li>Scheduled backups</li><li>Uptime SLA</li><li>Priority support</li></ul><div class=\"card-actions mt-6\">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Var23 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-				if !templ_7745c5c3_IsBuffer {
-					defer func() {
-						templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-						if templ_7745c5c3_Err == nil {
-							templ_7745c5c3_Err = templ_7745c5c3_BufErr
-						}
-					}()
-				}
-				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "Talk to us")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				return nil
-			})
-			templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/emergent.feedback/issues/new", Variant: ui.ButtonOutline, Block: true, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var23), templ_7745c5c3_Buffer)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "</div>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			return nil
-		})
-		templ_7745c5c3_Err = ui.Card("", nil).Render(templ.WithChildren(ctx, templ_7745c5c3_Var22), templ_7745c5c3_Buffer)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "</div></div></section><!-- ── Self-host ───────────────────────────────────────────────────── --><section id=\"self-host\" class=\"border-b border-base-300/60\"><div class=\"mx-auto w-full max-w-5xl px-4 py-16 md:py-20\"><div class=\"grid grid-cols-1 items-start gap-10 md:grid-cols-2\"><div><p class=\"font-mono text-xs uppercase tracking-widest text-base-content/50\">Self-host</p><h2 class=\"mt-2 text-3xl font-semibold tracking-tight\">Run it on your own infrastructure</h2><p class=\"mt-3 text-base text-base-content/70\">The same server that powers the managed tier ships as a container. Bring your own database, keep every byte of feedback inside your network.</p><p class=\"mt-4 text-sm text-base-content/60\">Issues are filed by a GitHub App or a fine-grained bot token — or by each reporter's own token. Reporter-token filing needs a GitHub OAuth App with repo scope, or a GitHub App whose Issues permission is read &amp; write. Login uses GitHub OAuth credentials.</p>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = ui.Alert(ui.AlertProps{Type: ui.AlertWarning, Style: ui.AlertStyleSoft, Message: "Set GitHub OAuth credentials for sign-in, plus a GitHub App, bot token, or reporter tokens (OAuth App repo scope, or GitHub App Issues read & write)."}).Render(ctx, templ_7745c5c3_Buffer)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "</div><div><p class=\"mb-2 font-mono text-xs uppercase tracking-widest text-base-content/50\">Client</p><div class=\"mockup-code w-full text-sm\"><pre data-prefix=\"&lt;/&gt;\"><code>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var24 string
-		templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs("<script src=\"https://feedback.your-domain.com/emergent-feedback.js\" data-api=\"https://feedback.your-domain.com\" data-repo=\"owner/repo\" async></script>")
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `server/landing/landing.templ`, Line: 541, Col: 202}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "</code></pre></div><p class=\"mb-2 mt-6 font-mono text-xs uppercase tracking-widest text-base-content/50\">Server</p><div class=\"mockup-code w-full text-sm\"><pre data-prefix=\"$\"><code>docker run -p 8080:8080 ghcr.io/emergent-company/emergent-feedback</code></pre></div></div></div></div></section><!-- ── FAQ ─────────────────────────────────────────────────────────── --><section class=\"border-b border-base-300/60 bg-base-200/30\"><div class=\"mx-auto w-full max-w-3xl px-4 py-16 md:py-20\"><div class=\"max-w-2xl\"><p class=\"font-mono text-xs uppercase tracking-widest text-base-content/50\">FAQ</p><h2 class=\"mt-2 text-3xl font-semibold tracking-tight\">Questions, answered</h2></div><div class=\"mt-8 flex flex-col gap-3\"><div class=\"collapse collapse-arrow border border-base-300 bg-base-100\"><input type=\"radio\" name=\"faq\" checked=\"checked\" aria-label=\"What happens to my data, and what gets redacted?\"><div class=\"collapse-title font-medium\">What happens to my data, and what gets redacted?</div><div class=\"collapse-content text-sm text-base-content/75\"><p>Captures are redacted on the way out: sensitive attributes and query parameters are stripped from the DOM snapshot, and sensitive input values (passwords, tokens, keys) are removed from session history. The selected element's HTML and its screenshot are captured as-is, so check them before you file.</p></div></div><div class=\"collapse collapse-arrow border border-base-300 bg-base-100\"><input type=\"radio\" name=\"faq\" aria-label=\"Can I change the hotkey?\"><div class=\"collapse-title font-medium\">Can I change the hotkey?</div><div class=\"collapse-content text-sm text-base-content/75\"><p>Yes. The default is Alt+Shift, and you can override it with a data attribute on the script tag so it never collides with your own shortcuts.</p></div></div><div class=\"collapse collapse-arrow border border-base-300 bg-base-100\"><input type=\"radio\" name=\"faq\" aria-label=\"Which auth providers are supported today?\"><div class=\"collapse-title font-medium\">Which auth providers are supported today?</div><div class=\"collapse-content text-sm text-base-content/75\"><p>GitHub only, for now. Sign-in and issue filing share the same GitHub App, so there is nothing else to configure. More providers are on the roadmap.</p></div></div></div></div></section><!-- ── Footer ──────────────────────────────────────────────────────── --><footer class=\"bg-base-200/60\"><div class=\"mx-auto flex w-full max-w-6xl flex-col items-start gap-6 px-4 py-12 sm:flex-row sm:items-center sm:justify-between\"><div class=\"flex items-center gap-2\"><span class=\"grid size-6 place-items-center rounded-md bg-primary\" aria-hidden=\"true\"><span class=\"size-2.5 rounded-[3px] bg-primary-content\"></span></span> <span class=\"text-sm font-semibold tracking-tight\">emergent.feedback</span> <span class=\"ml-2 font-mono text-xs text-base-content/40\">v")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var25 string
-		templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(version)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `server/landing/landing.templ`, Line: 593, Col: 73}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "</span></div><nav class=\"flex items-center gap-4 text-sm\" aria-label=\"Footer\"><a href=\"https://github.com/emergent-company/emergent.feedback\" class=\"link link-hover\" target=\"_blank\" rel=\"noopener noreferrer\">GitHub</a> <a href=\"/panel\" class=\"link link-hover\">Panel</a></nav></div></footer><script src=\"/emergent-feedback.js\" data-api=\"\" data-repo=\"emergent-company/emergent.feedback\" data-label=\"feedback\" async></script></body></html>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "</span></div><nav class=\"flex items-center gap-4 text-sm\" aria-label=\"Footer\"><a href=\"https://github.com/emergent-company/emergent.feedback\" class=\"link link-hover\" target=\"_blank\" rel=\"noopener noreferrer\">GitHub</a> <a href=\"/panel\" class=\"link link-hover\">Panel</a></nav></div></footer><!-- Nav auth state: the panel and the overlay share localStorage on this\n\t\t     origin, so a present token means \"signed in\" and we reveal the\n\t\t     dashboard action instead of sign in / sign up. No token → the\n\t\t     default (visible) signed-out group stays. --><script>\n\t\t(function () {\n\t\t\tvar signedIn = false;\n\t\t\ttry { signedIn = !!localStorage.getItem(\"__ef_token__\"); } catch (e) {}\n\t\t\tvar out = document.getElementById(\"nav-auth-out\");\n\t\t\tvar inEl = document.getElementById(\"nav-auth-in\");\n\t\t\tif (!out || !inEl) return;\n\t\t\tif (signedIn) {\n\t\t\t\tout.classList.add(\"hidden\");\n\t\t\t\tinEl.classList.remove(\"hidden\");\n\t\t\t} else {\n\t\t\t\tinEl.classList.add(\"hidden\");\n\t\t\t\tout.classList.remove(\"hidden\");\n\t\t\t}\n\t\t})();\n\t\t</script><script src=\"/emergent-feedback.js\" data-api=\"\" data-repo=\"emergent-company/emergent.feedback\" data-label=\"feedback\" async></script></body></html>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

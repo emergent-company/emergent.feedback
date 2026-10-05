@@ -7,6 +7,10 @@ import "github.com/emergent-company/go-daisy/components/ui"
 // purchased Scalo daisyUI 5 template). go-daisy's app.css provides the base;
 // scalo.css layers the Scalo theme + custom components on top. The overlay
 // itself is loaded at the very bottom so visitors can try it live on this page.
+//
+// Layout note: every top-level section (nav, hero, sections, footer) uses the
+// same `mx-auto w-full max-w-6xl px-4` content column so the page reads as one
+// aligned grid. Inner prose is narrowed independently (max-w-2xl / 3xl).
 templ LandingPage(version string) {
 	<!DOCTYPE html>
 	<html lang="en" data-theme="scalo">
@@ -28,17 +32,24 @@ templ LandingPage(version string) {
 					</span>
 					<span class="text-sm font-semibold tracking-tight">emergent.feedback</span>
 				</a>
-				<nav class="hidden items-center gap-1 md:flex" aria-label="Primary">
+				<nav class="hidden items-center gap-1 lg:flex" aria-label="Primary">
 					<a href="#how-it-works" class="btn btn-ghost btn-sm">How it works</a>
 					<a href="#what-it-captures" class="btn btn-ghost btn-sm">What it captures</a>
+					<a href="#mcp" class="btn btn-ghost btn-sm">MCP</a>
 					<a href="#pricing" class="btn btn-ghost btn-sm">Pricing</a>
 					<a href="#self-host" class="btn btn-ghost btn-sm">Self-host</a>
 				</nav>
 				<div class="flex items-center gap-2">
-					<a href="/panel" class="btn btn-ghost btn-sm hidden sm:inline-flex">Panel</a>
-					@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/emergent.feedback", Variant: ui.ButtonPrimary, Size: ui.ButtonSM, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}) {
-						GitHub
-					}
+					<a href="https://github.com/emergent-company/emergent.feedback" aria-label="GitHub" target="_blank" rel="noopener noreferrer" class="btn btn-ghost btn-sm btn-square">
+						<svg viewBox="0 0 24 24" fill="currentColor" class="size-5" aria-hidden="true"><path d="M12 .5C5.37.5 0 5.87 0 12.5c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58 0-.29-.01-1.05-.02-2.06-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.2.08 1.84 1.24 1.84 1.24 1.07 1.84 2.81 1.31 3.5 1 .11-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6.01 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.8 5.63-5.48 5.92.43.37.81 1.1.81 2.22 0 1.6-.01 2.9-.01 3.29 0 .32.22.7.83.58A12.01 12.01 0 0 0 24 12.5C24 5.87 18.63.5 12 .5z"/></svg>
+					</a>
+					<div id="nav-auth-out" class="flex items-center gap-2">
+						<a href="/auth/github" class="btn btn-ghost btn-sm hidden sm:inline-flex">Sign in</a>
+						<a href="/auth/github" class="btn btn-primary btn-sm">Sign up</a>
+					</div>
+					<div id="nav-auth-in" class="hidden">
+						<a href="/panel" class="btn btn-primary btn-sm">Go to dashboard</a>
+					</div>
 				</div>
 			</div>
 		</header>
@@ -48,7 +59,7 @@ templ LandingPage(version string) {
 		     pill → centered display headline with a gradient swash behind the
 		     highlighted word → subcopy → dual CTA → three check lines →
 		     code-drawn product window with floating capture/share cards → 4-up
-		     stat row. Every visual is HTML/CSS + lucide icons so no binary assets
+		     stat row. Every visual is HTML/CSS + inline SVG so no binary assets
 		     from the purchased template enter this repo. -->
 		<section class="relative overflow-hidden border-b border-base-300/60" aria-labelledby="hero-title">
 			<!-- Code-drawn atmosphere: radial glow, faint grid, bottom fade. -->
@@ -61,7 +72,7 @@ templ LandingPage(version string) {
 					<!-- 1. Pill -->
 					<span class="inline-flex items-center gap-2 rounded-full border border-base-300/60 bg-base-200/40 px-3 py-1 text-xs font-medium text-base-content/80 transition-all duration-700 starting:opacity-0">
 						Element-level feedback
-						<span class="iconify lucide--arrow-right size-3.5 text-primary" aria-hidden="true"></span>
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-3.5 text-primary" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
 						GitHub issues
 					</span>
 
@@ -79,37 +90,37 @@ templ LandingPage(version string) {
 						Never hunt the DOM again. Hold one hotkey, click the broken element, and a fully-contextual GitHub issue is filed for you — selector, styles, viewport and screenshot included.
 					</p>
 
-					<!-- 4. Dual CTA -->
+					<!-- 4. CTA: primary GitHub link, plus Try it which enters the live overlay's comment mode. -->
 					<div class="mt-8 flex flex-col items-center gap-3 transition-all delay-1000 duration-1000 starting:opacity-0 starting:blur-sm sm:flex-row sm:gap-5">
 						@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/emergent.feedback", Variant: ui.ButtonPrimary, Size: ui.ButtonLG, ExtraClass: "group relative gap-2.5 border-0 bg-linear-to-r from-primary to-secondary text-base font-medium text-primary-content sm:text-lg", Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}) {
-							<span class="iconify lucide--github size-4.5" aria-hidden="true"></span>
+							<svg viewBox="0 0 24 24" fill="currentColor" class="size-4.5" aria-hidden="true"><path d="M12 .5C5.37.5 0 5.87 0 12.5c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58 0-.29-.01-1.05-.02-2.06-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.2.08 1.84 1.24 1.84 1.24 1.07 1.84 2.81 1.31 3.5 1 .11-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6.01 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.8 5.63-5.48 5.92.43.37.81 1.1.81 2.22 0 1.6-.01 2.9-.01 3.29 0 .32.22.7.83.58A12.01 12.01 0 0 0 24 12.5C24 5.87 18.63.5 12 .5z"/></svg>
 							Get started on GitHub
 							<span class="pointer-events-none absolute inset-x-1 top-1.5 -z-1 h-full animate-background-shift bg-linear-to-r from-primary to-secondary opacity-60 blur-md transition-all duration-500 group-hover:inset-x-0 group-hover:opacity-90 group-hover:blur-lg" aria-hidden="true"></span>
 						}
-						@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "#self-host", Variant: ui.ButtonGhost, Size: ui.ButtonLG, ExtraClass: "gap-2.5 text-base font-medium sm:text-lg"}) {
-							<span class="iconify lucide--play size-4.5" aria-hidden="true"></span>
-							Self-host
-						}
+						<button type="button" id="try-it" onclick="window.EmergentFeedback && window.EmergentFeedback.start()" class="btn btn-outline btn-lg gap-2.5 text-base font-medium sm:text-lg">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-4.5" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+							Try it
+						</button>
 					</div>
 
 					<!-- 5. Three check lines -->
 					<ul class="mt-8 flex flex-col items-center gap-2 text-sm text-base-content transition-all delay-1000 duration-1000 starting:opacity-0 sm:flex-row sm:flex-wrap sm:justify-center sm:gap-x-6">
 						<li class="flex items-center gap-2">
-							<span class="iconify lucide--check size-4 shrink-0" aria-hidden="true"></span>
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-4 shrink-0" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
 							Drop in one script tag
 						</li>
 						<li class="flex items-center gap-2">
-							<span class="iconify lucide--check size-4 shrink-0" aria-hidden="true"></span>
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-4 shrink-0" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
 							Framework-aware capture
 						</li>
 						<li class="flex items-center gap-2">
-							<span class="iconify lucide--check size-4 shrink-0" aria-hidden="true"></span>
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-4 shrink-0" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
 							Files straight to GitHub
 						</li>
 					</ul>
 
 					<p class="mt-4 text-xs text-base-content/50 transition-all delay-1000 duration-1000 starting:opacity-0">
-						Hold Alt+Shift and click any element to try the overlay right here.
+						Hold Alt+Shift, or press “Try it”, to open the overlay and click any element right here.
 					</p>
 				</div>
 
@@ -126,7 +137,7 @@ templ LandingPage(version string) {
 										<span class="size-2.5 rounded-full bg-success/70"></span>
 									</div>
 									<div class="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-base-300/60 bg-base-100 px-3 py-1 text-xs text-base-content/50">
-										<span class="iconify lucide--lock size-3 shrink-0" aria-hidden="true"></span>
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-3 shrink-0" aria-hidden="true"><rect width="14" height="11" x="5" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
 										<span class="truncate font-mono">app.example.com/checkout</span>
 									</div>
 									<span class="badge badge-primary badge-sm gap-1.5">
@@ -165,7 +176,7 @@ templ LandingPage(version string) {
 										</div>
 										<div class="pointer-events-none absolute -inset-1 rounded-lg ring-2 ring-primary ring-offset-2 ring-offset-base-100"></div>
 										<div class="absolute -top-3 left-4 flex items-center gap-1 rounded-md bg-primary px-2 py-0.5 text-[11px] font-medium text-primary-content shadow">
-											<span class="iconify lucide--bug size-3" aria-hidden="true"></span>
+											<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-3" aria-hidden="true"><path d="m8 2 1.88 1.88"/><path d="M14.12 3.88 16 2"/><path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/><path d="M12 20v-9"/><path d="M6.53 9C4.6 8.8 3 7.1 3 5"/><path d="M6 13H2"/><path d="M6.53 15c-1.93.2-3.53 1.9-3.53 4"/><path d="M18 5c0 2.1-1.6 3.8-3.53 4"/><path d="M22 13h-4"/><path d="M18.53 19c0-2.1-1.6-3.8-3.53-4"/></svg>
 											{ "button[data-component=\"checkout\"]" }
 										</div>
 									</div>
@@ -183,10 +194,10 @@ templ LandingPage(version string) {
 							</div>
 							<div class="mt-3 flex items-end justify-between gap-2">
 								<div class="tooltip" data-tip="In process">
-									<span class="iconify lucide--loader block size-4 animate-spin text-base-content/60" aria-hidden="true"></span>
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-4 animate-spin text-base-content/60" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
 								</div>
 								<span class="btn btn-sm btn-error border-0">
-									<span class="iconify lucide--x-square size-4" aria-hidden="true"></span>
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-4" aria-hidden="true"><path d="M10 10l4 4"/><path d="m14 10-4 4"/><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
 									Cancel
 								</span>
 							</div>
@@ -204,10 +215,10 @@ templ LandingPage(version string) {
 							</div>
 							<div class="mt-3 flex items-end justify-between gap-2">
 								<div class="tooltip flex items-center rounded-full bg-success/10 p-1.5 text-success" data-tip="Shared successfully">
-									<span class="iconify lucide--check size-3.5" aria-hidden="true"></span>
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-3.5" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
 								</div>
 								<span class="btn btn-sm btn-soft ms-auto">
-									<span class="iconify lucide--copy size-4" aria-hidden="true"></span>
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-4" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
 									Copy Link
 								</span>
 							</div>
@@ -240,39 +251,55 @@ templ LandingPage(version string) {
 		</section>
 
 		<!-- ── The problem ─────────────────────────────────────────────────── -->
-		<section class="border-b border-base-300/60 bg-base-200/30">
-			<div class="mx-auto w-full max-w-5xl px-4 py-16 md:py-20">
-				<div class="max-w-2xl">
-					<p class="font-mono text-xs uppercase tracking-widest text-base-content/50">The problem</p>
-					<h2 class="mt-2 text-3xl font-semibold tracking-tight">Bug reports lose the one thing you actually need</h2>
-					<p class="mt-3 text-base text-base-content/70">
+		<section class="border-b border-base-300/60 bg-base-200/30" aria-labelledby="problem-title">
+			<div class="mx-auto w-full max-w-6xl px-4 py-16 md:py-20">
+				<div class="mx-auto max-w-2xl text-center">
+					<div class="flex items-center justify-center gap-2">
+						<span class="h-4 w-0.5 rounded-full bg-primary/60" aria-hidden="true"></span>
+						<p class="font-mono text-sm font-medium text-base-content/60">The problem</p>
+						<span class="h-4 w-0.5 rounded-full bg-primary/60" aria-hidden="true"></span>
+					</div>
+					<h2 id="problem-title" class="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">Bug reports lose the one thing you actually need</h2>
+					<p class="mt-4 text-base text-base-content/70">
 						By the time a vague report reaches a developer, the context is gone. Everyone guesses, and the fix slips a sprint.
 					</p>
 				</div>
-				<div class="mt-10 grid grid-cols-1 gap-5 sm:grid-cols-2">
-					@ui.Card("", nil) {
-						<h3 class="card-title text-base">Vague reports</h3>
-						<p class="text-sm text-base-content/70">“The button doesn’t work.” No steps, no page, no idea which button. A round-trip just to reproduce.</p>
-					}
-					@ui.Card("", nil) {
-						<h3 class="card-title text-base">No selector or element</h3>
-						<p class="text-sm text-base-content/70">Developers hunt through the DOM by hand. The failing element is never named, so guesses pile up.</p>
-					}
-					@ui.Card("", nil) {
-						<h3 class="card-title text-base">Unknown viewport and framework</h3>
-						<p class="text-sm text-base-content/70">Mobile-only? Tailwind or MUI? Without the environment, every fix is shot in the dark.</p>
-					}
-					@ui.Card("", nil) {
-						<h3 class="card-title text-base">Screenshot-only, “works on my machine”</h3>
-						<p class="text-sm text-base-content/70">A PNG proves something broke but carries no styles, no DOM and nothing an agent can act on.</p>
-					}
+				<div class="mt-12 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+					<div class="card group border border-base-300/60 bg-base-200/20 p-5 transition-colors hover:border-base-300 hover:bg-base-200/40">
+						<span class="inline-flex size-11 items-center justify-center rounded-lg bg-error/10 text-error" aria-hidden="true">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="size-5"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+						</span>
+						<h3 class="mt-4 text-base font-medium">Vague reports</h3>
+						<p class="mt-1.5 text-sm text-base-content/70">“The button doesn’t work.” No steps, no page, no idea which button. A round-trip just to reproduce.</p>
+					</div>
+					<div class="card group border border-base-300/60 bg-base-200/20 p-5 transition-colors hover:border-base-300 hover:bg-base-200/40">
+						<span class="inline-flex size-11 items-center justify-center rounded-lg bg-warning/10 text-warning" aria-hidden="true">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="size-5"><path d="m3 3 7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/><path d="m13 13 6 6"/></svg>
+						</span>
+						<h3 class="mt-4 text-base font-medium">No selector or element</h3>
+						<p class="mt-1.5 text-sm text-base-content/70">Developers hunt through the DOM by hand. The failing element is never named, so guesses pile up.</p>
+					</div>
+					<div class="card group border border-base-300/60 bg-base-200/20 p-5 transition-colors hover:border-base-300 hover:bg-base-200/40">
+						<span class="inline-flex size-11 items-center justify-center rounded-lg bg-secondary/10 text-secondary" aria-hidden="true">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="size-5"><path d="M18 8V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h8"/><path d="M10 19v-3.96 3.15"/><path d="M7 19h5"/><rect width="6" height="10" x="16" y="12" rx="2"/></svg>
+						</span>
+						<h3 class="mt-4 text-base font-medium">Unknown viewport and framework</h3>
+						<p class="mt-1.5 text-sm text-base-content/70">Mobile-only? Tailwind or MUI? Without the environment, every fix is shot in the dark.</p>
+					</div>
+					<div class="card group border border-base-300/60 bg-base-200/20 p-5 transition-colors hover:border-base-300 hover:bg-base-200/40">
+						<span class="inline-flex size-11 items-center justify-center rounded-lg bg-primary/10 text-primary" aria-hidden="true">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="size-5"><line x1="2" x2="22" y1="2" y2="22"/><path d="M10.41 10.41a2 2 0 1 1-2.83-2.83"/><line x1="13.5" x2="6" y1="13.5" y2="21"/><line x1="18" x2="21" y1="12" y2="15"/><path d="M3.59 3.59A1.99 1.99 0 0 0 3 5v14a2 2 0 0 0 2 2h14c.55 0 1.052-.22 1.41-.59"/><path d="M21 15V5a2 2 0 0 0-2-2H9"/></svg>
+						</span>
+						<h3 class="mt-4 text-base font-medium">Screenshot-only, “works on my machine”</h3>
+						<p class="mt-1.5 text-sm text-base-content/70">A PNG proves something broke but carries no styles, no DOM and nothing an agent can act on.</p>
+					</div>
 				</div>
 			</div>
 		</section>
 
 		<!-- ── How it works ────────────────────────────────────────────────── -->
 		<section id="how-it-works" class="border-b border-base-300/60">
-			<div class="mx-auto w-full max-w-5xl px-4 py-16 md:py-20">
+			<div class="mx-auto w-full max-w-6xl px-4 py-16 md:py-20">
 				<div class="max-w-2xl">
 					<p class="font-mono text-xs uppercase tracking-widest text-base-content/50">How it works</p>
 					<h2 class="mt-2 text-3xl font-semibold tracking-tight">Four steps from click to issue</h2>
@@ -359,7 +386,7 @@ templ LandingPage(version string) {
 
 		<!-- ── The issue it produces ───────────────────────────────────────── -->
 		<section class="border-b border-base-300/60">
-			<div class="mx-auto w-full max-w-5xl px-4 py-16 md:py-20">
+			<div class="mx-auto w-full max-w-6xl px-4 py-16 md:py-20">
 				<div class="max-w-2xl">
 					<p class="font-mono text-xs uppercase tracking-widest text-base-content/50">The output</p>
 					<h2 class="mt-2 text-3xl font-semibold tracking-tight">The issue it produces</h2>
@@ -392,7 +419,7 @@ templ LandingPage(version string) {
 
 		<!-- ── Built for testers / developers ──────────────────────────────── -->
 		<section class="border-b border-base-300/60 bg-base-200/30">
-			<div class="mx-auto w-full max-w-5xl px-4 py-16 md:py-20">
+			<div class="mx-auto w-full max-w-6xl px-4 py-16 md:py-20">
 				<div class="grid grid-cols-1 gap-6 md:grid-cols-2">
 					@ui.Card("", nil) {
 						@ui.Badge(ui.BadgeProps{Label: "Built for testers", Variant: ui.BadgeSecondary, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM})
@@ -420,33 +447,162 @@ templ LandingPage(version string) {
 			</div>
 		</section>
 
-		<!-- ── Agent-ready (MCP) ───────────────────────────────────────────── -->
-		<section class="border-b border-base-300/60">
-			<div class="mx-auto w-full max-w-5xl px-4 py-16 md:py-20">
-				<div class="max-w-2xl">
-					<p class="font-mono text-xs uppercase tracking-widest text-base-content/50">Agent-ready</p>
-					<h2 class="mt-2 text-3xl font-semibold tracking-tight">Let coding agents read the report</h2>
-					<p class="mt-3 text-base text-base-content/70">
-						Expose feedback to your agents over MCP. Repo-scoped API keys mean an agent only ever sees the repositories you allow.
+		<!-- ── MCP server (headline feature) ──────────────────────────────── -->
+		<section id="mcp" class="relative overflow-hidden border-b border-base-300/60" aria-labelledby="mcp-title">
+			<div class="hero-glow pointer-events-none absolute inset-x-0 -top-48 -z-1 h-[720px] opacity-40" aria-hidden="true"></div>
+			<div class="relative mx-auto w-full max-w-6xl px-4 py-16 md:py-24">
+				<div class="mx-auto max-w-3xl text-center">
+					<div class="flex items-center justify-center gap-2">
+						<span class="h-4 w-0.5 rounded-full bg-primary/60" aria-hidden="true"></span>
+						<p class="font-mono text-sm font-medium text-base-content/60">Agent-ready</p>
+						<span class="h-4 w-0.5 rounded-full bg-primary/60" aria-hidden="true"></span>
+					</div>
+					<h2 id="mcp-title" class="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl lg:text-5xl">
+						<span class="bg-linear-to-r from-primary to-secondary bg-clip-text text-transparent">MCP server</span>
+					</h2>
+					<p class="mt-5 text-base text-base-content/70 sm:text-lg">
+						emergent.feedback ships a built-in MCP server so AI agents can pull any feedback item with its full context — selector, computed styles, screenshot, redacted DOM snapshot, replay and lifecycle — and act on it.
 					</p>
+					<div class="mt-5 flex flex-wrap items-center justify-center gap-2">
+						@ui.Badge(ui.BadgeProps{Label: "Streamable HTTP", Variant: ui.BadgePrimary, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM})
+						@ui.Badge(ui.BadgeProps{Label: "Repo-scoped keys", Variant: ui.BadgeGhost, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM})
+						@ui.Badge(ui.BadgeProps{Label: "Built in", Variant: ui.BadgeGhost, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM})
+					</div>
 				</div>
-				<div class="mt-8 grid grid-cols-1 gap-5 lg:grid-cols-2">
-					@ui.CardRaw("border border-base-300 bg-base-200/50 shadow-none", "gap-2", nil) {
-						<h3 class="text-sm font-semibold uppercase tracking-wide text-base-content/60">MCP tools</h3>
-						<ul class="flex flex-col gap-2">
-							<li><code class="rounded-md bg-base-300/60 px-2 py-1 font-mono text-sm">feedback_get_context</code></li>
-							<li><code class="rounded-md bg-base-300/60 px-2 py-1 font-mono text-sm">feedback_get_screenshot</code></li>
-							<li><code class="rounded-md bg-base-300/60 px-2 py-1 font-mono text-sm">feedback_get_snapshot</code></li>
-							<li><code class="rounded-md bg-base-300/60 px-2 py-1 font-mono text-sm">feedback_list_for_issue</code></li>
+
+				<!-- Tools, grouped by read vs lifecycle. -->
+				<div class="mt-12 grid grid-cols-1 gap-5 lg:grid-cols-2">
+					<div class="card border border-base-300/60 bg-base-100 p-6">
+						<div class="flex items-center justify-between gap-3">
+							<div class="flex items-center gap-2">
+								<span class="inline-flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary" aria-hidden="true">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="size-4"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+								</span>
+								<h3 class="text-sm font-semibold uppercase tracking-wide text-base-content/60">Read</h3>
+							</div>
+							<span class="badge badge-primary badge-soft badge-sm">7 tools</span>
+						</div>
+						<ul class="mt-4 flex flex-wrap gap-2">
+							<li><code class="rounded-md border border-base-300/60 bg-base-300/40 px-2 py-1 font-mono text-xs">feedback_list</code></li>
+							<li><code class="rounded-md border border-base-300/60 bg-base-300/40 px-2 py-1 font-mono text-xs">feedback_get</code></li>
+							<li><code class="rounded-md border border-base-300/60 bg-base-300/40 px-2 py-1 font-mono text-xs">feedback_get_context</code></li>
+							<li><code class="rounded-md border border-base-300/60 bg-base-300/40 px-2 py-1 font-mono text-xs">feedback_get_screenshot</code></li>
+							<li><code class="rounded-md border border-base-300/60 bg-base-300/40 px-2 py-1 font-mono text-xs">feedback_get_snapshot</code></li>
+							<li><code class="rounded-md border border-base-300/60 bg-base-300/40 px-2 py-1 font-mono text-xs">feedback_get_replay</code></li>
+							<li><code class="rounded-md border border-base-300/60 bg-base-300/40 px-2 py-1 font-mono text-xs">feedback_list_for_issue</code></li>
 						</ul>
-					}
-					@ui.CardRaw("border border-base-300 bg-base-200/50 shadow-none", "gap-2", nil) {
-						<h3 class="text-sm font-semibold uppercase tracking-wide text-base-content/60">Repo-scoped API keys</h3>
-						<p class="text-sm text-base-content/75">
-							Create a key per agent, limited to the repositories you select. Keys are shown once and can be revoked at any time — a leaked key only ever exposes the repos you named.
-						</p>
-						<a href="/panel" class="link link-primary mt-1 text-sm">Manage keys in the panel →</a>
-					}
+						<p class="mt-4 text-sm text-base-content/70">List reports, fetch one, and pull its context, screenshot, DOM snapshot or replay — or find everything filed against a GitHub issue.</p>
+					</div>
+					<div class="card border border-base-300/60 bg-base-100 p-6">
+						<div class="flex items-center justify-between gap-3">
+							<div class="flex items-center gap-2">
+								<span class="inline-flex size-8 items-center justify-center rounded-lg bg-secondary/10 text-secondary" aria-hidden="true">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="size-4"><path d="M21 12a9 9 0 1 1-6.219-8.56"/><path d="M21 3v6h-6"/></svg>
+								</span>
+								<h3 class="text-sm font-semibold uppercase tracking-wide text-base-content/60">Lifecycle</h3>
+							</div>
+							<span class="badge badge-secondary badge-soft badge-sm">4 tools</span>
+						</div>
+						<ul class="mt-4 flex flex-wrap gap-2">
+							<li><code class="rounded-md border border-base-300/60 bg-base-300/40 px-2 py-1 font-mono text-xs">feedback_mark_applied</code></li>
+							<li><code class="rounded-md border border-base-300/60 bg-base-300/40 px-2 py-1 font-mono text-xs">feedback_mark_resolved</code></li>
+							<li><code class="rounded-md border border-base-300/60 bg-base-300/40 px-2 py-1 font-mono text-xs">feedback_verify</code></li>
+							<li><code class="rounded-md border border-base-300/60 bg-base-300/40 px-2 py-1 font-mono text-xs">feedback_watch</code></li>
+						</ul>
+						<p class="mt-4 text-sm text-base-content/70">Close the loop: mark work applied, resolve a report, verify it against the running app, or watch for new feedback as it arrives.</p>
+					</div>
+				</div>
+
+				<!-- Endpoint + auth. -->
+				<div class="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
+					<div class="card border border-base-300/60 bg-base-100 p-6">
+						<div class="flex items-center gap-2">
+							<span class="inline-flex size-8 items-center justify-center rounded-lg bg-accent/10 text-accent" aria-hidden="true">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="size-4"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+							</span>
+							<h3 class="text-base font-medium">Endpoint</h3>
+						</div>
+						<p class="mt-3 text-sm text-base-content/70">One streamable HTTP endpoint. Point your agent at it and it is ready to pull context.</p>
+						<div class="mt-4 flex items-center gap-2 rounded-lg border border-base-300/60 bg-base-300/40 px-3 py-2.5">
+							<code class="min-w-0 flex-1 break-all font-mono text-xs">https://feedback.emergent-company.ai/mcp</code>
+						</div>
+					</div>
+					<div class="card border border-base-300/60 bg-base-100 p-6">
+						<div class="flex items-center gap-2">
+							<span class="inline-flex size-8 items-center justify-center rounded-lg bg-warning/10 text-warning" aria-hidden="true">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="size-4"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg>
+							</span>
+							<h3 class="text-base font-medium">Repo-scoped API key</h3>
+						</div>
+						<p class="mt-3 text-sm text-base-content/70">Authenticate with a key created in the panel, sent as a bearer header. Each key is limited to the repositories you select, so a leaked key only ever exposes the repos you named.</p>
+						<div class="mockup-code mt-4 w-full text-xs">
+							<pre data-prefix="↳"><code>Authorization: Bearer &lt;TOKEN&gt;</code></pre>
+						</div>
+						<a href="/panel" class="link link-primary mt-3 inline-block text-sm">Create a key in the panel →</a>
+					</div>
+				</div>
+
+				<!-- Install instructions. -->
+				<div class="mt-14">
+					<div class="mx-auto max-w-2xl text-center">
+						<h3 class="text-2xl font-semibold tracking-tight">Connect your agent</h3>
+						<p class="mt-3 text-base text-base-content/70">Three verified ways to register the server. Swap the token placeholder for a key from the panel.</p>
+					</div>
+					<div class="mt-8 grid grid-cols-1 gap-5 lg:grid-cols-3">
+						<!-- Claude Code (CLI) -->
+						<div class="card border border-base-300/60 bg-base-100 p-5">
+							<div class="flex items-center gap-2">
+								<span class="inline-flex size-7 items-center justify-center rounded-md bg-base-300/50 font-mono text-xs text-base-content/70" aria-hidden="true">&gt;_</span>
+								<h4 class="text-sm font-semibold">Claude Code (CLI)</h4>
+							</div>
+							<p class="mt-1 text-xs text-base-content/60">Register for your user account in one line.</p>
+							<div class="mockup-code mt-3 w-full text-xs">
+								<pre data-prefix="$"><code>claude mcp add --transport http feedback https://feedback.emergent-company.ai/mcp --header "Authorization: Bearer &lt;TOKEN&gt;" --scope user</code></pre>
+							</div>
+						</div>
+						<!-- Project .mcp.json -->
+						<div class="card border border-base-300/60 bg-base-100 p-5">
+							<div class="flex items-center gap-2">
+								<span class="inline-flex size-7 items-center justify-center rounded-md bg-base-300/50 font-mono text-[11px] text-base-content/70" aria-hidden="true">&#123; &#125;</span>
+								<h4 class="text-sm font-semibold">Claude Code (project)</h4>
+							</div>
+							<p class="mt-1 text-xs text-base-content/60">Commit <code class="font-mono">.mcp.json</code> at the repo root.</p>
+							<div class="mockup-code mt-3 w-full text-[11px]">
+								<pre><code>{`{
+  "mcpServers": {
+    "feedback": {
+      "type": "http",
+      "url": "https://feedback.emergent-company.ai/mcp",
+      "headers": { "Authorization": "Bearer ${FEEDBACK_MCP_TOKEN}" }
+    }
+  }
+}`}</code></pre>
+							</div>
+						</div>
+						<!-- Cursor -->
+						<div class="card border border-base-300/60 bg-base-100 p-5">
+							<div class="flex items-center gap-2">
+								<span class="inline-flex size-7 items-center justify-center rounded-md bg-base-300/50 font-mono text-[11px] text-base-content/70" aria-hidden="true">&#123; &#125;</span>
+								<h4 class="text-sm font-semibold">Cursor</h4>
+							</div>
+							<p class="mt-1 text-xs text-base-content/60">Add to <code class="font-mono">.cursor/mcp.json</code>.</p>
+							<div class="mockup-code mt-3 w-full text-[11px]">
+								<pre><code>{`{
+  "mcpServers": {
+    "feedback": {
+      "url": "https://feedback.emergent-company.ai/mcp",
+      "headers": { "Authorization": "Bearer ${env:FEEDBACK_MCP_TOKEN}" }
+    }
+  }
+}`}</code></pre>
+							</div>
+						</div>
+					</div>
+
+					<div role="alert" class="alert alert-info alert-soft mt-8 text-sm">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-5" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+						<span>Claude Desktop’s config is stdio-only, so remote HTTP goes through the Connectors UI or the <code class="font-mono">mcp-remote</code> bridge.</span>
+					</div>
 				</div>
 			</div>
 		</section>
@@ -522,7 +678,7 @@ templ LandingPage(version string) {
 
 		<!-- ── Self-host ───────────────────────────────────────────────────── -->
 		<section id="self-host" class="border-b border-base-300/60">
-			<div class="mx-auto w-full max-w-5xl px-4 py-16 md:py-20">
+			<div class="mx-auto w-full max-w-6xl px-4 py-16 md:py-20">
 				<div class="grid grid-cols-1 items-start gap-10 md:grid-cols-2">
 					<div>
 						<p class="font-mono text-xs uppercase tracking-widest text-base-content/50">Self-host</p>
@@ -534,16 +690,19 @@ templ LandingPage(version string) {
 							Issues are filed by a GitHub App or a fine-grained bot token — or by each reporter's own token. Reporter-token filing needs a GitHub OAuth App with repo scope, or a GitHub App whose Issues permission is read &amp; write. Login uses GitHub OAuth credentials.
 						</p>
 						@ui.Alert(ui.AlertProps{Type: ui.AlertWarning, Style: ui.AlertStyleSoft, Message: "Set GitHub OAuth credentials for sign-in, plus a GitHub App, bot token, or reporter tokens (OAuth App repo scope, or GitHub App Issues read & write)."})
+						<div class="mt-6">
+							@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/emergent.feedback", Variant: ui.ButtonPrimary, Size: ui.ButtonLG, ExtraClass: "gap-2.5 text-base font-medium", Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}) {
+								<svg viewBox="0 0 24 24" fill="currentColor" class="size-4.5" aria-hidden="true"><path d="M12 .5C5.37.5 0 5.87 0 12.5c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58 0-.29-.01-1.05-.02-2.06-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.2.08 1.84 1.24 1.84 1.24 1.07 1.84 2.81 1.31 3.5 1 .11-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6.01 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.8 5.63-5.48 5.92.43.37.81 1.1.81 2.22 0 1.6-.01 2.9-.01 3.29 0 .32.22.7.83.58A12.01 12.01 0 0 0 24 12.5C24 5.87 18.63.5 12 .5z"/></svg>
+								Go to GitHub
+							}
+						</div>
 					</div>
 					<div>
 						<p class="mb-2 font-mono text-xs uppercase tracking-widest text-base-content/50">Client</p>
 						<div class="mockup-code w-full text-sm">
 							<pre data-prefix="&lt;/&gt;"><code>{ "<script src=\"https://feedback.your-domain.com/emergent-feedback.js\" data-api=\"https://feedback.your-domain.com\" data-repo=\"owner/repo\" async></script>" }</code></pre>
 						</div>
-						<p class="mb-2 mt-6 font-mono text-xs uppercase tracking-widest text-base-content/50">Server</p>
-						<div class="mockup-code w-full text-sm">
-							<pre data-prefix="$"><code>docker run -p 8080:8080 ghcr.io/emergent-company/emergent-feedback</code></pre>
-						</div>
+						<p class="mt-4 text-sm text-base-content/60">Container images, deployment notes and configuration live in the repository.</p>
 					</div>
 				</div>
 			</div>
@@ -551,31 +710,33 @@ templ LandingPage(version string) {
 
 		<!-- ── FAQ ─────────────────────────────────────────────────────────── -->
 		<section class="border-b border-base-300/60 bg-base-200/30">
-			<div class="mx-auto w-full max-w-3xl px-4 py-16 md:py-20">
-				<div class="max-w-2xl">
-					<p class="font-mono text-xs uppercase tracking-widest text-base-content/50">FAQ</p>
-					<h2 class="mt-2 text-3xl font-semibold tracking-tight">Questions, answered</h2>
-				</div>
-				<div class="mt-8 flex flex-col gap-3">
-					<div class="collapse collapse-arrow border border-base-300 bg-base-100">
-						<input type="radio" name="faq" checked="checked" aria-label="What happens to my data, and what gets redacted?"/>
-						<div class="collapse-title font-medium">What happens to my data, and what gets redacted?</div>
-						<div class="collapse-content text-sm text-base-content/75">
-							<p>Captures are redacted on the way out: sensitive attributes and query parameters are stripped from the DOM snapshot, and sensitive input values (passwords, tokens, keys) are removed from session history. The selected element's HTML and its screenshot are captured as-is, so check them before you file.</p>
-						</div>
+			<div class="mx-auto w-full max-w-6xl px-4 py-16 md:py-20">
+				<div class="mx-auto max-w-3xl">
+					<div class="max-w-2xl">
+						<p class="font-mono text-xs uppercase tracking-widest text-base-content/50">FAQ</p>
+						<h2 class="mt-2 text-3xl font-semibold tracking-tight">Questions, answered</h2>
 					</div>
-					<div class="collapse collapse-arrow border border-base-300 bg-base-100">
-						<input type="radio" name="faq" aria-label="Can I change the hotkey?"/>
-						<div class="collapse-title font-medium">Can I change the hotkey?</div>
-						<div class="collapse-content text-sm text-base-content/75">
-							<p>Yes. The default is Alt+Shift, and you can override it with a data attribute on the script tag so it never collides with your own shortcuts.</p>
+					<div class="mt-8 flex flex-col gap-3">
+						<div class="collapse collapse-arrow border border-base-300 bg-base-100">
+							<input type="radio" name="faq" checked="checked" aria-label="What happens to my data, and what gets redacted?"/>
+							<div class="collapse-title font-medium">What happens to my data, and what gets redacted?</div>
+							<div class="collapse-content text-sm text-base-content/75">
+								<p>Captures are redacted on the way out: sensitive attributes and query parameters are stripped from the DOM snapshot, and sensitive input values (passwords, tokens, keys) are removed from session history. The selected element's HTML and its screenshot are captured as-is, so check them before you file.</p>
+							</div>
 						</div>
-					</div>
-					<div class="collapse collapse-arrow border border-base-300 bg-base-100">
-						<input type="radio" name="faq" aria-label="Which auth providers are supported today?"/>
-						<div class="collapse-title font-medium">Which auth providers are supported today?</div>
-						<div class="collapse-content text-sm text-base-content/75">
-							<p>GitHub only, for now. Sign-in and issue filing share the same GitHub App, so there is nothing else to configure. More providers are on the roadmap.</p>
+						<div class="collapse collapse-arrow border border-base-300 bg-base-100">
+							<input type="radio" name="faq" aria-label="Can I change the hotkey?"/>
+							<div class="collapse-title font-medium">Can I change the hotkey?</div>
+							<div class="collapse-content text-sm text-base-content/75">
+								<p>Yes. The default is Alt+Shift, and you can override it with a data attribute on the script tag so it never collides with your own shortcuts.</p>
+							</div>
+						</div>
+						<div class="collapse collapse-arrow border border-base-300 bg-base-100">
+							<input type="radio" name="faq" aria-label="Which auth providers are supported today?"/>
+							<div class="collapse-title font-medium">Which auth providers are supported today?</div>
+							<div class="collapse-content text-sm text-base-content/75">
+								<p>GitHub only, for now. Sign-in and issue filing share the same GitHub App, so there is nothing else to configure. More providers are on the roadmap.</p>
+							</div>
 						</div>
 					</div>
 				</div>
@@ -598,6 +759,27 @@ templ LandingPage(version string) {
 				</nav>
 			</div>
 		</footer>
+
+		<!-- Nav auth state: the panel and the overlay share localStorage on this
+		     origin, so a present token means "signed in" and we reveal the
+		     dashboard action instead of sign in / sign up. No token → the
+		     default (visible) signed-out group stays. -->
+		<script>
+		(function () {
+			var signedIn = false;
+			try { signedIn = !!localStorage.getItem("__ef_token__"); } catch (e) {}
+			var out = document.getElementById("nav-auth-out");
+			var inEl = document.getElementById("nav-auth-in");
+			if (!out || !inEl) return;
+			if (signedIn) {
+				out.classList.add("hidden");
+				inEl.classList.remove("hidden");
+			} else {
+				inEl.classList.add("hidden");
+				out.classList.remove("hidden");
+			}
+		})();
+		</script>
 
 		<script src="/emergent-feedback.js" data-api="" data-repo="emergent-company/emergent.feedback" data-label="feedback" async></script>
 	</body>

@@ -531,3 +531,15 @@ import { startReporterNotify, stopReporterNotify } from "./notify";
     return detected;
   }
 })();
+
+// ── Public API (exposed as the `EmergentFeedback` global) ────────────────────
+// Used by the marketing site's "Try it" button to enter/leave comment mode.
+export function start(): void {
+  forceMode("active");
+}
+
+export function stop(): void {
+  forceMode("idle");
+}
+
+export { getMode };
