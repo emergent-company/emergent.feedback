@@ -7,7 +7,7 @@ import "github.com/emergent-company/go-daisy/components/ui"
 // purchased Scalo daisyUI 5 template). go-daisy's app.css provides the base;
 // scalo.css layers the Scalo theme + custom components on top. The overlay
 // itself is loaded at the very bottom so visitors can try it live on this page.
-templ LandingPage() {
+templ LandingPage(version string) {
 	<!DOCTYPE html>
 	<html lang="en" data-theme="scalo">
 	<head>
@@ -590,7 +590,7 @@ templ LandingPage() {
 						<span class="size-2.5 rounded-[3px] bg-primary-content"></span>
 					</span>
 					<span class="text-sm font-semibold tracking-tight">emergent.feedback</span>
-					<span class="ml-2 font-mono text-xs text-base-content/40">v0.11.0</span>
+					<span class="ml-2 font-mono text-xs text-base-content/40">v{ version }</span>
 				</div>
 				<nav class="flex items-center gap-4 text-sm" aria-label="Footer">
 					<a href="https://github.com/emergent-company/emergent.feedback" class="link link-hover" target="_blank" rel="noopener noreferrer">GitHub</a>

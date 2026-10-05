@@ -121,7 +121,7 @@ func BuildRouter(opts Options) (*echo.Echo, error) {
 
 	// Landing page (public; commercial one-pager)
 	e.GET("/", func(c echo.Context) error {
-		render.RenderPage(c.Response().Writer, c.Request(), landing.LandingPage())
+		render.RenderPage(c.Response().Writer, c.Request(), landing.LandingPage(Version))
 		return nil
 	})
 

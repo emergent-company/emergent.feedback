@@ -161,9 +161,9 @@ services:
     environment:
       PORT: "8080"
       DB_PATH: /data/feedback-overlay.db
-      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID}
-      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
-      GITHUB_REDIRECT_URI: https://your-domain.example.com/auth/callback
+      GH_APP_CLIENT_ID: ${GH_APP_CLIENT_ID}
+      GH_APP_CLIENT_SECRET: ${GH_APP_CLIENT_SECRET}
+      GH_REDIRECT_URI: https://your-domain.example.com/auth/callback
       JWT_SECRET: ${JWT_SECRET}
 
 volumes:
@@ -173,8 +173,8 @@ volumes:
 ### 4. Write your `.env`
 
 ```env
-GITHUB_CLIENT_ID=<your client id>
-GITHUB_CLIENT_SECRET=<your client secret>
+GH_APP_CLIENT_ID=<your client id>
+GH_APP_CLIENT_SECRET=<your client secret>
 JWT_SECRET=<your random secret>
 ```
 
@@ -276,9 +276,9 @@ docker build -t emergent-feedback .
 |----------|---------|-------------|
 | `PORT` | `8080` | HTTP listen port |
 | `DB_PATH` | `./feedback-overlay.db` | SQLite database path |
-| `GITHUB_CLIENT_ID` | — | OAuth App client ID |
-| `GITHUB_CLIENT_SECRET` | — | OAuth App client secret |
-| `GITHUB_REDIRECT_URI` | — | Must match the OAuth App callback URL |
+| `GH_APP_CLIENT_ID` | — | OAuth App client ID |
+| `GH_APP_CLIENT_SECRET` | — | OAuth App client secret |
+| `GH_REDIRECT_URI` | — | Must match the OAuth App callback URL |
 | `JWT_SECRET` | — | Secret used to sign session JWTs |
 
 ---
