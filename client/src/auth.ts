@@ -125,7 +125,16 @@ export class AuthManager {
     try {
       const raw = localStorage.getItem(USER_KEY);
       if (!raw) return null;
-      return JSON.parse(raw) as AuthUser;
+      const parsed = JSON.parse(raw) as
+        | (Partial<AuthUser> & { avatar?: string })
+        | null;
+      if (!parsed || typeof parsed !== "object" || typeof parsed.login !== "string") {
+        return null;
+      }
+      return {
+        login: parsed.login,
+        avatarUrl: parsed.avatarUrl ?? parsed.avatar ?? "",
+      };
     } catch {
       return null;
     }
