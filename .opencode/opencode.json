@@ -11,14 +11,6 @@
       "type": "local",
       "command": ["npx", "-y", "@playwright/mcp@latest"],
       "enabled": true
-    },
-    "unsplash": {
-      "type": "local",
-      "command": ["npx", "-y", "unsplash-mcp-server"],
-      "enabled": false,
-      "environment": {
-        "UNSPLASH_ACCESS_KEY": ""
-      }
     }
   }
 }

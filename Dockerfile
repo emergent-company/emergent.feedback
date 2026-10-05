@@ -28,12 +28,16 @@ RUN --mount=type=cache,target=/root/.npm \
 COPY client/ ./
 RUN npm run build
 
-# Build the Scalo landing CSS → server/app/static/css/scalo.css
-WORKDIR /landing
-COPY landing/package*.json ./
+# Build the Scalo landing CSS → /build/server/app/static/css/scalo.css.
+# The Tailwind entry's @source globs are relative to landing/styles/app.css
+# (../../server/**), so the server sources must be present in this stage or
+# the page utilities used in .templ files get tree-shaken out of the CSS.
+WORKDIR /build
+COPY landing/ ./landing/
+COPY server/ ./server/
+WORKDIR /build/landing
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --prefer-offline
-COPY landing/ ./
 RUN npm run build
 
 # ── Stage 2: build Go server ───────────────────────────────────────────────────
@@ -57,7 +61,7 @@ RUN --mount=type=cache,target=/root/go/pkg/mod \
 COPY . .
 COPY --from=node-builder /client/../server/app/static/emergent-feedback.js ./server/app/static/emergent-feedback.js
 COPY --from=node-builder /client/../server/app/static/emergent-feedback-replay.js ./server/app/static/emergent-feedback-replay.js
-COPY --from=node-builder /landing/../server/app/static/css/scalo.css ./server/app/static/css/scalo.css
+COPY --from=node-builder /build/server/app/static/css/scalo.css ./server/app/static/css/scalo.css
 
 # VERSION/COMMIT are injected here. Changing them only busts the final link
 # step, not the expensive compilation of all dependencies.

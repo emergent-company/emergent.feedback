@@ -44,45 +44,166 @@ templ LandingPage() {
 		</header>
 
 		<!-- ── Hero ────────────────────────────────────────────────────────── -->
-		<section class="relative overflow-hidden border-b border-base-300/60 bg-base-200/40">
-			<div class="mx-auto grid w-full max-w-6xl items-center gap-10 px-4 py-16 md:grid-cols-2 md:py-24">
-				<div>
-					@ui.Badge(ui.BadgeProps{Label: "Element-level feedback → GitHub issues", Variant: ui.BadgePrimary, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM})
-					<h1 class="mt-5 text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">
-						Your tester said “the button on the right”. Your developers need the exact element.
+		<!-- Ported from Scalo's home hero (centered badge → gradient headline →
+		     dual CTA → product visual → "available in" row). The Scalo background
+		     image and screenshot swiper are replaced with code-drawn CSS/SVG so no
+		     purchased binary assets enter this repo. -->
+		<section class="relative overflow-hidden border-b border-base-300/60" aria-labelledby="hero-title">
+			<!-- Code-drawn atmosphere: radial glow, faint grid, bottom fade. -->
+			<div class="hero-glow pointer-events-none absolute inset-x-0 -top-40 -z-3 h-[900px] opacity-70" aria-hidden="true"></div>
+			<div class="hero-grid pointer-events-none absolute inset-0 -z-2" aria-hidden="true"></div>
+			<div class="hero-fade-bottom pointer-events-none absolute inset-x-0 bottom-0 -z-1 h-24" aria-hidden="true"></div>
+
+			<div class="relative mx-auto w-full max-w-6xl px-4 pb-16 pt-14 md:pt-20 lg:pt-24">
+				<div class="flex flex-col items-center text-center">
+					<span class="badge badge-secondary badge-sm rounded-full text-sm">Element-level feedback → GitHub issues</span>
+
+					<h1 id="hero-title" class="mt-5 max-w-4xl text-3xl font-bold leading-tight tracking-tight transition-all duration-1000 starting:scale-105 starting:blur sm:text-4xl lg:text-5xl xl:text-6xl">
+						Your testers say <span class="text-base-content/90">“the button on the right.”</span>
+						<span class="block">Your developers need</span>
+						<span class="animate-background-shift from-primary to-secondary bg-linear-to-l bg-[400%,400%] bg-clip-text text-transparent">the exact element.</span>
 					</h1>
-					<p class="mt-5 max-w-xl text-base text-base-content/70">
+
+					<p class="mt-6 max-w-2xl text-base text-base-content/80 transition-all delay-500 duration-700 starting:opacity-0 sm:text-lg">
 						emergent.feedback closes the gap. Drop in one script tag, hold the hotkey, click the broken element, and a fully-contextual GitHub issue is filed for you — selector, styles, viewport, framework and screenshot included.
 					</p>
-					<div class="mt-7 flex flex-wrap items-center gap-3">
-						@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/emergent.feedback", Variant: ui.ButtonPrimary, Size: ui.ButtonLG, Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}) {
+
+					<div class="mt-8 flex flex-col items-center gap-3 transition-all delay-1000 duration-1000 starting:opacity-0 starting:blur-sm sm:flex-row sm:gap-5">
+						@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "https://github.com/emergent-company/emergent.feedback", Variant: ui.ButtonPrimary, Size: ui.ButtonLG, ExtraClass: "group relative gap-3 border-0 bg-linear-to-r from-primary to-secondary text-base text-primary-content", Attrs: templ.Attributes{"target": "_blank", "rel": "noopener noreferrer"}}) {
+							<span class="iconify lucide--github size-4 sm:size-5" aria-hidden="true"></span>
 							Get started on GitHub
+							<span class="pointer-events-none absolute inset-x-1 top-2 -z-1 h-10 bg-linear-to-r from-primary to-secondary opacity-40 blur-md transition-all duration-500 group-hover:inset-x-0 group-hover:opacity-80 group-hover:blur-lg" aria-hidden="true"></span>
 						}
-						<a href="#self-host" class="btn btn-outline btn-lg">Self-host</a>
+						@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeLink, Href: "#self-host", Variant: ui.ButtonGhost, Size: ui.ButtonLG, ExtraClass: "gap-3 border-transparent text-base"}) {
+							<span class="iconify lucide--terminal size-4 sm:size-5" aria-hidden="true"></span>
+							Self-host
+						}
 					</div>
-					<div class="mt-7">
-						@ui.Alert(ui.AlertProps{Type: ui.AlertInfo, Style: ui.AlertStyleSoft, Message: "Hold Alt+Shift, click any element on this page and file a real issue against this project — you can try the overlay live right here."})
+
+					<div class="mt-6 transition-all delay-1000 duration-1000 starting:opacity-0">
+						<code class="inline-flex items-center gap-2 rounded-lg border border-base-300/60 bg-base-200/50 px-3 py-2 font-mono text-xs text-base-content/70">
+							<span class="iconify lucide--square-code size-3.5 shrink-0 text-primary" aria-hidden="true"></span>
+							{ "<script src=\"/emergent-feedback.js\" data-repo=\"owner/repo\" async></script>" }
+						</code>
 					</div>
 				</div>
 
-				<div>
-					<p class="mb-2 font-mono text-xs uppercase tracking-widest text-base-content/50">Install</p>
-					<div class="mockup-code w-full text-sm shadow-xl">
-						<pre data-prefix="&lt;/&gt;"><code>{ "<script src=\"https://feedback.emergent-company.ai/emergent-feedback.js\" data-api=\"https://feedback.emergent-company.ai\" data-repo=\"owner/repo\" async></script>" }</code></pre>
+				<!-- Code-drawn product mockup: the overlay mid-capture. -->
+				<div class="mt-14 transition-all delay-1500 duration-1000 starting:opacity-0 md:mt-16" role="img" aria-label="Diagram of the emergent.feedback overlay: a tester clicks a checkout button, and the captured selector, viewport and computed styles are filed as a GitHub issue.">
+					<div class="relative mx-auto max-w-5xl">
+						<div class="relative overflow-hidden rounded-xl bg-linear-to-r from-primary/25 via-secondary/20 to-accent/25 p-1.5 shadow-2xl shadow-primary/10">
+							<div class="overflow-hidden rounded-lg border border-base-300/60 bg-base-100">
+								<!-- window bar -->
+								<div class="flex items-center gap-3 border-b border-base-300/60 bg-base-200/50 px-4 py-3">
+									<div class="flex items-center gap-1.5" aria-hidden="true">
+										<span class="size-2.5 rounded-full bg-error/70"></span>
+										<span class="size-2.5 rounded-full bg-warning/70"></span>
+										<span class="size-2.5 rounded-full bg-success/70"></span>
+									</div>
+									<div class="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-base-300/60 bg-base-100 px-3 py-1 text-xs text-base-content/50">
+										<span class="iconify lucide--lock size-3 shrink-0" aria-hidden="true"></span>
+										<span class="truncate font-mono">app.example.com/checkout</span>
+									</div>
+									<span class="badge badge-primary badge-sm gap-1.5">
+										<span class="size-1.5 animate-pulse rounded-full bg-primary-content" aria-hidden="true"></span>
+										Overlay armed
+									</span>
+								</div>
+								<div class="grid md:grid-cols-[1.35fr_1fr]">
+									<!-- fake app page -->
+									<div class="relative min-h-[320px] bg-base-200/20 p-5">
+										<div class="flex items-center justify-between">
+											<div class="space-y-1.5">
+												<div class="h-2.5 w-28 rounded-full bg-base-300"></div>
+												<div class="h-2 w-20 rounded-full bg-base-300/60"></div>
+											</div>
+											<div class="flex -space-x-2" aria-hidden="true">
+												<span class="size-6 rounded-full border-2 border-base-100 bg-primary/50"></span>
+												<span class="size-6 rounded-full border-2 border-base-100 bg-secondary/50"></span>
+												<span class="size-6 rounded-full border-2 border-base-100 bg-accent/50"></span>
+											</div>
+										</div>
+										<div class="mt-5 space-y-2.5" aria-hidden="true">
+											<div class="h-2 w-full rounded-full bg-base-300/50"></div>
+											<div class="h-2 w-5/6 rounded-full bg-base-300/50"></div>
+											<div class="h-2 w-2/3 rounded-full bg-base-300/50"></div>
+										</div>
+										<!-- selected element -->
+										<div class="relative mt-6">
+											<div class="rounded-lg border border-base-300 bg-base-100 p-4 shadow-sm">
+												<div class="flex items-center justify-between gap-4">
+													<div class="space-y-1.5">
+														<div class="h-2 w-16 rounded-full bg-base-300/70"></div>
+														<div class="h-2 w-24 rounded-full bg-base-300/50"></div>
+													</div>
+													<div class="h-7 w-24 rounded-md bg-primary/70"></div>
+												</div>
+											</div>
+											<div class="pointer-events-none absolute -inset-1 rounded-lg ring-2 ring-primary ring-offset-2 ring-offset-base-100"></div>
+											<div class="absolute -top-3 left-4 flex items-center gap-1 rounded-md bg-primary px-2 py-0.5 text-[11px] font-medium text-primary-content shadow">
+												<span class="iconify lucide--bug size-3" aria-hidden="true"></span>
+												{ "button[data-component=\"checkout\"]" }
+											</div>
+										</div>
+										<div class="mt-6 flex items-center justify-center gap-2 text-xs text-base-content/50">
+											<span class="kbd kbd-xs">Alt</span>
+											<span>+</span>
+											<span class="kbd kbd-xs">Shift</span>
+										</div>
+										<p class="mt-2 text-center text-xs text-base-content/50">Hold Alt+Shift and click any element to try the overlay right here.</p>
+									</div>
+									<!-- capture panel -->
+									<div class="border-t border-base-300/60 bg-base-100 p-5 md:border-l md:border-t-0">
+										<div class="flex items-center justify-between">
+											<h2 class="text-sm font-semibold">New feedback</h2>
+											@ui.Badge(ui.BadgeProps{Label: "Bug", Variant: ui.BadgeError, Size: ui.BadgeSizeSM})
+										</div>
+										<dl class="mt-4 space-y-2 text-xs">
+											<div class="flex items-center justify-between gap-3">
+												<dt class="text-base-content/50">URL</dt>
+												<dd class="font-mono text-base-content/80">/checkout</dd>
+											</div>
+											<div class="flex items-center justify-between gap-3">
+												<dt class="text-base-content/50">Viewport</dt>
+												<dd class="font-mono text-base-content/80">390×844 · DPR 3</dd>
+											</div>
+											<div class="flex items-center justify-between gap-3">
+												<dt class="text-base-content/50">Framework</dt>
+												<dd class="font-mono text-base-content/80">React + Tailwind</dd>
+											</div>
+										</dl>
+										<div class="mt-4 rounded-lg border border-base-300/60 bg-base-200/50 p-3">
+											<p class="text-[10px] font-medium uppercase tracking-widest text-base-content/40">Selector</p>
+											<code class="mt-1 block break-all font-mono text-xs text-primary">main &gt; section.cart &gt; button.btn-primary</code>
+										</div>
+										<div class="mt-3 rounded-lg border border-base-300/60 bg-base-200/50 p-3">
+											<p class="text-[10px] font-medium uppercase tracking-widest text-base-content/40">Computed styles</p>
+											<code class="mt-1 block font-mono text-xs text-base-content/70">{ "display: flex; pointer-events: none" }</code>
+										</div>
+										<div class="mt-4 flex items-center justify-center gap-2 rounded-lg bg-primary/10 px-3 py-2 text-xs font-medium text-primary">
+											<span class="iconify lucide--github size-3.5" aria-hidden="true"></span>
+											Issue filed to GitHub
+											<span class="iconify lucide--check size-3.5" aria-hidden="true"></span>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+						<div class="pointer-events-none absolute inset-x-10 -bottom-6 -z-1 h-24 rounded-full bg-secondary/20 blur-3xl" aria-hidden="true"></div>
 					</div>
-					<div class="stats mt-6 w-full border border-base-300 bg-base-200/50">
-						<div class="stat">
-							<div class="stat-title text-xs">Setup</div>
-							<div class="stat-value text-2xl">1 tag</div>
-						</div>
-						<div class="stat">
-							<div class="stat-title text-xs">Frameworks</div>
-							<div class="stat-value text-2xl">6+</div>
-						</div>
-						<div class="stat">
-							<div class="stat-title text-xs">Backend</div>
-							<div class="stat-value text-2xl">None</div>
-						</div>
+				</div>
+
+				<!-- Works-with row (Scalo "Available In" analog, text only). -->
+				<div class="mt-16 text-center md:mt-20">
+					<p class="text-sm font-medium text-base-content/60">Works with</p>
+					<div class="mt-4 flex flex-wrap items-center justify-center gap-2 md:gap-3">
+						@ui.Badge(ui.BadgeProps{Label: "Plain HTML", Variant: ui.BadgeGhost, Size: ui.BadgeSizeSM})
+						@ui.Badge(ui.BadgeProps{Label: "React", Variant: ui.BadgeGhost, Size: ui.BadgeSizeSM})
+						@ui.Badge(ui.BadgeProps{Label: "Vue", Variant: ui.BadgeGhost, Size: ui.BadgeSizeSM})
+						@ui.Badge(ui.BadgeProps{Label: "Svelte", Variant: ui.BadgeGhost, Size: ui.BadgeSizeSM})
+						@ui.Badge(ui.BadgeProps{Label: "Angular", Variant: ui.BadgeGhost, Size: ui.BadgeSizeSM})
+						@ui.Badge(ui.BadgeProps{Label: "Tailwind", Variant: ui.BadgeGhost, Size: ui.BadgeSizeSM})
+						@ui.Badge(ui.BadgeProps{Label: "daisyUI", Variant: ui.BadgeGhost, Size: ui.BadgeSizeSM})
 					</div>
 				</div>
 			</div>
