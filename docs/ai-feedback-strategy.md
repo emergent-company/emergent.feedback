@@ -1,6 +1,6 @@
 # Perfect Feedback for AI — Strategy & Technical Spec
 
-Repo: `/root/feedback-overlay` · Date: 2026-10-01 · Status: strategic spec (no code yet)
+Repo: `emergent-company/emergent.feedback` · Date: 2026-10-01 · Status: strategic spec (no code yet)
 Sources: `docs/competitive-analysis.md` + oracle architecture review + librarian research on agent context engineering.
 
 ---
@@ -430,7 +430,7 @@ Highest-leverage first; each phase independently shippable.
 1. rrweb replay, buffered ~60s, shipped on submit only. *Heavy.*
 2. Source-map upload + stack unmapping for `repro.console` (not DOM). *Heavy.*
 3. Detail levels (Compact/Standard/Forensic) + `response_format`. *Cheap (renderer).*
-4. **Publish the envelope JSON Schema** at `feedback-overlay.dev/envelope` — first-mover on the "neutral feedback schema" whitespace. *Cheap, high strategic value.*
+4. **Publish the envelope JSON Schema** at `emergent-feedback.dev/envelope` — first-mover on the "neutral feedback schema" whitespace. *Cheap, high strategic value.*
 5. Reporter notification on ship + AI dedupe/auto-title.
 
 **Cheap wins (any phase):** provenance/trust_order, intent form, `feedback_get`/`list`, mark_applied/resolved, quality scoring, console capture, detail levels, schema publication.
@@ -463,7 +463,7 @@ Agents *do* consume images, but expensively and imprecisely:
 **Open questions (decide before Phase B):**
 6. Who re-runs the verification contract — client (cheap, tab-bound) vs headless service (robust, heavy)? Recommend client-first + `human` fallback, headless in v2.
 7. Envelope storage: derive-on-read + new columns (recommended) vs full `envelope_json` blob.
-8. Do we own the `feedback-overlay.dev/envelope` namespace and publish the schema? Strategic bet on portability.
+8. Do we own the `emergent-feedback.dev/envelope` namespace and publish the schema? Strategic bet on portability.
 9. Dedup semantics — fingerprint-equality ≠ bug-equality; don't auto-merge on selector alone.
 10. **Published benchmark gap:** no public study isolates "source location vs selector-only" on one-shot edit accuracy. Running our own small ablation would be a credible marketing asset.
 

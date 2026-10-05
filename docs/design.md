@@ -1,6 +1,7 @@
-# feedback-overlay — Context Enrichment Design
+# emergent.feedback — Context Enrichment Design
 
 Status: **v1 + v2 + v3 + P1 implemented**. P2 (panel UI) pending.
+**v4 (host-provided metadata) designed, not implemented.**
 
 ## Goal
 
@@ -31,7 +32,7 @@ handler) but the client never sends it — dead path.
 ### Overlay session ID
 
 - Mint a UUID on first load, persist in `sessionStorage` under
-  `__fo_session_id__`. Falls back to ephemeral random ID if `sessionStorage`
+  `__ef_session_id__`. Falls back to ephemeral random ID if `sessionStorage`
   or `crypto.randomUUID` is unavailable.
 - Attach as `context.sessionId`.
 - Purpose: group all feedback items produced by one browser session, so the
@@ -53,7 +54,7 @@ attribute is enough, do not auto-detect telemetry internals.
 
 ```html
 <script
-  src="https://feedback.emergent-company.ai/feedback-overlay.js"
+  src="https://feedback.emergent-company.ai/emergent-feedback.js"
   data-repo="org/repo"
   data-session-id="b8f3…"
   data-session-id-selector="#trace-id"
@@ -145,6 +146,140 @@ issue.
 
 ---
 
+## v4 — Host-provided metadata (`<meta name="ef:*">`)
+
+Status: **designed, not implemented.**
+
+### Goal
+
+Let the host app attach arbitrary product metadata — environment, tenant,
+plan, feature flags, route/feature name, correlation IDs — that travels with
+every feedback item and is rendered alongside the auto-captured context.
+
+Today the host can only contribute three fields: `data-branch`,
+`data-version`, `data-session-id` (`client/src/config.ts`). Everything else is
+auto-captured DOM/browser data. Adding more `data-*` attributes scales badly
+because each new field needs client code. Instead, expose **one generic
+channel**: document `<head>` meta tags under the `ef:` namespace.
+
+### Channel (decided)
+
+Only `<meta name="ef:*">` tags. No JS setter API, no `data-context` JSON bag in
+v4. Rationale: meta tags work for SSR/server-rendered apps with zero client
+wiring, are readable by the overlay at submit time, and need no new JS public
+surface. A runtime setter (`window.feedbackOverlay.setContext`) is explicitly
+deferred to a later version if SPA-dynamic metadata proves necessary.
+
+Legacy `data-branch` / `data-version` / `data-session-id` are **unchanged** and
+keep populating their existing top-level context keys. Meta tags are additive;
+they do not override or replace them.
+
+### Syntax
+
+```html
+<head>
+  <!-- flat key -->
+  <meta name="ef:env" content="staging">
+  <!-- dotted key → nested object -->
+  <meta name="ef:tenant.id" content="acme">
+  <meta name="ef:feature.area" content="billing">
+</head>
+```
+
+- Name must start with `ef:` (case-insensitive prefix; keys normalised to
+  lower-case).
+- The remainder is a dot path. Each segment must match `[a-z0-9_-]+`.
+  Max **3 segments** (depth), deeper paths rejected.
+- Value = trimmed `content` attribute. Empty content skipped.
+- Collection happens in `gatherContext` (`client/src/index.ts`) by scanning
+  `document.head` at submit time, so meta tags injected by client JS before
+  submit are picked up as well as SSR-rendered ones.
+
+### Context shape
+
+All meta tags merge into one reserved object, `context.app`:
+
+```json
+{
+  "url": "…",
+  "viewport": { "width": 1440, "height": 900 },
+  "sessionHistory": [ … ],
+  "app": {
+    "env": "staging",
+    "tenant": { "id": "acme" },
+    "feature": { "area": "billing" }
+  }
+}
+```
+
+`context.app` is reserved and never written by auto-capture. Legacy `branch` /
+`appVersion` stay at the top level; renderers show `context.app` and the legacy
+fields in one "App metadata" block.
+
+### Recommended key catalog
+
+Not enforced — the namespace is free-form — but these are the keys worth
+capturing, grouped for documentation:
+
+| Group | Example keys |
+|---|---|
+| Build / deploy | `env`, `commit`, `build`, `deploy.id`, `region`, `release` |
+| App | `product`, `framework`, `framework.version`, `locale`, `timezone`, `theme` |
+| Tenant / identity | `tenant.id`, `workspace.id`, `user.id`, `plan`, `role`, `flags.*` |
+| Routing | `route`, `route.params`, `feature.area` |
+| Correlation | `request.id`, `backend.trace.id` |
+
+### Guardrails (mandatory)
+
+Reuse the redaction signals already in `client/src/snapshot.ts`.
+
+- **Sensitive keys/values dropped.** Apply `SENSITIVE_ATTR` (token/secret/
+  password/apikey/authorization/jwt/csrf/cookie/sessionid…) to the full dotted
+  key, and `TOKEN_VALUE` to the value. A match means the whole tag is dropped
+  (not redacted) so it never reaches storage or the issue.
+- **PII deny-list.** Keys matching `email|phone|ssn|dob|address|ip` are dropped
+  by default. The app is responsible for what it emits; the overlay refuses the
+  obvious offenders.
+- **Size caps.** Per-value ≤ 500 chars; ≤ 50 keys total; ≤ 4 KB serialised.
+  Exceeding a cap drops the offending tag (per-value) or the whole `context.app`
+  (global caps) with a `console.warn`. Never fail the submit.
+- **No interpretation.** Values are treated as opaque text and rendered through
+  the existing `escapeHtml` path — never injected as HTML.
+
+### Rendering call sites
+
+No storage change: metadata rides in `context_json` under `context.app`.
+
+| Surface | Change |
+|---|---|
+| `client/src/index.ts` `gatherContext` | read `ef:*` meta tags, build `context.app` |
+| `client/src/config.ts` | unchanged (no new script attribute) |
+| `client/src/dialog.ts` (~L490 meta rows) | "App metadata" group in the context grid |
+| `server/handler/issue.go` `buildIssueContent` | "App metadata" block in the issue body |
+| `server/panel/panel.templ` `contextSection` | rows for `context.app` |
+| MCP `feedback_get_context` | unchanged — raw JSON already includes `context.app` |
+
+### Non-goals
+
+- No JS runtime setter / `window.feedbackOverlay.setContext` in v4.
+- No typed schema or per-key validation beyond name syntax and caps.
+- No auto-detection of framework/telemetry internals (only explicit tags).
+- No path-level override or precedence machinery — meta tags only append.
+
+### Acceptance criteria
+
+1. `<meta name="ef:env">` and `<meta name="ef:tenant.id">` appear as
+   `context.app.env` and `context.app.tenant.id` on a submitted item.
+2. Malformed names (`ef:` empty, uppercase path, >3 segments, illegal chars)
+   are ignored without error.
+3. `ef:api.key`, `ef:user.email`, and a value that matches `TOKEN_VALUE` are
+   dropped and never appear in `context_json` or the issue body.
+4. Over-cap input is dropped with a console warning; submit still succeeds.
+5. Legacy `data-branch` / `data-version` behaviour is byte-for-byte unchanged.
+6. Metadata renders in the dialog, the GitHub issue body, and the panel preview.
+
+---
+
 ## Schema (future migrations)
 
 | Version | Change |
@@ -152,6 +287,7 @@ issue.
 | v1 | none — new fields ride in `context_json`; `screenshot` column already exists |
 | v2 | `feedback` + `snapshot BLOB`, `snapshot_size INT`; `github_issues` + `feedback_ids TEXT` (`snapshot_secret` legacy column, unused) |
 | v3 | `api_keys` + `api_key_repos` — per-user repo-scoped API keys |
+| v4 | none — host metadata rides in `context_json` under reserved `context.app` key |
 
 ---
 
@@ -159,6 +295,8 @@ issue.
 
 - Never capture `localStorage` values.
 - Redact sensitive input values (already done in `history.ts`; extend to snapshot).
+- Host metadata (`ef:*` tags) is filtered through the same sensitive-key/value
+  and PII deny-lists before attach; over-cap input is dropped, never truncated mid-value.
 - API keys stored hashed only; repo-scoped; never embedded in issues.
 - Snapshot/screenshot/context served only for exported feedback, within the key's repo scope.
 
