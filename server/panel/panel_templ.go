@@ -54,17 +54,18 @@ func panelBrand(markOnly bool) templ.Component {
 	})
 }
 
-// panelSidebarGroups is the panel's left-nav. The Workspace group uses in-page
-// anchors (Overview / API keys / Reports) so it mirrors the memory admin
-// sections; Links points at the public surfaces.
-func panelSidebarGroups() []layout.SidebarGroup {
+// panelSidebarGroups is the panel's left-nav. The Workspace group maps to the
+// three real panel routes; active is the current page key ("overview", "keys"
+// or "reports") so the correct item is highlighted on load. Links points at the
+// public surfaces.
+func panelSidebarGroups(active string) []layout.SidebarGroup {
 	return []layout.SidebarGroup{
 		{
 			Label: "Workspace",
 			Items: []layout.SidebarItem{
-				{Label: "Overview", Href: "#overview", Icon: "lucide--layout-dashboard", Active: true},
-				{Label: "API keys", Href: "#keys", Icon: "lucide--key-round"},
-				{Label: "Reports", Href: "#reports", Icon: "lucide--inbox"},
+				{Label: "Overview", Href: "/panel", Icon: "lucide--layout-dashboard", Active: active == "overview"},
+				{Label: "API keys", Href: "/panel/keys", Icon: "lucide--key-round", Active: active == "keys"},
+				{Label: "Reports", Href: "/panel/reports", Icon: "lucide--inbox", Active: active == "reports"},
 			},
 		},
 		{
@@ -81,8 +82,8 @@ func panelSidebarGroups() []layout.SidebarGroup {
 // panelSidebar mirrors memory's hand-rolled sidebar (same #_layout-sidebar id,
 // h-14 header, and .sidebar-menu/.menu-label/.menu-item classes) so the
 // go-daisy responsive drawer + desktop collapse CSS keeps working. Each link is
-// a layout.SidebarMenuItem (plain anchor, no HTMX nav — the panel is one page).
-func panelSidebar() templ.Component {
+// a layout.SidebarMenuItem (plain anchor, full-page navigation between routes).
+func panelSidebar(active string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -115,7 +116,7 @@ func panelSidebar() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		for i, group := range panelSidebarGroups() {
+		for i, group := range panelSidebarGroups(active) {
 			if group.Label != "" {
 				var templ_7745c5c3_Var3 = []any{"menu-label px-2.5 pb-1.5", templ.KV("pt-5", i > 0), templ.KV("pt-0", i == 0)}
 				templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var3...)
@@ -142,7 +143,7 @@ func panelSidebar() templ.Component {
 				var templ_7745c5c3_Var5 string
 				templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(group.Label)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `server/panel/panel.templ`, Line: 58, Col: 110}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `server/panel/panel.templ`, Line: 59, Col: 110}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 				if templ_7745c5c3_Err != nil {
@@ -168,10 +169,8 @@ func panelSidebar() templ.Component {
 	})
 }
 
-// PanelPage renders the API-key management panel. It is a server-rendered
-// go-daisy page whose dynamic regions (repos, keys, reveal, toasts) are filled
-// in by the inline vanilla-JS controller at the bottom of the page.
-func PanelPage() templ.Component {
+// panelGate is the signed-out gate shown before the app shell.
+func panelGate() templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -192,7 +191,7 @@ func PanelPage() templ.Component {
 			templ_7745c5c3_Var6 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<!doctype html><html lang=\"en\" data-theme=\"dark\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><meta name=\"color-scheme\" content=\"dark\"><title>emergent.feedback · API keys</title><link rel=\"stylesheet\" href=\"/static/css/app.css\"></head><body class=\"min-h-screen bg-base-200\"><div id=\"modal-container\"></div><!-- ── Signed-out gate ─────────────────────────────────────────────── --><div id=\"gate\" class=\"hidden\"><div class=\"flex min-h-screen items-center justify-center p-6\"><div class=\"w-full max-w-md\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<div id=\"gate\" class=\"hidden\"><div class=\"flex min-h-screen items-center justify-center p-6\"><div class=\"w-full max-w-md\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -208,7 +207,7 @@ func PanelPage() templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<div class=\"flex items-center gap-2\"><span class=\"grid size-6 place-items-center rounded-md bg-primary\" aria-hidden=\"true\"><span class=\"size-2.5 rounded-[3px] bg-primary-content\"></span></span> <span class=\"text-sm font-semibold tracking-tight\">emergent.feedback</span></div><h1 class=\"mt-5 text-lg font-semibold tracking-tight\">API keys</h1><p class=\"mt-1 text-sm text-base-content/70\">Sign in with GitHub to create keys that let an agent read feedback for the repositories you choose.</p><div class=\"mt-3 w-fit\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<div class=\"flex items-center gap-2\"><span class=\"grid size-6 place-items-center rounded-md bg-primary\" aria-hidden=\"true\"><span class=\"size-2.5 rounded-[3px] bg-primary-content\"></span></span> <span class=\"text-sm font-semibold tracking-tight\">emergent.feedback</span></div><h1 class=\"mt-5 text-lg font-semibold tracking-tight\">Sign in</h1><p class=\"mt-1 text-sm text-base-content/70\">Sign in with GitHub to manage the API keys and reports for the repositories you choose.</p><div class=\"mt-3 w-fit\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -252,11 +251,41 @@ func PanelPage() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</div></div></div><!-- ── Signed-in panel ────────────────────────────────────────────── --><div id=\"app\" class=\"hidden\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</div></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Var9 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		return nil
+	})
+}
+
+// panelNavbar is the shared top bar: brand, signed-in login and account menu.
+func panelNavbar() templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var9 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var9 == nil {
+			templ_7745c5c3_Var9 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<div class=\"bg-base-100 border-base-content/5 z-10 h-14 shrink-0 border-b\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Var10 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -268,15 +297,11 @@ func PanelPage() templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = panelSidebar().Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<span id=\"user-login\" class=\"hidden max-w-[10rem] truncate text-sm font-medium sm:block\"></span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, " <div class=\"flex min-w-0 grow flex-col overflow-hidden\"><div class=\"bg-base-100 border-base-content/5 z-10 h-14 shrink-0 border-b\">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Var10 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_Var11 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 				if !templ_7745c5c3_IsBuffer {
@@ -288,11 +313,19 @@ func PanelPage() templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<span id=\"user-login\" class=\"hidden max-w-[10rem] truncate text-sm font-medium sm:block\"></span>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<div tabindex=\"0\" role=\"button\" class=\"cursor-pointer rounded-full p-px outline-none transition hover:ring-1 hover:ring-base-content/25 focus-visible:ring-1 focus-visible:ring-base-content/45 active:ring-1 active:ring-base-content/30\" aria-label=\"Account menu\" aria-haspopup=\"menu\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Var11 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_Err = ui.AvatarFull(ui.AvatarProps{Name: "user", Icon: "lucide--user", Size: ui.AvatarSM, Tone: ui.AvatarToneMuted, Attrs: templ.Attributes{"id": "user-avatar"}}).Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "</div>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Var12 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 					if !templ_7745c5c3_IsBuffer {
@@ -304,375 +337,175 @@ func PanelPage() templ.Component {
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<div tabindex=\"0\" role=\"button\" class=\"cursor-pointer rounded-full p-px outline-none transition hover:ring-1 hover:ring-base-content/25 focus-visible:ring-1 focus-visible:ring-base-content/45 active:ring-1 active:ring-base-content/30\" aria-label=\"Account menu\" aria-haspopup=\"menu\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "<li class=\"menu-title pointer-events-none select-none px-2 pt-2 pb-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-base-content/50\">Signed in with GitHub</li><li class=\"pointer-events-none\"><div class=\"flex items-center gap-2 px-1 py-0.5\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = ui.AvatarFull(ui.AvatarProps{Name: "user", Icon: "lucide--user", Size: ui.AvatarSM, Tone: ui.AvatarToneMuted, Attrs: templ.Attributes{"id": "user-avatar"}}).Render(ctx, templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = ui.IconSpan("lucide--github", "size-4 text-base-content/60").Render(ctx, templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "</div>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<span class=\"text-sm text-base-content/80\">GitHub session</span></div></li><li aria-hidden=\"true\"></li><li><button id=\"signout\" type=\"button\" class=\"text-error hover:bg-error/10 flex w-full cursor-pointer items-center gap-2 text-left\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Var12 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-						templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-						templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-						if !templ_7745c5c3_IsBuffer {
-							defer func() {
-								templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-								if templ_7745c5c3_Err == nil {
-									templ_7745c5c3_Err = templ_7745c5c3_BufErr
-								}
-							}()
-						}
-						ctx = templ.InitializeContext(ctx)
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "<li class=\"menu-title pointer-events-none select-none px-2 pt-2 pb-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-base-content/50\">Signed in with GitHub</li><li class=\"pointer-events-none\"><div class=\"flex items-center gap-2 px-1 py-0.5\">")
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						templ_7745c5c3_Err = ui.IconSpan("lucide--github", "size-4 text-base-content/60").Render(ctx, templ_7745c5c3_Buffer)
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<span class=\"text-sm text-base-content/80\">GitHub session</span></div></li><li aria-hidden=\"true\"></li><li><button id=\"signout\" type=\"button\" class=\"text-error hover:bg-error/10 flex w-full cursor-pointer items-center gap-2 text-left\">")
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						templ_7745c5c3_Err = ui.IconSpan("lucide--log-out", "size-4").Render(ctx, templ_7745c5c3_Buffer)
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<span>Sign out</span></button></li>")
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						return nil
-					})
-					templ_7745c5c3_Err = ui.DropdownMenu(templ.Attributes{"aria-label": "Account", "class": "min-w-56 border-base-content/10 z-50"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var12), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = ui.IconSpan("lucide--log-out", "size-4").Render(ctx, templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<span>Sign out</span></button></li>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = ui.Dropdown(ui.DropdownEnd, templ.Attributes{"data-testid": "account-menu"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var11), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = ui.DropdownMenu(templ.Attributes{"aria-label": "Account", "class": "min-w-56 border-base-content/10 z-50"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var12), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = layout.Navbar("emergent.feedback", panelBrand(false)).Render(templ.WithChildren(ctx, templ_7745c5c3_Var10), templ_7745c5c3_Buffer)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "</div><main id=\"main\" class=\"grow overflow-auto\">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Var13 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-				if !templ_7745c5c3_IsBuffer {
-					defer func() {
-						templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-						if templ_7745c5c3_Err == nil {
-							templ_7745c5c3_Err = templ_7745c5c3_BufErr
-						}
-					}()
-				}
-				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "<header id=\"overview\" class=\"mb-6 scroll-mt-6\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = ui.Eyebrow("API access", ui.EyebrowProps{Size: "text-[11px]", Margin: "mb-1"}).Render(ctx, templ_7745c5c3_Buffer)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "<div class=\"flex flex-wrap items-end justify-between gap-4\"><div class=\"min-w-0\"><h1 class=\"text-2xl font-semibold tracking-tight lg:text-3xl\">API keys</h1><p class=\"mt-1.5 max-w-2xl text-sm text-base-content/70\">Create keys for agents that read feedback. Each key is limited to the repositories you select, and the plaintext value is shown only once.</p></div><div class=\"flex flex-wrap items-center gap-2\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = ui.Badge(ui.BadgeProps{Label: "Scoped to repos", Variant: ui.BadgeGhost, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM}).Render(ctx, templ_7745c5c3_Buffer)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = ui.Badge(ui.BadgeProps{Label: "Shown once", Variant: ui.BadgeWarning, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM, Icon: "lucide--eye-off"}).Render(ctx, templ_7745c5c3_Buffer)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "</div></div></header><!-- One-time reveal (filled on create) --> <div id=\"reveal\" class=\"hidden\"><div class=\"card mb-6 border border-success/30 bg-base-100 shadow-sm\"><div class=\"card-body\"><div class=\"flex items-center justify-between gap-3\"><div class=\"flex items-center gap-2\"><h2 class=\"text-base font-semibold\">Key created</h2>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = ui.Badge(ui.BadgeProps{Label: "Shown once", Variant: ui.BadgeWarning, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM}).Render(ctx, templ_7745c5c3_Buffer)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "</div>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Var14 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-					if !templ_7745c5c3_IsBuffer {
-						defer func() {
-							templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-							if templ_7745c5c3_Err == nil {
-								templ_7745c5c3_Err = templ_7745c5c3_BufErr
-							}
-						}()
-					}
-					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "Dismiss")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					return nil
-				})
-				templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: ui.ButtonTypeButton, Variant: ui.ButtonGhost, Size: ui.ButtonSM, Attrs: templ.Attributes{"id": "reveal-dismiss"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var14), templ_7745c5c3_Buffer)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "</div><p class=\"mt-1 text-sm text-base-content/70\">Copy it now. This is the only time the full key is shown.</p><div id=\"reveal-repos\" class=\"mt-3 flex flex-wrap gap-2\"></div><div class=\"mt-4 flex items-stretch gap-2\"><code id=\"reveal-key\" class=\"min-w-0 flex-1 break-all rounded-lg bg-neutral px-4 py-3 font-mono text-sm text-neutral-content\"></code>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Var15 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-					if !templ_7745c5c3_IsBuffer {
-						defer func() {
-							templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-							if templ_7745c5c3_Err == nil {
-								templ_7745c5c3_Err = templ_7745c5c3_BufErr
-							}
-						}()
-					}
-					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "Copy")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					return nil
-				})
-				templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: ui.ButtonTypeButton, Variant: ui.ButtonPrimary, Attrs: templ.Attributes{"id": "reveal-copy", "aria-label": "Copy API key to clipboard"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var15), templ_7745c5c3_Buffer)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "</div><div class=\"mt-4\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = ui.Alert(ui.AlertProps{Type: ui.AlertWarning, Style: ui.AlertStyleSoft, Message: "Store it in a secret manager. It cannot be retrieved again - revoke and create a new one if lost."}).Render(ctx, templ_7745c5c3_Buffer)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "</div></div></div></div><!-- Create + existing keys --> <section id=\"keys\" class=\"scroll-mt-6\"><div class=\"grid grid-cols-1 items-start gap-6 lg:grid-cols-2\"><!-- Create -->")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Var16 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-					if !templ_7745c5c3_IsBuffer {
-						defer func() {
-							templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-							if templ_7745c5c3_Err == nil {
-								templ_7745c5c3_Err = templ_7745c5c3_BufErr
-							}
-						}()
-					}
-					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "<div class=\"flex items-center justify-between gap-3 border-b border-base-content/5 px-5 py-4\"><div><h2 class=\"text-base font-semibold tracking-tight\">Create a key</h2><p class=\"mt-0.5 text-xs text-base-content/60\">Select the repositories this key may read.</p></div>")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Var17 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-						templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-						templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-						if !templ_7745c5c3_IsBuffer {
-							defer func() {
-								templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-								if templ_7745c5c3_Err == nil {
-									templ_7745c5c3_Err = templ_7745c5c3_BufErr
-								}
-							}()
-						}
-						ctx = templ.InitializeContext(ctx)
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "Reload")
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						return nil
-					})
-					templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: ui.ButtonTypeButton, Variant: ui.ButtonGhost, Size: ui.ButtonSM, Icon: "lucide--refresh-cw", Attrs: templ.Attributes{"id": "reload-repos"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var17), templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "</div><div id=\"repo-tools\" class=\"hidden border-b border-base-content/5\"><div class=\"flex flex-wrap items-center gap-2 px-5 py-3\"><input id=\"repo-filter\" class=\"input input-bordered input-sm w-full flex-1\" type=\"search\" placeholder=\"Filter repositories\" aria-label=\"Filter repositories\" autocomplete=\"off\"> <button id=\"select-all\" class=\"btn btn-ghost btn-xs\" type=\"button\">Select all</button> <button id=\"clear-all\" class=\"btn btn-ghost btn-xs\" type=\"button\" disabled>Clear</button></div></div><div id=\"repo-list\" class=\"max-h-80 overflow-y-auto p-2\" role=\"group\" aria-label=\"Repositories\"></div><div id=\"repos-status\" class=\"px-5 py-4 text-sm text-base-content/60\" role=\"status\" aria-live=\"polite\"></div><div class=\"flex items-center justify-between gap-3 border-t border-base-content/5 bg-base-200/40 px-5 py-4\"><span id=\"sel-count\" class=\"text-sm text-base-content/70\">No repositories selected</span>")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Var18 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-						templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-						templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-						if !templ_7745c5c3_IsBuffer {
-							defer func() {
-								templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-								if templ_7745c5c3_Err == nil {
-									templ_7745c5c3_Err = templ_7745c5c3_BufErr
-								}
-							}()
-						}
-						ctx = templ.InitializeContext(ctx)
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "Generate key")
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						return nil
-					})
-					templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: ui.ButtonTypeButton, Variant: ui.ButtonPrimary, Attrs: templ.Attributes{"id": "generate", "disabled": true}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var18), templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "</div>")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					return nil
-				})
-				templ_7745c5c3_Err = ui.CardRaw("card-border overflow-hidden", "gap-0 p-0", nil).Render(templ.WithChildren(ctx, templ_7745c5c3_Var16), templ_7745c5c3_Buffer)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "<!-- Existing -->")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Var19 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-					if !templ_7745c5c3_IsBuffer {
-						defer func() {
-							templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-							if templ_7745c5c3_Err == nil {
-								templ_7745c5c3_Err = templ_7745c5c3_BufErr
-							}
-						}()
-					}
-					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "<div class=\"flex items-center justify-between gap-3 border-b border-base-content/5 px-5 py-4\"><div><h2 class=\"text-base font-semibold tracking-tight\">Existing keys</h2><p class=\"mt-0.5 text-xs text-base-content/60\">Keys you have created for this account.</p></div>")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Var20 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-						templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-						templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-						if !templ_7745c5c3_IsBuffer {
-							defer func() {
-								templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-								if templ_7745c5c3_Err == nil {
-									templ_7745c5c3_Err = templ_7745c5c3_BufErr
-								}
-							}()
-						}
-						ctx = templ.InitializeContext(ctx)
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "Refresh")
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						return nil
-					})
-					templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: ui.ButtonTypeButton, Variant: ui.ButtonGhost, Size: ui.ButtonSM, Icon: "lucide--refresh-cw", Attrs: templ.Attributes{"id": "refresh"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var20), templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "</div><ul id=\"keys-list\" class=\"flex flex-col gap-3 p-5\" aria-live=\"polite\"></ul>")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					return nil
-				})
-				templ_7745c5c3_Err = ui.CardRaw("card-border overflow-hidden", "gap-0 p-0", nil).Render(templ.WithChildren(ctx, templ_7745c5c3_Var19), templ_7745c5c3_Buffer)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "</div></section><!-- Reports (full width) --> <section id=\"reports\" class=\"mt-6 scroll-mt-6\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Var21 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-					if !templ_7745c5c3_IsBuffer {
-						defer func() {
-							templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-							if templ_7745c5c3_Err == nil {
-								templ_7745c5c3_Err = templ_7745c5c3_BufErr
-							}
-						}()
-					}
-					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "<div class=\"flex items-center justify-between gap-3 border-b border-base-content/5 px-5 py-4\"><div><h2 class=\"text-base font-semibold tracking-tight\">Reports</h2><p class=\"mt-0.5 text-xs text-base-content/60\">Feedback captured by the overlay. Select a report to preview it.</p></div>")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Var22 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-						templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-						templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-						if !templ_7745c5c3_IsBuffer {
-							defer func() {
-								templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-								if templ_7745c5c3_Err == nil {
-									templ_7745c5c3_Err = templ_7745c5c3_BufErr
-								}
-							}()
-						}
-						ctx = templ.InitializeContext(ctx)
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "Refresh")
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						return nil
-					})
-					templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: ui.ButtonTypeButton, Variant: ui.ButtonGhost, Size: ui.ButtonSM, Icon: "lucide--refresh-cw", Attrs: templ.Attributes{"id": "reports-refresh"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var22), templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "</div><div id=\"report-preview\" class=\"hidden\" role=\"region\" aria-label=\"Report preview\"></div><ul id=\"reports-list\" class=\"flex flex-col gap-3 p-5\" aria-live=\"polite\"></ul>")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					return nil
-				})
-				templ_7745c5c3_Err = ui.CardRaw("card-border overflow-hidden", "gap-0 p-0", nil).Render(templ.WithChildren(ctx, templ_7745c5c3_Var21), templ_7745c5c3_Buffer)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "</section>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				return nil
-			})
-			templ_7745c5c3_Err = layout.Container(layout.ContainerLG, nil).Render(templ.WithChildren(ctx, templ_7745c5c3_Var13), templ_7745c5c3_Buffer)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "</main></div>")
+			templ_7745c5c3_Err = ui.Dropdown(ui.DropdownEnd, templ.Attributes{"data-testid": "account-menu"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var11), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = layout.AppShell("emergent.feedback").Render(templ.WithChildren(ctx, templ_7745c5c3_Var9), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = layout.Navbar("emergent.feedback", panelBrand(false)).Render(templ.WithChildren(ctx, templ_7745c5c3_Var10), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "</div><div id=\"toast-container\" class=\"toast toast-end toast-bottom z-50\"></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "</div>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
+}
+
+// panelShell is the shared page chrome for every panel route: signed-out gate,
+// app shell, sidebar (with active-page highlight), navbar and the controller
+// script. Pages pass their content as children.
+func panelShell(title string, active string) templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var13 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var13 == nil {
+			templ_7745c5c3_Var13 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "<!doctype html><html lang=\"en\" data-theme=\"dark\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><meta name=\"color-scheme\" content=\"dark\"><title>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var14 string
+		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(title)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `server/panel/panel.templ`, Line: 156, Col: 16}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "</title><link rel=\"stylesheet\" href=\"/static/css/app.css\"></head><body class=\"min-h-screen bg-base-200\" data-panel-page=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var15 string
+		templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.ResolveAttributeValue(active)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `server/panel/panel.templ`, Line: 159, Col: 64}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var15)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "\"><div id=\"modal-container\"></div>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = panelGate().Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<div id=\"app\" class=\"hidden\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Var16 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+			if !templ_7745c5c3_IsBuffer {
+				defer func() {
+					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err == nil {
+						templ_7745c5c3_Err = templ_7745c5c3_BufErr
+					}
+				}()
+			}
+			ctx = templ.InitializeContext(ctx)
+			templ_7745c5c3_Err = panelSidebar(active).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, " <div class=\"flex min-w-0 grow flex-col overflow-hidden\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = panelNavbar().Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<main id=\"main\" class=\"grow overflow-auto\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Var17 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+				if !templ_7745c5c3_IsBuffer {
+					defer func() {
+						templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+						if templ_7745c5c3_Err == nil {
+							templ_7745c5c3_Err = templ_7745c5c3_BufErr
+						}
+					}()
+				}
+				ctx = templ.InitializeContext(ctx)
+				templ_7745c5c3_Err = templ_7745c5c3_Var13.Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				return nil
+			})
+			templ_7745c5c3_Err = layout.Container(layout.ContainerLG, nil).Render(templ.WithChildren(ctx, templ_7745c5c3_Var17), templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "</main></div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			return nil
+		})
+		templ_7745c5c3_Err = layout.AppShell("emergent.feedback").Render(templ.WithChildren(ctx, templ_7745c5c3_Var16), templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "</div><div id=\"toast-container\" class=\"toast toast-end toast-bottom z-50\"></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -680,7 +513,535 @@ func PanelPage() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "<script>\n\t\t(function () {\n\t\t\t\"use strict\";\n\n\t\t\tvar TOKEN_KEY = \"__ef_token__\";\n\t\t\tvar USER_KEY = \"__ef_user__\";\n\n\t\t\tfunction byId(id) { return document.getElementById(id); }\n\n\t\t\tfunction clear(node) {\n\t\t\t\tif (!node) return;\n\t\t\t\twhile (node.firstChild) { node.removeChild(node.firstChild); }\n\t\t\t}\n\n\t\t\tfunction makeEl(tag, className, attrs) {\n\t\t\t\tvar n = document.createElement(tag);\n\t\t\t\tif (className) n.className = className;\n\t\t\t\tif (attrs) {\n\t\t\t\t\tfor (var k in attrs) {\n\t\t\t\t\t\tif (Object.prototype.hasOwnProperty.call(attrs, k)) n.setAttribute(k, attrs[k]);\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t\treturn n;\n\t\t\t}\n\n\t\t\tfunction getToken() {\n\t\t\t\ttry { return localStorage.getItem(TOKEN_KEY); } catch (e) { return null; }\n\t\t\t}\n\n\t\t\tfunction getUser() {\n\t\t\t\ttry { return JSON.parse(localStorage.getItem(USER_KEY) || \"null\"); } catch (e) { return null; }\n\t\t\t}\n\n\t\t\tvar state = {\n\t\t\t\ttoken: getToken(),\n\t\t\t\tuser: getUser(),\n\t\t\t\trepos: [],\n\t\t\t\treposLoaded: false,\n\t\t\t\treposError: null,\n\t\t\t\tkeys: [],\n\t\t\t\tkeysLoaded: false,\n\t\t\t\tkeysError: null,\n\t\t\t\treports: [],\n\t\t\t\treportsLoaded: false,\n\t\t\t\treportsError: null\n\t\t\t};\n\t\t\tvar selected = {};\n\n\t\t\t// ── Cookie fallback: the OAuth callback may redirect to /panel when\n\t\t\t// the popup opener is lost, setting ef_panel_token instead.\n\t\t\tfunction readCookieToken() {\n\t\t\t\tvar parts = document.cookie ? document.cookie.split(\";\") : [];\n\t\t\t\tfor (var i = 0; i < parts.length; i++) {\n\t\t\t\t\tvar p = parts[i].trim();\n\t\t\t\t\tif (p.indexOf(\"ef_panel_token=\") === 0) {\n\t\t\t\t\t\treturn decodeURIComponent(p.slice(\"ef_panel_token=\".length));\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t\treturn \"\";\n\t\t\t}\n\n\t\t\tfunction consumeCookieToken() {\n\t\t\t\tvar t = readCookieToken();\n\t\t\t\tif (!t) return false;\n\t\t\t\ttry { localStorage.setItem(TOKEN_KEY, t); } catch (e) {}\n\t\t\t\tdocument.cookie = \"ef_panel_token=; Max-Age=0; Path=/; SameSite=Lax\";\n\t\t\t\treturn true;\n\t\t\t}\n\n\t\t\t// ── Feedback toast (auto-dismissed by ui.ToastScript) ────────────\n\t\t\tfunction toast(message, kind) {\n\t\t\t\tvar box = byId(\"toast-container\");\n\t\t\t\tif (!box) return;\n\t\t\t\tvar alert = makeEl(\"div\", \"alert text-sm shadow-md toast-auto-dismiss \" + (kind === \"error\" ? \"alert-error\" : \"alert-success\"), { \"role\": \"alert\", \"data-duration\": \"3800\" });\n\t\t\t\tvar span = makeEl(\"span\");\n\t\t\t\tspan.textContent = message;\n\t\t\t\talert.appendChild(span);\n\t\t\t\tbox.appendChild(alert);\n\t\t\t}\n\n\t\t\t// ── API ──────────────────────────────────────────────────────────\n\t\t\tfunction api(path, opts) {\n\t\t\t\topts = opts || {};\n\t\t\t\tvar headers = { \"Accept\": \"application/json\" };\n\t\t\t\tif (opts.body) headers[\"Content-Type\"] = \"application/json\";\n\t\t\t\tif (state.token) headers[\"Authorization\"] = \"Bearer \" + state.token;\n\t\t\t\treturn fetch(path, { method: opts.method || \"GET\", headers: headers, body: opts.body }).then(function (res) {\n\t\t\t\t\tif (res.status === 401) {\n\t\t\t\t\t\tsignOut();\n\t\t\t\t\t\tthrow new Error(\"Your session expired. Sign in again.\");\n\t\t\t\t\t}\n\t\t\t\t\tif (!res.ok) {\n\t\t\t\t\t\treturn res.text().then(function (raw) {\n\t\t\t\t\t\t\tvar msg = res.statusText || (\"HTTP \" + res.status);\n\t\t\t\t\t\t\ttry { var j = JSON.parse(raw); if (j && j.message) msg = j.message; } catch (e) {}\n\t\t\t\t\t\t\tthrow new Error(msg);\n\t\t\t\t\t\t});\n\t\t\t\t\t}\n\t\t\t\t\tif (res.status === 204) return null;\n\t\t\t\t\treturn res.json();\n\t\t\t\t});\n\t\t\t}\n\n\t\t\t// ── Auth state ───────────────────────────────────────────────────\n\t\t\tfunction renderAuth() {\n\t\t\t\tvar signedIn = !!state.token;\n\t\t\t\tvar gate = byId(\"gate\");\n\t\t\t\tvar app = byId(\"app\");\n\t\t\t\tif (signedIn) {\n\t\t\t\t\tif (gate) gate.classList.add(\"hidden\");\n\t\t\t\t\tif (app) app.classList.remove(\"hidden\");\n\t\t\t\t} else {\n\t\t\t\t\tif (app) app.classList.add(\"hidden\");\n\t\t\t\t\tif (gate) gate.classList.remove(\"hidden\");\n\t\t\t\t}\n\t\t\t\tif (!signedIn) return;\n\t\t\t\tvar login = byId(\"user-login\");\n\t\t\t\tif (login) login.textContent = (state.user && state.user.login) || \"\";\n\t\t\t\tsetAvatar(state.user);\n\t\t\t}\n\n\t\t\tfunction setAvatar(user) {\n\t\t\t\tvar wrap = byId(\"user-avatar\");\n\t\t\t\tif (!wrap) return;\n\t\t\t\tclear(wrap);\n\t\t\t\tvar src = user && user.avatar;\n\t\t\t\tif (src) {\n\t\t\t\t\tvar frame = makeEl(\"div\", \"size-8 overflow-hidden rounded-full\");\n\t\t\t\t\tvar img = makeEl(\"img\", \"h-full w-full object-cover\", { \"src\": src, \"alt\": \"\" });\n\t\t\t\t\tframe.appendChild(img);\n\t\t\t\t\twrap.appendChild(frame);\n\t\t\t\t} else {\n\t\t\t\t\tvar name = (user && user.login) || \"?\";\n\t\t\t\t\tvar badge = makeEl(\"div\", \"flex size-8 items-center justify-center rounded-full bg-base-300 text-xs font-semibold\");\n\t\t\t\t\tbadge.textContent = name.charAt(0).toUpperCase();\n\t\t\t\t\twrap.appendChild(badge);\n\t\t\t\t}\n\t\t\t}\n\n\t\t\tfunction signIn() {\n\t\t\t\twindow.open(\n\t\t\t\t\t\"/auth/github?origin=\" + encodeURIComponent(location.origin),\n\t\t\t\t\t\"ef_auth\",\n\t\t\t\t\t\"width=600,height=700,left=200,top=100\"\n\t\t\t\t);\n\t\t\t}\n\n\t\t\tfunction signOut() {\n\t\t\t\ttry {\n\t\t\t\t\tlocalStorage.removeItem(TOKEN_KEY);\n\t\t\t\t\tlocalStorage.removeItem(USER_KEY);\n\t\t\t\t} catch (e) {}\n\t\t\t\tstate.token = null;\n\t\t\t\tstate.user = null;\n\t\t\t\tstate.repos = [];\n\t\t\t\tstate.keys = [];\n\t\t\t\tstate.reports = [];\n\t\t\t\tstate.reposLoaded = false;\n\t\t\t\tstate.keysLoaded = false;\n\t\t\t\tstate.reportsLoaded = false;\n\t\t\t\tstate.reposError = null;\n\t\t\t\tstate.keysError = null;\n\t\t\t\tstate.reportsError = null;\n\t\t\t\tselected = {};\n\t\t\t\tvar reveal = byId(\"reveal\");\n\t\t\t\tif (reveal) reveal.classList.add(\"hidden\");\n\t\t\t\tvar preview = byId(\"report-preview\");\n\t\t\t\tif (preview) {\n\t\t\t\t\tpreview.classList.add(\"hidden\");\n\t\t\t\t\tclear(preview);\n\t\t\t\t}\n\t\t\t\tvar filter = byId(\"repo-filter\");\n\t\t\t\tif (filter) filter.value = \"\";\n\t\t\t\trenderAuth();\n\t\t\t}\n\n\t\t\t// ── Repositories ─────────────────────────────────────────────────\n\t\t\tfunction setReposStatus(message, kind) {\n\t\t\t\tvar s = byId(\"repos-status\");\n\t\t\t\tif (!s) return;\n\t\t\t\tclear(s);\n\t\t\t\ts.className = \"px-5 py-4 text-sm \" + (kind === \"error\" ? \"text-error\" : \"text-base-content/60\");\n\t\t\t\tif (kind === \"loading\") {\n\t\t\t\t\ts.appendChild(makeEl(\"span\", \"loading loading-spinner loading-xs mr-2 align-middle\"));\n\t\t\t\t}\n\t\t\t\tvar span = makeEl(\"span\");\n\t\t\t\tspan.textContent = message;\n\t\t\t\ts.appendChild(span);\n\t\t\t}\n\n\t\t\tfunction loadRepos() {\n\t\t\t\tstate.reposLoaded = false;\n\t\t\t\tstate.reposError = null;\n\t\t\t\tsetReposStatus(\"Loading repositories...\", \"loading\");\n\t\t\t\tvar generate = byId(\"generate\");\n\t\t\t\tif (generate) generate.disabled = true;\n\t\t\t\tapi(\"/api/repos\").then(function (repos) {\n\t\t\t\t\tstate.repos = Array.isArray(repos) ? repos : [];\n\t\t\t\t\tstate.reposLoaded = true;\n\t\t\t\t}).catch(function (err) {\n\t\t\t\t\tstate.repos = [];\n\t\t\t\t\tstate.reposLoaded = true;\n\t\t\t\t\tstate.reposError = err.message;\n\t\t\t\t}).then(function () {\n\t\t\t\t\trenderRepos();\n\t\t\t\t});\n\t\t\t}\n\n\t\t\tfunction groupByOwner(repos) {\n\t\t\t\tvar groups = [];\n\t\t\t\tvar index = {};\n\t\t\t\tfor (var i = 0; i < repos.length; i++) {\n\t\t\t\t\tvar r = repos[i];\n\t\t\t\t\tvar full = r.full_name || \"\";\n\t\t\t\t\tvar slash = full.indexOf(\"/\");\n\t\t\t\t\tvar owner = slash > -1 ? full.slice(0, slash) : \"\";\n\t\t\t\t\tvar name = slash > -1 ? full.slice(slash + 1) : full;\n\t\t\t\t\tif (!Object.prototype.hasOwnProperty.call(index, owner)) {\n\t\t\t\t\t\tindex[owner] = { owner: owner, items: [] };\n\t\t\t\t\t\tgroups.push(index[owner]);\n\t\t\t\t\t}\n\t\t\t\t\tindex[owner].items.push({ full_name: full, name: name, private: !!r.private });\n\t\t\t\t}\n\t\t\t\treturn groups;\n\t\t\t}\n\n\t\t\tfunction repoRow(repo, owner) {\n\t\t\t\tvar input = makeEl(\"input\", \"checkbox checkbox-sm checkbox-primary\", { \"type\": \"checkbox\", \"value\": repo.full_name, \"aria-label\": repo.full_name });\n\t\t\t\tinput.checked = Object.prototype.hasOwnProperty.call(selected, repo.full_name);\n\t\t\t\tinput.addEventListener(\"change\", function () {\n\t\t\t\t\tif (input.checked) selected[repo.full_name] = true;\n\t\t\t\t\telse delete selected[repo.full_name];\n\t\t\t\t\tupdateSelectionUi();\n\t\t\t\t});\n\n\t\t\t\tvar label = makeEl(\"label\", \"flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 hover:bg-base-200\");\n\t\t\t\tlabel.appendChild(input);\n\n\t\t\t\tvar nameEl = makeEl(\"span\", \"min-w-0 truncate font-mono text-sm\");\n\t\t\t\tif (owner) {\n\t\t\t\t\tvar ownerEl = makeEl(\"span\", \"text-base-content/40\");\n\t\t\t\t\townerEl.textContent = owner + \"/\";\n\t\t\t\t\tnameEl.appendChild(ownerEl);\n\t\t\t\t}\n\t\t\t\tnameEl.appendChild(document.createTextNode(repo.name));\n\t\t\t\tlabel.appendChild(nameEl);\n\n\t\t\t\tlabel.appendChild(makeEl(\"span\", \"flex-1\"));\n\n\t\t\t\tvar badge = makeEl(\"span\", \"badge badge-sm gap-1 \" + (repo.private ? \"badge-warning\" : \"badge-ghost\"));\n\t\t\t\tbadge.textContent = repo.private ? \"Private\" : \"Public\";\n\t\t\t\tlabel.appendChild(badge);\n\n\t\t\t\treturn label;\n\t\t\t}\n\n\t\t\tfunction renderRepos() {\n\t\t\t\tvar list = byId(\"repo-list\");\n\t\t\t\tvar tools = byId(\"repo-tools\");\n\t\t\t\tvar filterEl = byId(\"repo-filter\");\n\t\t\t\tif (!list) return;\n\t\t\t\tclear(list);\n\n\t\t\t\tif (state.reposError) {\n\t\t\t\t\tif (tools) tools.classList.add(\"hidden\");\n\t\t\t\t\tsetReposStatus(\"Could not load repositories. \" + state.reposError, \"error\");\n\t\t\t\t\tupdateSelectionUi();\n\t\t\t\t\treturn;\n\t\t\t\t}\n\n\t\t\t\tif (!state.repos.length) {\n\t\t\t\t\tif (tools) tools.classList.add(\"hidden\");\n\t\t\t\t\tsetReposStatus(\"No repositories found. Check that the GitHub App is installed for your account.\", \"empty\");\n\t\t\t\t\tupdateSelectionUi();\n\t\t\t\t\treturn;\n\t\t\t\t}\n\n\t\t\t\tif (tools) tools.classList.remove(\"hidden\");\n\n\t\t\t\tvar filter = filterEl ? (filterEl.value || \"\").trim().toLowerCase() : \"\";\n\t\t\t\tvar matches = state.repos.filter(function (r) {\n\t\t\t\t\treturn (r.full_name || \"\").toLowerCase().indexOf(filter) > -1;\n\t\t\t\t});\n\n\t\t\t\tif (!matches.length) {\n\t\t\t\t\tsetReposStatus(\"No repositories match the current filter.\", \"empty\");\n\t\t\t\t\tupdateSelectionUi();\n\t\t\t\t\treturn;\n\t\t\t\t}\n\n\t\t\t\tsetReposStatus(\"\", \"idle\");\n\t\t\t\tvar groups = groupByOwner(matches);\n\t\t\t\tfor (var g = 0; g < groups.length; g++) {\n\t\t\t\t\tvar group = groups[g];\n\t\t\t\t\tvar groupEl = makeEl(\"div\");\n\t\t\t\t\tvar ownerLabel = makeEl(\"div\", \"px-2 pb-1 pt-3 font-mono text-[11px] uppercase tracking-wide text-base-content/40\");\n\t\t\t\t\townerLabel.textContent = group.owner;\n\t\t\t\t\tgroupEl.appendChild(ownerLabel);\n\t\t\t\t\tfor (var j = 0; j < group.items.length; j++) {\n\t\t\t\t\t\tgroupEl.appendChild(repoRow(group.items[j], group.owner));\n\t\t\t\t\t}\n\t\t\t\t\tlist.appendChild(groupEl);\n\t\t\t\t}\n\n\t\t\t\tupdateSelectionUi();\n\t\t\t}\n\n\t\t\tfunction selectedNames() {\n\t\t\t\tvar out = [];\n\t\t\t\tfor (var k in selected) {\n\t\t\t\t\tif (Object.prototype.hasOwnProperty.call(selected, k)) out.push(k);\n\t\t\t\t}\n\t\t\t\treturn out;\n\t\t\t}\n\n\t\t\tfunction updateSelectionUi() {\n\t\t\t\tvar names = selectedNames();\n\t\t\t\tvar n = names.length;\n\t\t\t\tvar count = byId(\"sel-count\");\n\t\t\t\tif (count) count.textContent = n === 0 ? \"No repositories selected\" : n + (n === 1 ? \" repository selected\" : \" repositories selected\");\n\t\t\t\tvar generate = byId(\"generate\");\n\t\t\t\tif (generate) generate.disabled = n === 0;\n\t\t\t\tvar clearBtn = byId(\"clear-all\");\n\t\t\t\tif (clearBtn) clearBtn.disabled = n === 0;\n\n\t\t\t\tvar selectAll = byId(\"select-all\");\n\t\t\t\tif (selectAll) {\n\t\t\t\t\tvar allSelected = state.reposLoaded && state.repos.length > 0 && state.repos.every(function (r) {\n\t\t\t\t\t\treturn Object.prototype.hasOwnProperty.call(selected, r.full_name);\n\t\t\t\t\t});\n\t\t\t\t\tselectAll.textContent = allSelected ? \"Clear all\" : \"Select all\";\n\t\t\t\t}\n\t\t\t}\n\n\t\t\t// ── Keys ─────────────────────────────────────────────────────────\n\t\t\tfunction fmtDate(iso) {\n\t\t\t\tvar d = new Date(iso);\n\t\t\t\tif (isNaN(d.getTime())) return iso || \"\";\n\t\t\t\treturn d.toLocaleDateString(undefined, { year: \"numeric\", month: \"short\", day: \"numeric\" });\n\t\t\t}\n\n\t\t\tfunction loadKeys() {\n\t\t\t\tstate.keysLoaded = false;\n\t\t\t\tstate.keysError = null;\n\t\t\t\tvar list = byId(\"keys-list\");\n\t\t\t\tif (!list) return;\n\t\t\t\tclear(list);\n\t\t\t\tvar li = makeEl(\"li\", \"flex items-center gap-2 py-6 text-sm text-base-content/50\");\n\t\t\t\tli.appendChild(makeEl(\"span\", \"loading loading-spinner loading-sm\"));\n\t\t\t\tvar span = makeEl(\"span\");\n\t\t\t\tspan.textContent = \"Loading keys...\";\n\t\t\t\tli.appendChild(span);\n\t\t\t\tlist.appendChild(li);\n\n\t\t\t\tapi(\"/api/keys\").then(function (keys) {\n\t\t\t\t\tstate.keys = Array.isArray(keys) ? keys : [];\n\t\t\t\t\tstate.keysLoaded = true;\n\t\t\t\t}).catch(function (err) {\n\t\t\t\t\tstate.keys = [];\n\t\t\t\t\tstate.keysLoaded = true;\n\t\t\t\t\tstate.keysError = err.message;\n\t\t\t\t}).then(function () {\n\t\t\t\t\trenderKeys();\n\t\t\t\t});\n\t\t\t}\n\n\t\t\tfunction keysMessage(text, kind) {\n\t\t\t\tvar li = makeEl(\"li\", \"py-6 text-center text-sm \" + (kind === \"error\" ? \"text-error\" : \"text-base-content/50\"));\n\t\t\t\tli.textContent = text;\n\t\t\t\treturn li;\n\t\t\t}\n\n\t\t\tfunction renderKeys() {\n\t\t\t\tvar list = byId(\"keys-list\");\n\t\t\t\tif (!list) return;\n\t\t\t\tclear(list);\n\n\t\t\t\tif (state.keysError) {\n\t\t\t\t\tlist.appendChild(keysMessage(\"Could not load keys. \" + state.keysError, \"error\"));\n\t\t\t\t\treturn;\n\t\t\t\t}\n\t\t\t\tif (!state.keys.length) {\n\t\t\t\t\tlist.appendChild(keysMessage(\"No keys yet. Generate one to let an agent read feedback.\", \"empty\"));\n\t\t\t\t\treturn;\n\t\t\t\t}\n\n\t\t\t\tfor (var i = 0; i < state.keys.length; i++) {\n\t\t\t\t\tlist.appendChild(keyItem(state.keys[i]));\n\t\t\t\t}\n\t\t\t}\n\n\t\t\tfunction keyItem(key) {\n\t\t\t\tvar li = makeEl(\"li\", \"flex items-start justify-between gap-4 rounded-xl border border-base-200 p-4\" + (key.revoked ? \" opacity-60\" : \"\"));\n\n\t\t\t\tvar main = makeEl(\"div\", \"min-w-0 flex-1\");\n\t\t\t\tvar chips = makeEl(\"div\", \"flex flex-wrap gap-2\");\n\t\t\t\tvar repos = key.repos || [];\n\t\t\t\tfor (var r = 0; r < repos.length; r++) {\n\t\t\t\t\tvar chip = makeEl(\"span\", \"badge badge-sm badge-ghost font-mono\" + (key.revoked ? \" line-through\" : \"\"));\n\t\t\t\t\tchip.textContent = repos[r];\n\t\t\t\t\tchips.appendChild(chip);\n\t\t\t\t}\n\t\t\t\tmain.appendChild(chips);\n\t\t\t\tvar meta = makeEl(\"div\", \"mt-2 text-xs text-base-content/50\");\n\t\t\t\tmeta.textContent = \"Created \" + fmtDate(key.created_at) + (key.revoked ? \" · revoked\" : \"\");\n\t\t\t\tmain.appendChild(meta);\n\n\t\t\t\tvar side = makeEl(\"div\", \"flex flex-col items-end gap-2\");\n\t\t\t\tvar id = makeEl(\"span\", \"font-mono text-xs text-base-content/40\");\n\t\t\t\tid.textContent = \"#\" + key.id;\n\t\t\t\tside.appendChild(id);\n\t\t\t\tif (key.revoked) {\n\t\t\t\t\tvar revoked = makeEl(\"span\", \"badge badge-sm badge-error\");\n\t\t\t\t\trevoked.textContent = \"Revoked\";\n\t\t\t\t\tside.appendChild(revoked);\n\t\t\t\t} else {\n\t\t\t\t\tvar btn = makeEl(\"button\", \"btn btn-error btn-outline btn-xs\", { \"type\": \"button\", \"aria-label\": \"Revoke key \" + key.id });\n\t\t\t\t\tbtn.textContent = \"Revoke\";\n\t\t\t\t\tbtn.addEventListener(\"click\", function () { revokeKey(key.id, btn); });\n\t\t\t\t\tside.appendChild(btn);\n\t\t\t\t}\n\n\t\t\t\tli.appendChild(main);\n\t\t\t\tli.appendChild(side);\n\t\t\t\treturn li;\n\t\t\t}\n\n\t\t\tfunction revokeKey(id, btn) {\n\t\t\t\tif (!window.confirm(\"Revoke this key? Any agent using it will lose access immediately.\")) return;\n\t\t\t\tbtn.disabled = true;\n\t\t\t\tbtn.textContent = \"Revoking...\";\n\t\t\t\tapi(\"/api/keys/\" + id, { method: \"DELETE\" }).then(function () {\n\t\t\t\t\ttoast(\"Key revoked.\");\n\t\t\t\t\tloadKeys();\n\t\t\t\t}).catch(function (err) {\n\t\t\t\t\ttoast(\"Could not revoke key: \" + err.message, \"error\");\n\t\t\t\t\tbtn.disabled = false;\n\t\t\t\t\tbtn.textContent = \"Revoke\";\n\t\t\t\t});\n\t\t\t}\n\n\t\t\t// ── Reveal + create ──────────────────────────────────────────────\n\t\t\tfunction copyText(text, btn) {\n\t\t\t\tfunction done() {\n\t\t\t\t\tvar prev = btn.textContent;\n\t\t\t\t\tbtn.textContent = \"Copied\";\n\t\t\t\t\tsetTimeout(function () { btn.textContent = prev; }, 1600);\n\t\t\t\t}\n\t\t\t\tfunction fallback() {\n\t\t\t\t\tvar ta = document.createElement(\"textarea\");\n\t\t\t\t\tta.value = text;\n\t\t\t\t\tta.setAttribute(\"readonly\", \"\");\n\t\t\t\t\tta.style.position = \"fixed\";\n\t\t\t\t\tta.style.left = \"-9999px\";\n\t\t\t\t\tdocument.body.appendChild(ta);\n\t\t\t\t\tta.select();\n\t\t\t\t\tvar ok = false;\n\t\t\t\t\ttry { ok = document.execCommand(\"copy\"); } catch (e) { ok = false; }\n\t\t\t\t\tdocument.body.removeChild(ta);\n\t\t\t\t\tif (ok) done();\n\t\t\t\t\telse toast(\"Copy failed. Select the key and copy it manually.\", \"error\");\n\t\t\t\t}\n\t\t\t\tif (navigator.clipboard && navigator.clipboard.writeText) {\n\t\t\t\t\tnavigator.clipboard.writeText(text).then(done).catch(fallback);\n\t\t\t\t} else {\n\t\t\t\t\tfallback();\n\t\t\t\t}\n\t\t\t}\n\n\t\t\tfunction showReveal(plainKey, repos) {\n\t\t\t\tvar reveal = byId(\"reveal\");\n\t\t\t\tvar keyEl = byId(\"reveal-key\");\n\t\t\t\tvar reposEl = byId(\"reveal-repos\");\n\t\t\t\tif (!reveal) return;\n\t\t\t\tif (keyEl) keyEl.textContent = plainKey;\n\t\t\t\tif (reposEl) {\n\t\t\t\t\tclear(reposEl);\n\t\t\t\t\tvar list = repos || [];\n\t\t\t\t\tfor (var i = 0; i < list.length; i++) {\n\t\t\t\t\t\tvar chip = makeEl(\"span\", \"badge badge-sm badge-ghost font-mono\");\n\t\t\t\t\t\tchip.textContent = list[i];\n\t\t\t\t\t\treposEl.appendChild(chip);\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t\treveal.classList.remove(\"hidden\");\n\t\t\t\tif (reveal.scrollIntoView) reveal.scrollIntoView({ behavior: \"smooth\", block: \"center\" });\n\t\t\t\tvar copy = byId(\"reveal-copy\");\n\t\t\t\tif (copy) copy.focus();\n\t\t\t}\n\n\t\t\tfunction generate() {\n\t\t\t\tvar repos = selectedNames();\n\t\t\t\tif (!repos.length) return;\n\t\t\t\tvar btn = byId(\"generate\");\n\t\t\t\tvar prev = btn ? btn.textContent : \"\";\n\t\t\t\tif (btn) { btn.disabled = true; btn.textContent = \"Generating...\"; }\n\t\t\t\tapi(\"/api/keys\", { method: \"POST\", body: JSON.stringify({ repos: repos }) }).then(function (res) {\n\t\t\t\t\tshowReveal(res.key, res.repos || repos);\n\t\t\t\t\ttoast(\"Key created. Copy it now - it is shown once.\");\n\t\t\t\t\tselected = {};\n\t\t\t\t\trenderRepos();\n\t\t\t\t\tloadKeys();\n\t\t\t\t}).catch(function (err) {\n\t\t\t\t\ttoast(\"Could not create key: \" + err.message, \"error\");\n\t\t\t\t}).then(function () {\n\t\t\t\t\tif (btn) { btn.textContent = prev; }\n\t\t\t\t\tupdateSelectionUi();\n\t\t\t\t});\n\t\t\t}\n\n\t\t\t// ── Reports ──────────────────────────────────────────────────────\n\t\t\tfunction snippet(value, max) {\n\t\t\t\tvar s = value == null ? \"\" : String(value);\n\t\t\t\ts = s.split(\"\\n\").join(\" \").split(\"\\t\").join(\" \").trim();\n\t\t\t\tif (s.length <= max) return s;\n\t\t\t\treturn s.slice(0, max - 1) + \"...\";\n\t\t\t}\n\n\t\t\tfunction isObj(v) {\n\t\t\t\treturn v !== null && typeof v === \"object\";\n\t\t\t}\n\n\t\t\tfunction textOf(v) {\n\t\t\t\tif (v == null) return \"\";\n\t\t\t\tif (typeof v === \"string\") return v;\n\t\t\t\ttry { return JSON.stringify(v); } catch (e) { return String(v); }\n\t\t\t}\n\n\t\t\tfunction safeStringify(v) {\n\t\t\t\ttry { return JSON.stringify(v, null, 2); } catch (e) { return String(v); }\n\t\t\t}\n\n\t\t\tfunction noticeDiv(text, kind) {\n\t\t\t\tvar d = makeEl(\"div\", \"px-5 py-4 text-sm \" + (kind === \"error\" ? \"text-error\" : \"text-base-content/50\"));\n\t\t\t\td.textContent = text;\n\t\t\t\treturn d;\n\t\t\t}\n\n\t\t\tfunction reportsMessage(text, kind) {\n\t\t\t\tvar li = makeEl(\"li\", \"py-6 text-center text-sm \" + (kind === \"error\" ? \"text-error\" : \"text-base-content/50\"));\n\t\t\t\tli.textContent = text;\n\t\t\t\treturn li;\n\t\t\t}\n\n\t\t\tfunction loadReports() {\n\t\t\t\tstate.reportsLoaded = false;\n\t\t\t\tstate.reportsError = null;\n\t\t\t\tvar list = byId(\"reports-list\");\n\t\t\t\tif (!list) return;\n\t\t\t\tclear(list);\n\t\t\t\tvar li = makeEl(\"li\", \"flex items-center gap-2 py-6 text-sm text-base-content/50\");\n\t\t\t\tli.appendChild(makeEl(\"span\", \"loading loading-spinner loading-sm\"));\n\t\t\t\tvar span = makeEl(\"span\");\n\t\t\t\tspan.textContent = \"Loading reports...\";\n\t\t\t\tli.appendChild(span);\n\t\t\t\tlist.appendChild(li);\n\n\t\t\t\tapi(\"/api/reports\").then(function (reports) {\n\t\t\t\t\tstate.reports = Array.isArray(reports) ? reports : [];\n\t\t\t\t\tstate.reportsLoaded = true;\n\t\t\t\t}).catch(function (err) {\n\t\t\t\t\tstate.reports = [];\n\t\t\t\t\tstate.reportsLoaded = true;\n\t\t\t\t\tstate.reportsError = err.message;\n\t\t\t\t}).then(function () {\n\t\t\t\t\trenderReports();\n\t\t\t\t});\n\t\t\t}\n\n\t\t\tfunction renderReports() {\n\t\t\t\tvar list = byId(\"reports-list\");\n\t\t\t\tif (!list) return;\n\t\t\t\tclear(list);\n\n\t\t\t\tif (state.reportsError) {\n\t\t\t\t\tlist.appendChild(reportsMessage(\"Could not load reports. \" + state.reportsError, \"error\"));\n\t\t\t\t\treturn;\n\t\t\t\t}\n\t\t\t\tif (!state.reports.length) {\n\t\t\t\t\tlist.appendChild(reportsMessage(\"No reports yet.\", \"empty\"));\n\t\t\t\t\treturn;\n\t\t\t\t}\n\n\t\t\t\tfor (var i = 0; i < state.reports.length; i++) {\n\t\t\t\t\tlist.appendChild(reportRow(state.reports[i]));\n\t\t\t\t}\n\t\t\t}\n\n\t\t\tfunction reportRow(report) {\n\t\t\t\tvar li = makeEl(\"li\", \"flex items-start justify-between gap-4 rounded-xl border border-base-200 p-4\");\n\n\t\t\t\tvar main = makeEl(\"div\", \"min-w-0 flex-1\");\n\t\t\t\tvar head = makeEl(\"div\", \"flex flex-wrap items-center gap-2\");\n\t\t\t\tif (report.repo) {\n\t\t\t\t\tvar chip = makeEl(\"span\", \"badge badge-sm badge-ghost font-mono\");\n\t\t\t\t\tchip.textContent = report.repo;\n\t\t\t\t\thead.appendChild(chip);\n\t\t\t\t}\n\t\t\t\tif (report.selector) {\n\t\t\t\t\tvar sel = makeEl(\"code\", \"max-w-full truncate font-mono text-xs text-base-content/70\");\n\t\t\t\t\tsel.textContent = report.selector;\n\t\t\t\t\tsel.title = report.selector;\n\t\t\t\t\thead.appendChild(sel);\n\t\t\t\t}\n\t\t\t\tmain.appendChild(head);\n\n\t\t\t\tvar p = makeEl(\"p\", \"mt-2 text-sm text-base-content/80\");\n\t\t\t\tp.textContent = snippet(report.comment, 160) || \"(no comment)\";\n\t\t\t\tmain.appendChild(p);\n\n\t\t\t\tvar meta = makeEl(\"div\", \"mt-2 text-xs text-base-content/50\");\n\t\t\t\tmeta.textContent = \"Created \" + fmtDate(report.created_at);\n\t\t\t\tmain.appendChild(meta);\n\n\t\t\t\tvar side = makeEl(\"div\", \"flex flex-col items-end gap-2\");\n\t\t\t\tvar preview = makeEl(\"button\", \"btn btn-ghost btn-xs\", { \"type\": \"button\", \"aria-label\": \"Preview report \" + report.id });\n\t\t\t\tpreview.textContent = \"Preview\";\n\t\t\t\tpreview.addEventListener(\"click\", function () { openReport(report.id); });\n\t\t\t\tside.appendChild(preview);\n\t\t\t\tif (report.issue_url) {\n\t\t\t\t\tvar issueLink = makeEl(\"a\", \"link link-primary text-xs\", { \"href\": report.issue_url, \"target\": \"_blank\", \"rel\": \"noopener noreferrer\", \"aria-label\": \"Open GitHub issue for report \" + report.id });\n\t\t\t\t\tissueLink.textContent = \"Issue\";\n\t\t\t\t\tside.appendChild(issueLink);\n\t\t\t\t}\n\t\t\t\tli.appendChild(main);\n\t\t\t\tli.appendChild(side);\n\t\t\t\treturn li;\n\t\t\t}\n\n\t\t\tfunction openReport(id) {\n\t\t\t\tvar panel = byId(\"report-preview\");\n\t\t\t\tif (!panel) return;\n\t\t\t\tclear(panel);\n\t\t\t\tvar loading = makeEl(\"div\", \"flex items-center gap-2 border-b border-base-200 px-5 py-4 text-sm text-base-content/50\");\n\t\t\t\tloading.appendChild(makeEl(\"span\", \"loading loading-spinner loading-sm\"));\n\t\t\t\tvar span = makeEl(\"span\");\n\t\t\t\tspan.textContent = \"Loading report...\";\n\t\t\t\tloading.appendChild(span);\n\t\t\t\tpanel.appendChild(loading);\n\t\t\t\tpanel.classList.remove(\"hidden\");\n\t\t\t\tif (panel.scrollIntoView) panel.scrollIntoView({ behavior: \"smooth\", block: \"start\" });\n\n\t\t\t\tapi(\"/api/reports/\" + encodeURIComponent(id)).then(function (data) {\n\t\t\t\t\trenderReportPreview(data);\n\t\t\t\t}).catch(function (err) {\n\t\t\t\t\tclear(panel);\n\t\t\t\t\tpanel.appendChild(noticeDiv(\"Could not load report. \" + err.message, \"error\"));\n\t\t\t\t\ttoast(\"Could not load report: \" + err.message, \"error\");\n\t\t\t\t});\n\t\t\t}\n\n\t\t\tfunction formatViewport(vp) {\n\t\t\t\tif (vp == null) return \"\";\n\t\t\t\tif (typeof vp === \"string\" || typeof vp === \"number\") return String(vp);\n\t\t\t\tif (isObj(vp) && vp.width != null && vp.height != null) return vp.width + \" x \" + vp.height;\n\t\t\t\treturn textOf(vp);\n\t\t\t}\n\n\t\t\tfunction formatHistory(history) {\n\t\t\t\tif (history == null) return \"\";\n\t\t\t\tif (Array.isArray(history)) {\n\t\t\t\t\tvar out = history.length + (history.length === 1 ? \" entry\" : \" entries\");\n\t\t\t\t\tif (history.length) {\n\t\t\t\t\t\tvar last = history[history.length - 1];\n\t\t\t\t\t\tvar lastText = typeof last === \"string\" ? last : textOf(last);\n\t\t\t\t\t\tlastText = snippet(lastText, 60);\n\t\t\t\t\t\tif (lastText) out += \" - last: \" + lastText;\n\t\t\t\t\t}\n\t\t\t\t\treturn out;\n\t\t\t\t}\n\t\t\t\treturn textOf(history);\n\t\t\t}\n\n\t\t\tfunction contextRow(grid, label, value) {\n\t\t\t\tvar text = value == null ? \"\" : String(value);\n\t\t\t\tif (!text) return;\n\t\t\t\tvar row = makeEl(\"div\", \"min-w-0\");\n\t\t\t\tvar k = makeEl(\"div\", \"text-xs text-base-content/40\");\n\t\t\t\tk.textContent = label;\n\t\t\t\tvar v = makeEl(\"div\", \"truncate text-sm text-base-content/80\");\n\t\t\t\tv.textContent = text;\n\t\t\t\tv.title = text;\n\t\t\t\trow.appendChild(k);\n\t\t\t\trow.appendChild(v);\n\t\t\t\tgrid.appendChild(row);\n\t\t\t}\n\n\t\t\tfunction contextSection(ctx) {\n\t\t\t\tvar section = makeEl(\"div\", \"mt-4\");\n\t\t\t\tvar label = makeEl(\"div\", \"mb-2 text-xs font-medium uppercase tracking-wide text-base-content/40\");\n\t\t\t\tlabel.textContent = \"Context\";\n\t\t\t\tsection.appendChild(label);\n\n\t\t\t\tif (!isObj(ctx)) {\n\t\t\t\t\tvar none = makeEl(\"p\", \"text-sm text-base-content/50\");\n\t\t\t\t\tnone.textContent = \"No context captured.\";\n\t\t\t\t\tsection.appendChild(none);\n\t\t\t\t\treturn section;\n\t\t\t\t}\n\n\t\t\t\tvar grid = makeEl(\"div\", \"grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2\");\n\t\t\t\tcontextRow(grid, \"URL\", ctx.url);\n\t\t\t\tcontextRow(grid, \"Viewport\", formatViewport(ctx.viewport));\n\t\t\t\tcontextRow(grid, \"CSS framework\", ctx.cssFramework);\n\t\t\t\tcontextRow(grid, \"User agent\", ctx.userAgent);\n\t\t\t\tcontextRow(grid, \"Data component\", ctx.dataComponent);\n\t\t\t\tcontextRow(grid, \"Session history\", formatHistory(ctx.sessionHistory));\n\t\t\t\tsection.appendChild(grid);\n\n\t\t\t\tvar raw = makeEl(\"details\", \"mt-3 text-xs\");\n\t\t\t\tvar sum = makeEl(\"summary\", \"cursor-pointer text-base-content/50\");\n\t\t\t\tsum.textContent = \"Raw context JSON\";\n\t\t\t\traw.appendChild(sum);\n\t\t\t\tvar pre = makeEl(\"pre\", \"mt-2 max-h-64 overflow-auto rounded-lg bg-base-300/40 p-3 font-mono text-xs text-base-content/80\");\n\t\t\t\tpre.textContent = safeStringify(ctx);\n\t\t\t\traw.appendChild(pre);\n\t\t\t\tsection.appendChild(raw);\n\t\t\t\treturn section;\n\t\t\t}\n\n\t\t\tfunction snapshotSection(snapshotHtml) {\n\t\t\t\tvar section = makeEl(\"div\", \"p-5\");\n\t\t\t\tvar details = makeEl(\"details\", \"text-sm\");\n\t\t\t\tvar sum = makeEl(\"summary\", \"cursor-pointer text-base-content/60\");\n\t\t\t\tsum.textContent = \"Full-page snapshot\";\n\t\t\t\tdetails.appendChild(sum);\n\t\t\t\tvar note = makeEl(\"p\", \"mt-2 text-xs text-base-content/40\");\n\t\t\t\tnote.textContent = \"Rendered in a sandboxed frame. Scripts are disabled.\";\n\t\t\t\tdetails.appendChild(note);\n\t\t\t\t// srcdoc is set via setAttribute so the snapshot HTML is treated as\n\t\t\t\t// the frame's document, not interpolated into markup.\n\t\t\t\tvar frame = makeEl(\"iframe\", \"mt-2 h-[400px] w-full rounded-lg border border-base-200 bg-white\", { \"sandbox\": \"\", \"title\": \"Captured page snapshot\", \"loading\": \"lazy\" });\n\t\t\t\tframe.setAttribute(\"srcdoc\", snapshotHtml);\n\t\t\t\tdetails.appendChild(frame);\n\t\t\t\tsection.appendChild(details);\n\t\t\t\treturn section;\n\t\t\t}\n\n\t\t\tfunction renderReportPreview(data) {\n\t\t\t\tvar panel = byId(\"report-preview\");\n\t\t\t\tif (!panel) return;\n\t\t\t\tclear(panel);\n\n\t\t\t\tvar wrap = makeEl(\"div\", \"border-b border-base-200 bg-base-200/30 p-5\");\n\n\t\t\t\tvar head = makeEl(\"div\", \"flex flex-wrap items-start justify-between gap-3\");\n\t\t\t\tvar titleWrap = makeEl(\"div\", \"min-w-0\");\n\t\t\t\tvar title = makeEl(\"h3\", \"text-sm font-semibold\");\n\t\t\t\ttitle.textContent = \"Report #\" + data.id;\n\t\t\t\ttitleWrap.appendChild(title);\n\t\t\t\tvar sub = makeEl(\"div\", \"mt-1 flex flex-wrap items-center gap-2\");\n\t\t\t\tif (data.repo) {\n\t\t\t\t\tvar chip = makeEl(\"span\", \"badge badge-sm badge-ghost font-mono\");\n\t\t\t\t\tchip.textContent = data.repo;\n\t\t\t\t\tsub.appendChild(chip);\n\t\t\t\t}\n\t\t\t\tif (data.selector) {\n\t\t\t\t\tvar sel = makeEl(\"code\", \"truncate font-mono text-xs text-base-content/70\");\n\t\t\t\t\tsel.textContent = data.selector;\n\t\t\t\t\tsel.title = data.selector;\n\t\t\t\t\tsub.appendChild(sel);\n\t\t\t\t}\n\t\t\t\ttitleWrap.appendChild(sub);\n\t\t\t\thead.appendChild(titleWrap);\n\n\t\t\t\tvar actions = makeEl(\"div\", \"flex items-center gap-2\");\n\t\t\t\tif (data.issue_url) {\n\t\t\t\t\tvar issueLink = makeEl(\"a\", \"btn btn-ghost btn-xs\", { \"href\": data.issue_url, \"target\": \"_blank\", \"rel\": \"noopener noreferrer\" });\n\t\t\t\t\tissueLink.textContent = \"View issue on GitHub\";\n\t\t\t\t\tactions.appendChild(issueLink);\n\t\t\t\t}\n\t\t\t\tvar dismiss = makeEl(\"button\", \"btn btn-ghost btn-xs\", { \"type\": \"button\", \"aria-label\": \"Dismiss report preview\" });\n\t\t\t\tdismiss.textContent = \"Dismiss\";\n\t\t\t\tdismiss.addEventListener(\"click\", function () {\n\t\t\t\t\tpanel.classList.add(\"hidden\");\n\t\t\t\t\tclear(panel);\n\t\t\t\t});\n\t\t\t\tactions.appendChild(dismiss);\n\t\t\t\thead.appendChild(actions);\n\t\t\t\twrap.appendChild(head);\n\n\t\t\t\tif (data.comment) {\n\t\t\t\t\tvar comment = makeEl(\"p\", \"mt-3 whitespace-pre-wrap text-sm text-base-content/80\");\n\t\t\t\t\tcomment.textContent = data.comment;\n\t\t\t\t\twrap.appendChild(comment);\n\t\t\t\t}\n\n\t\t\t\tvar meta = makeEl(\"div\", \"mt-2 text-xs text-base-content/50\");\n\t\t\t\tmeta.textContent = \"Created \" + fmtDate(data.created_at);\n\t\t\t\twrap.appendChild(meta);\n\n\t\t\t\tif (data.url) {\n\t\t\t\t\tvar urlP = makeEl(\"p\", \"mt-3 text-xs text-base-content/60\");\n\t\t\t\t\tvar urlLabel = makeEl(\"span\", \"text-base-content/40\");\n\t\t\t\t\turlLabel.textContent = \"Page: \";\n\t\t\t\t\turlP.appendChild(urlLabel);\n\t\t\t\t\tvar pageLink = makeEl(\"a\", \"link link-primary break-all\", { \"href\": data.url, \"target\": \"_blank\", \"rel\": \"noopener noreferrer\" });\n\t\t\t\t\tpageLink.textContent = data.url;\n\t\t\t\t\turlP.appendChild(pageLink);\n\t\t\t\t\twrap.appendChild(urlP);\n\t\t\t\t}\n\n\t\t\t\twrap.appendChild(contextSection(data.context));\n\t\t\t\tpanel.appendChild(wrap);\n\n\t\t\t\tif (data.has_screenshot && data.screenshot) {\n\t\t\t\t\tvar shotWrap = makeEl(\"div\", \"border-b border-base-200 p-5\");\n\t\t\t\t\tvar shotHead = makeEl(\"div\", \"mb-2 text-xs font-medium uppercase tracking-wide text-base-content/40\");\n\t\t\t\t\tshotHead.textContent = \"Screenshot\";\n\t\t\t\t\tshotWrap.appendChild(shotHead);\n\t\t\t\t\tvar img = makeEl(\"img\", \"w-full rounded-lg border border-base-200\", { \"alt\": \"Screenshot of the captured page\" });\n\t\t\t\t\timg.src = \"data:image/png;base64,\" + data.screenshot;\n\t\t\t\t\tshotWrap.appendChild(img);\n\t\t\t\t\tpanel.appendChild(shotWrap);\n\t\t\t\t}\n\n\t\t\t\tif (data.has_snapshot && data.snapshot) {\n\t\t\t\t\tpanel.appendChild(snapshotSection(data.snapshot));\n\t\t\t\t}\n\t\t\t}\n\n\t\t\t// ── Bootstrap + events ───────────────────────────────────────────\n\t\t\tfunction bootstrap() {\n\t\t\t\trenderAuth();\n\t\t\t\tif (!state.token) return;\n\t\t\t\tapi(\"/me\").then(function (me) {\n\t\t\t\t\tstate.user = { login: me.login, avatar: me.avatar_url };\n\t\t\t\t\ttry { localStorage.setItem(USER_KEY, JSON.stringify(state.user)); } catch (e) {}\n\t\t\t\t\trenderAuth();\n\t\t\t\t\tloadRepos();\n\t\t\t\t\tloadKeys();\n\t\t\t\t\tloadReports();\n\t\t\t\t}).catch(function () {});\n\t\t\t}\n\n\t\t\tfunction wire() {\n\t\t\t\tvar signin = byId(\"signin\");\n\t\t\t\tif (signin) signin.addEventListener(\"click\", signIn);\n\n\t\t\t\tvar signout = byId(\"signout\");\n\t\t\t\tif (signout) signout.addEventListener(\"click\", function () { signOut(); toast(\"Signed out.\"); });\n\n\t\t\t\tvar refresh = byId(\"refresh\");\n\t\t\t\tif (refresh) refresh.addEventListener(\"click\", loadKeys);\n\n\t\t\t\tvar reportsRefresh = byId(\"reports-refresh\");\n\t\t\t\tif (reportsRefresh) reportsRefresh.addEventListener(\"click\", loadReports);\n\n\t\t\t\tvar reload = byId(\"reload-repos\");\n\t\t\t\tif (reload) reload.addEventListener(\"click\", loadRepos);\n\n\t\t\t\tvar generateBtn = byId(\"generate\");\n\t\t\t\tif (generateBtn) generateBtn.addEventListener(\"click\", generate);\n\n\t\t\t\tvar filter = byId(\"repo-filter\");\n\t\t\t\tif (filter) filter.addEventListener(\"input\", renderRepos);\n\n\t\t\t\tvar selectAll = byId(\"select-all\");\n\t\t\t\tif (selectAll) selectAll.addEventListener(\"click\", function () {\n\t\t\t\t\tvar filterEl = byId(\"repo-filter\");\n\t\t\t\t\tvar f = filterEl ? (filterEl.value || \"\").trim().toLowerCase() : \"\";\n\t\t\t\t\tvar visible = state.repos.filter(function (r) {\n\t\t\t\t\t\treturn (r.full_name || \"\").toLowerCase().indexOf(f) > -1;\n\t\t\t\t\t});\n\t\t\t\t\tvar allSelected = visible.length > 0 && visible.every(function (r) {\n\t\t\t\t\t\treturn Object.prototype.hasOwnProperty.call(selected, r.full_name);\n\t\t\t\t\t});\n\t\t\t\t\tfor (var i = 0; i < visible.length; i++) {\n\t\t\t\t\t\tif (allSelected) delete selected[visible[i].full_name];\n\t\t\t\t\t\telse selected[visible[i].full_name] = true;\n\t\t\t\t\t}\n\t\t\t\t\trenderRepos();\n\t\t\t\t});\n\n\t\t\t\tvar clearAll = byId(\"clear-all\");\n\t\t\t\tif (clearAll) clearAll.addEventListener(\"click\", function () {\n\t\t\t\t\tselected = {};\n\t\t\t\t\trenderRepos();\n\t\t\t\t});\n\n\t\t\t\tvar dismiss = byId(\"reveal-dismiss\");\n\t\t\t\tif (dismiss) dismiss.addEventListener(\"click\", function () {\n\t\t\t\t\tvar reveal = byId(\"reveal\");\n\t\t\t\t\tif (reveal) reveal.classList.add(\"hidden\");\n\t\t\t\t});\n\n\t\t\t\tvar copy = byId(\"reveal-copy\");\n\t\t\t\tif (copy) copy.addEventListener(\"click\", function () {\n\t\t\t\t\tvar keyEl = byId(\"reveal-key\");\n\t\t\t\t\tif (keyEl) copyText(keyEl.textContent, copy);\n\t\t\t\t});\n\n\t\t\t\twindow.addEventListener(\"message\", function (event) {\n\t\t\t\t\tif (event.origin !== location.origin) return;\n\t\t\t\t\tvar data = event.data;\n\t\t\t\t\tif (!data || data.type !== \"emergent_feedback_auth\" || !data.token) return;\n\t\t\t\t\ttry {\n\t\t\t\t\t\tlocalStorage.setItem(TOKEN_KEY, data.token);\n\t\t\t\t\t\tlocalStorage.setItem(USER_KEY, JSON.stringify({ login: data.login || \"\", avatar: data.avatar || \"\" }));\n\t\t\t\t\t} catch (e) {}\n\t\t\t\t\tstate.token = data.token;\n\t\t\t\t\tstate.user = { login: data.login || \"\", avatar: data.avatar || \"\" };\n\t\t\t\t\tstate.reposLoaded = false;\n\t\t\t\t\tstate.keysLoaded = false;\n\t\t\t\t\tstate.reportsLoaded = false;\n\t\t\t\t\tselected = {};\n\t\t\t\t\tvar preview = byId(\"report-preview\");\n\t\t\t\t\tif (preview) {\n\t\t\t\t\t\tpreview.classList.add(\"hidden\");\n\t\t\t\t\t\tclear(preview);\n\t\t\t\t\t}\n\t\t\t\t\ttoast(\"Signed in as \" + (data.login || \"GitHub user\") + \".\");\n\t\t\t\t\tbootstrap();\n\t\t\t\t});\n\t\t\t}\n\n\t\t\twire();\n\n\t\t\t// Prefer an existing session token; otherwise adopt the cookie the\n\t\t\t// OAuth callback may have set on a full-page redirect.\n\t\t\tif (!state.token) {\n\t\t\t\tif (consumeCookieToken()) state.token = getToken();\n\t\t\t}\n\t\t\tbootstrap();\n\t\t})();\n\t\t</script><script src=\"/static/js/htmx.js\"></script></body></html>")
+		templ_7745c5c3_Err = panelScript().Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "<script src=\"/static/js/htmx.js\"></script></body></html>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
+}
+
+// PanelOverviewPage is the /panel route: a summary of the signed-in account.
+func PanelOverviewPage() templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var18 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var18 == nil {
+			templ_7745c5c3_Var18 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Var19 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+			if !templ_7745c5c3_IsBuffer {
+				defer func() {
+					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err == nil {
+						templ_7745c5c3_Err = templ_7745c5c3_BufErr
+					}
+				}()
+			}
+			ctx = templ.InitializeContext(ctx)
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "<header id=\"overview\" class=\"mb-6 scroll-mt-6\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = ui.Eyebrow("Workspace", ui.EyebrowProps{Size: "text-[11px]", Margin: "mb-1"}).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "<div class=\"flex flex-wrap items-end justify-between gap-4\"><div class=\"min-w-0\"><h1 class=\"text-2xl font-semibold tracking-tight lg:text-3xl\">Overview</h1><p class=\"mt-1.5 max-w-2xl text-sm text-base-content/70\">Your repositories, API keys and captured reports at a glance.</p></div><div class=\"flex flex-wrap items-center gap-2\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = ui.Badge(ui.BadgeProps{Label: "Scoped to repos", Variant: ui.BadgeGhost, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM}).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "</div></div></header><section id=\"overview-stats\" class=\"grid grid-cols-1 gap-4 sm:grid-cols-3\" aria-live=\"polite\"><div class=\"col-span-full flex items-center justify-center gap-2 rounded-xl border border-base-300/60 bg-base-100 py-10 text-sm text-base-content/50\"><span class=\"loading loading-spinner loading-sm\"></span> <span>Loading summary...</span></div></section><div class=\"mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2\"><a href=\"/panel/keys\" class=\"card border border-base-300/60 bg-base-100 p-6 transition hover:border-primary/40 hover:shadow-sm\"><div class=\"flex items-center gap-2\"><span class=\"grid size-9 place-items-center rounded-lg bg-primary/10 text-primary\" aria-hidden=\"true\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = ui.IconSpan("lucide--key-round", "size-5").Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "</span><h2 class=\"text-base font-semibold tracking-tight\">API keys</h2></div><p class=\"mt-3 text-sm text-base-content/70\">Create repo-scoped keys for agents that read feedback. The plaintext value is shown only once.</p><span class=\"mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary\">Manage keys")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = ui.IconSpan("lucide--arrow-right", "size-4").Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "</span></a> <a href=\"/panel/reports\" class=\"card border border-base-300/60 bg-base-100 p-6 transition hover:border-primary/40 hover:shadow-sm\"><div class=\"flex items-center gap-2\"><span class=\"grid size-9 place-items-center rounded-lg bg-secondary/10 text-secondary\" aria-hidden=\"true\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = ui.IconSpan("lucide--inbox", "size-5").Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "</span><h2 class=\"text-base font-semibold tracking-tight\">Reports</h2></div><p class=\"mt-3 text-sm text-base-content/70\">Browse feedback captured by the overlay and preview the context, screenshot and DOM snapshot.</p><span class=\"mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary\">View reports")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = ui.IconSpan("lucide--arrow-right", "size-4").Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "</span></a></div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			return nil
+		})
+		templ_7745c5c3_Err = panelShell("emergent.feedback · Overview", "overview").Render(templ.WithChildren(ctx, templ_7745c5c3_Var19), templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
+}
+
+// PanelKeysPage is the /panel/keys route: API keys only. Creating a key happens
+// in the modal defined below.
+func PanelKeysPage() templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var20 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var20 == nil {
+			templ_7745c5c3_Var20 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Var21 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+			if !templ_7745c5c3_IsBuffer {
+				defer func() {
+					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err == nil {
+						templ_7745c5c3_Err = templ_7745c5c3_BufErr
+					}
+				}()
+			}
+			ctx = templ.InitializeContext(ctx)
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "<header id=\"keys\" class=\"mb-6 scroll-mt-6\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = ui.Eyebrow("API access", ui.EyebrowProps{Size: "text-[11px]", Margin: "mb-1"}).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "<div class=\"flex flex-wrap items-end justify-between gap-4\"><div class=\"min-w-0\"><h1 class=\"text-2xl font-semibold tracking-tight lg:text-3xl\">API keys</h1><p class=\"mt-1.5 max-w-2xl text-sm text-base-content/70\">Create keys for agents that read feedback. Each key is limited to the repositories you select, and the plaintext value is shown only once.</p></div><div class=\"flex flex-wrap items-center gap-2\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = ui.Badge(ui.BadgeProps{Label: "Scoped to repos", Variant: ui.BadgeGhost, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM}).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = ui.Badge(ui.BadgeProps{Label: "Shown once", Variant: ui.BadgeWarning, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM, Icon: "lucide--eye-off"}).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "</div></div></header><!-- One-time reveal (filled on create) --> <div id=\"reveal\" class=\"hidden\"><div class=\"card mb-6 border border-success/30 bg-base-100 shadow-sm\"><div class=\"card-body\"><div class=\"flex items-center justify-between gap-3\"><div class=\"flex items-center gap-2\"><h2 class=\"text-base font-semibold\">Key created</h2>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = ui.Badge(ui.BadgeProps{Label: "Shown once", Variant: ui.BadgeWarning, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM}).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "</div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Var22 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+				if !templ_7745c5c3_IsBuffer {
+					defer func() {
+						templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+						if templ_7745c5c3_Err == nil {
+							templ_7745c5c3_Err = templ_7745c5c3_BufErr
+						}
+					}()
+				}
+				ctx = templ.InitializeContext(ctx)
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "Dismiss")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				return nil
+			})
+			templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: ui.ButtonTypeButton, Variant: ui.ButtonGhost, Size: ui.ButtonSM, Attrs: templ.Attributes{"id": "reveal-dismiss"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var22), templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "</div><p class=\"mt-1 text-sm text-base-content/70\">Copy it now. This is the only time the full key is shown.</p><div id=\"reveal-repos\" class=\"mt-3 flex flex-wrap gap-2\"></div><div class=\"mt-4 flex items-stretch gap-2\"><code id=\"reveal-key\" class=\"min-w-0 flex-1 break-all rounded-lg bg-neutral px-4 py-3 font-mono text-sm text-neutral-content\"></code>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Var23 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+				if !templ_7745c5c3_IsBuffer {
+					defer func() {
+						templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+						if templ_7745c5c3_Err == nil {
+							templ_7745c5c3_Err = templ_7745c5c3_BufErr
+						}
+					}()
+				}
+				ctx = templ.InitializeContext(ctx)
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "Copy")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				return nil
+			})
+			templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: ui.ButtonTypeButton, Variant: ui.ButtonPrimary, Attrs: templ.Attributes{"id": "reveal-copy", "aria-label": "Copy API key to clipboard"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var23), templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "</div><div class=\"mt-4\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = ui.Alert(ui.AlertProps{Type: ui.AlertWarning, Style: ui.AlertStyleSoft, Message: "Store it in a secret manager. It cannot be retrieved again - revoke and create a new one if lost."}).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "</div></div></div></div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Var24 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+				if !templ_7745c5c3_IsBuffer {
+					defer func() {
+						templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+						if templ_7745c5c3_Err == nil {
+							templ_7745c5c3_Err = templ_7745c5c3_BufErr
+						}
+					}()
+				}
+				ctx = templ.InitializeContext(ctx)
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "<div class=\"flex items-center justify-between gap-3 border-b border-base-content/5 px-5 py-4\"><div><h2 class=\"text-base font-semibold tracking-tight\">Your keys</h2><p class=\"mt-0.5 text-xs text-base-content/60\">Keys you have created for this account.</p></div><div class=\"flex items-center gap-2\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Var25 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+					if !templ_7745c5c3_IsBuffer {
+						defer func() {
+							templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+							if templ_7745c5c3_Err == nil {
+								templ_7745c5c3_Err = templ_7745c5c3_BufErr
+							}
+						}()
+					}
+					ctx = templ.InitializeContext(ctx)
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "Refresh")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					return nil
+				})
+				templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: ui.ButtonTypeButton, Variant: ui.ButtonGhost, Size: ui.ButtonSM, Icon: "lucide--refresh-cw", Attrs: templ.Attributes{"id": "refresh"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var25), templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Var26 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+					if !templ_7745c5c3_IsBuffer {
+						defer func() {
+							templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+							if templ_7745c5c3_Err == nil {
+								templ_7745c5c3_Err = templ_7745c5c3_BufErr
+							}
+						}()
+					}
+					ctx = templ.InitializeContext(ctx)
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "Create key")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					return nil
+				})
+				templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: ui.ButtonTypeButton, Variant: ui.ButtonPrimary, Size: ui.ButtonSM, Icon: "lucide--plus", Attrs: templ.Attributes{"id": "create-key"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var26), templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "</div></div><ul id=\"keys-list\" class=\"flex flex-col gap-3 p-5\" aria-live=\"polite\"></ul>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				return nil
+			})
+			templ_7745c5c3_Err = ui.CardRaw("card-border overflow-hidden", "gap-0 p-0", nil).Render(templ.WithChildren(ctx, templ_7745c5c3_Var24), templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, " ")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = panelCreateKeyModal().Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			return nil
+		})
+		templ_7745c5c3_Err = panelShell("emergent.feedback · API keys", "keys").Render(templ.WithChildren(ctx, templ_7745c5c3_Var21), templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
+}
+
+// panelCreateKeyModal is the repo-scoped key creation dialog (native <dialog>
+// with daisyUI modal classes).
+func panelCreateKeyModal() templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var27 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var27 == nil {
+			templ_7745c5c3_Var27 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "<dialog id=\"create-key-modal\" class=\"modal\" aria-labelledby=\"create-key-title\"><div class=\"modal-box max-w-2xl p-0\"><div class=\"flex items-center justify-between gap-3 border-b border-base-content/5 px-5 py-4\"><div><h2 id=\"create-key-title\" class=\"text-base font-semibold tracking-tight\">Create a key</h2><p class=\"mt-0.5 text-xs text-base-content/60\">Select the repositories this key may read.</p></div><button id=\"create-key-close\" type=\"button\" class=\"btn btn-ghost btn-sm btn-circle\" aria-label=\"Close\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = ui.IconSpan("lucide--x", "size-4").Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "</button></div><div id=\"repo-tools\" class=\"hidden border-b border-base-content/5\"><div class=\"flex flex-wrap items-center gap-2 px-5 py-3\"><input id=\"repo-filter\" class=\"input input-bordered input-sm w-full flex-1\" type=\"search\" placeholder=\"Filter repositories\" aria-label=\"Filter repositories\" autocomplete=\"off\"> <button id=\"select-all\" class=\"btn btn-ghost btn-xs\" type=\"button\">Select all</button> <button id=\"clear-all\" class=\"btn btn-ghost btn-xs\" type=\"button\" disabled>Clear</button> <button id=\"reload-repos\" class=\"btn btn-ghost btn-xs\" type=\"button\" aria-label=\"Reload repositories\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = ui.IconSpan("lucide--refresh-cw", "size-3.5").Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "</button></div></div><div id=\"repo-list\" class=\"max-h-80 overflow-y-auto p-2\" role=\"group\" aria-label=\"Repositories\"></div><div id=\"repos-status\" class=\"px-5 py-3 text-sm text-base-content/60\" role=\"status\" aria-live=\"polite\"></div><div class=\"flex items-center justify-between gap-3 border-t border-base-content/5 bg-base-200/40 px-5 py-4\"><span id=\"sel-count\" class=\"text-sm text-base-content/70\">No repositories selected</span>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Var28 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+			if !templ_7745c5c3_IsBuffer {
+				defer func() {
+					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err == nil {
+						templ_7745c5c3_Err = templ_7745c5c3_BufErr
+					}
+				}()
+			}
+			ctx = templ.InitializeContext(ctx)
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 57, "Generate key")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			return nil
+		})
+		templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: ui.ButtonTypeButton, Variant: ui.ButtonPrimary, Attrs: templ.Attributes{"id": "generate", "disabled": true}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var28), templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "</div></div><form method=\"dialog\" class=\"modal-backdrop\"><button>close</button></form></dialog>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
+}
+
+// PanelReportsPage is the /panel/reports route: captured feedback only.
+func PanelReportsPage() templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var29 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var29 == nil {
+			templ_7745c5c3_Var29 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Var30 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+			if !templ_7745c5c3_IsBuffer {
+				defer func() {
+					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err == nil {
+						templ_7745c5c3_Err = templ_7745c5c3_BufErr
+					}
+				}()
+			}
+			ctx = templ.InitializeContext(ctx)
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "<header id=\"reports\" class=\"mb-6 scroll-mt-6\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = ui.Eyebrow("Feedback", ui.EyebrowProps{Size: "text-[11px]", Margin: "mb-1"}).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 60, "<div class=\"flex flex-wrap items-end justify-between gap-4\"><div class=\"min-w-0\"><h1 class=\"text-2xl font-semibold tracking-tight lg:text-3xl\">Reports</h1><p class=\"mt-1.5 max-w-2xl text-sm text-base-content/70\">Feedback captured by the overlay. Select a report to preview its context, screenshot and DOM snapshot.</p></div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Var31 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+				if !templ_7745c5c3_IsBuffer {
+					defer func() {
+						templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+						if templ_7745c5c3_Err == nil {
+							templ_7745c5c3_Err = templ_7745c5c3_BufErr
+						}
+					}()
+				}
+				ctx = templ.InitializeContext(ctx)
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 61, "Refresh")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				return nil
+			})
+			templ_7745c5c3_Err = ui.Button(ui.ButtonProps{Type: ui.ButtonTypeButton, Variant: ui.ButtonGhost, Size: ui.ButtonSM, Icon: "lucide--refresh-cw", Attrs: templ.Attributes{"id": "reports-refresh"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var31), templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 62, "</div></header><section>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Var32 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+				if !templ_7745c5c3_IsBuffer {
+					defer func() {
+						templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+						if templ_7745c5c3_Err == nil {
+							templ_7745c5c3_Err = templ_7745c5c3_BufErr
+						}
+					}()
+				}
+				ctx = templ.InitializeContext(ctx)
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 63, "<div id=\"report-preview\" class=\"hidden\" role=\"region\" aria-label=\"Report preview\"></div><ul id=\"reports-list\" class=\"flex flex-col gap-3 p-5\" aria-live=\"polite\"></ul>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				return nil
+			})
+			templ_7745c5c3_Err = ui.CardRaw("card-border overflow-hidden", "gap-0 p-0", nil).Render(templ.WithChildren(ctx, templ_7745c5c3_Var32), templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 64, "</section>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			return nil
+		})
+		templ_7745c5c3_Err = panelShell("emergent.feedback · Reports", "reports").Render(templ.WithChildren(ctx, templ_7745c5c3_Var30), templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
+}
+
+// panelScript is the shared vanilla-JS controller. It is page-aware via the
+// body's data-panel-page attribute so it only loads the data a page shows;
+// every DOM lookup is null-guarded because the same script ships on all routes.
+func panelScript() templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var33 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var33 == nil {
+			templ_7745c5c3_Var33 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 65, "<script>\n\t(function () {\n\t\t\"use strict\";\n\n\t\tvar TOKEN_KEY = \"__ef_token__\";\n\t\tvar USER_KEY = \"__ef_user__\";\n\n\t\tfunction byId(id) { return document.getElementById(id); }\n\n\t\tfunction clear(node) {\n\t\t\tif (!node) return;\n\t\t\twhile (node.firstChild) { node.removeChild(node.firstChild); }\n\t\t}\n\n\t\tfunction makeEl(tag, className, attrs) {\n\t\t\tvar n = document.createElement(tag);\n\t\t\tif (className) n.className = className;\n\t\t\tif (attrs) {\n\t\t\t\tfor (var k in attrs) {\n\t\t\t\t\tif (Object.prototype.hasOwnProperty.call(attrs, k)) n.setAttribute(k, attrs[k]);\n\t\t\t\t}\n\t\t\t}\n\t\t\treturn n;\n\t\t}\n\n\t\tfunction currentPage() {\n\t\t\treturn (document.body && document.body.getAttribute(\"data-panel-page\")) || \"\";\n\t\t}\n\n\t\tfunction getToken() {\n\t\t\ttry { return localStorage.getItem(TOKEN_KEY); } catch (e) { return null; }\n\t\t}\n\n\t\tfunction getUser() {\n\t\t\ttry { return JSON.parse(localStorage.getItem(USER_KEY) || \"null\"); } catch (e) { return null; }\n\t\t}\n\n\t\tvar state = {\n\t\t\ttoken: getToken(),\n\t\t\tuser: getUser(),\n\t\t\trepos: [],\n\t\t\treposLoaded: false,\n\t\t\treposError: null,\n\t\t\tkeys: [],\n\t\t\tkeysLoaded: false,\n\t\t\tkeysError: null,\n\t\t\treports: [],\n\t\t\treportsLoaded: false,\n\t\t\treportsError: null\n\t\t};\n\t\tvar selected = {};\n\n\t\t// ── Cookie fallback: the OAuth callback may redirect to /panel when\n\t\t// the popup opener is lost, setting ef_panel_token instead.\n\t\tfunction readCookieToken() {\n\t\t\tvar parts = document.cookie ? document.cookie.split(\";\") : [];\n\t\t\tfor (var i = 0; i < parts.length; i++) {\n\t\t\t\tvar p = parts[i].trim();\n\t\t\t\tif (p.indexOf(\"ef_panel_token=\") === 0) {\n\t\t\t\t\treturn decodeURIComponent(p.slice(\"ef_panel_token=\".length));\n\t\t\t\t}\n\t\t\t}\n\t\t\treturn \"\";\n\t\t}\n\n\t\tfunction consumeCookieToken() {\n\t\t\tvar t = readCookieToken();\n\t\t\tif (!t) return false;\n\t\t\ttry { localStorage.setItem(TOKEN_KEY, t); } catch (e) {}\n\t\t\tdocument.cookie = \"ef_panel_token=; Max-Age=0; Path=/; SameSite=Lax\";\n\t\t\treturn true;\n\t\t}\n\n\t\t// ── Feedback toast (auto-dismissed by ui.ToastScript) ────────────\n\t\tfunction toast(message, kind) {\n\t\t\tvar box = byId(\"toast-container\");\n\t\t\tif (!box) return;\n\t\t\tvar alert = makeEl(\"div\", \"alert text-sm shadow-md toast-auto-dismiss \" + (kind === \"error\" ? \"alert-error\" : \"alert-success\"), { \"role\": \"alert\", \"data-duration\": \"3800\" });\n\t\t\tvar span = makeEl(\"span\");\n\t\t\tspan.textContent = message;\n\t\t\talert.appendChild(span);\n\t\t\tbox.appendChild(alert);\n\t\t}\n\n\t\t// ── API ──────────────────────────────────────────────────────────\n\t\tfunction api(path, opts) {\n\t\t\topts = opts || {};\n\t\t\tvar headers = { \"Accept\": \"application/json\" };\n\t\t\tif (opts.body) headers[\"Content-Type\"] = \"application/json\";\n\t\t\tif (state.token) headers[\"Authorization\"] = \"Bearer \" + state.token;\n\t\t\treturn fetch(path, { method: opts.method || \"GET\", headers: headers, body: opts.body }).then(function (res) {\n\t\t\t\tif (res.status === 401) {\n\t\t\t\t\tsignOut();\n\t\t\t\t\tthrow new Error(\"Your session expired. Sign in again.\");\n\t\t\t\t}\n\t\t\t\tif (!res.ok) {\n\t\t\t\t\treturn res.text().then(function (raw) {\n\t\t\t\t\t\tvar msg = res.statusText || (\"HTTP \" + res.status);\n\t\t\t\t\t\ttry { var j = JSON.parse(raw); if (j && j.message) msg = j.message; } catch (e) {}\n\t\t\t\t\t\tthrow new Error(msg);\n\t\t\t\t\t});\n\t\t\t\t}\n\t\t\t\tif (res.status === 204) return null;\n\t\t\t\treturn res.json();\n\t\t\t});\n\t\t}\n\n\t\t// ── Auth state ───────────────────────────────────────────────────\n\t\tfunction renderAuth() {\n\t\t\tvar signedIn = !!state.token;\n\t\t\tvar gate = byId(\"gate\");\n\t\t\tvar app = byId(\"app\");\n\t\t\tif (signedIn) {\n\t\t\t\tif (gate) gate.classList.add(\"hidden\");\n\t\t\t\tif (app) app.classList.remove(\"hidden\");\n\t\t\t} else {\n\t\t\t\tif (app) app.classList.add(\"hidden\");\n\t\t\t\tif (gate) gate.classList.remove(\"hidden\");\n\t\t\t}\n\t\t\tif (!signedIn) return;\n\t\t\tvar login = byId(\"user-login\");\n\t\t\tif (login) login.textContent = (state.user && state.user.login) || \"\";\n\t\t\tsetAvatar(state.user);\n\t\t}\n\n\t\tfunction setAvatar(user) {\n\t\t\tvar wrap = byId(\"user-avatar\");\n\t\t\tif (!wrap) return;\n\t\t\tclear(wrap);\n\t\t\tvar src = user && user.avatar;\n\t\t\tif (src) {\n\t\t\t\tvar frame = makeEl(\"div\", \"size-8 overflow-hidden rounded-full\");\n\t\t\t\tvar img = makeEl(\"img\", \"h-full w-full object-cover\", { \"src\": src, \"alt\": \"\" });\n\t\t\t\tframe.appendChild(img);\n\t\t\t\twrap.appendChild(frame);\n\t\t\t} else {\n\t\t\t\tvar name = (user && user.login) || \"?\";\n\t\t\t\tvar badge = makeEl(\"div\", \"flex size-8 items-center justify-center rounded-full bg-base-300 text-xs font-semibold\");\n\t\t\t\tbadge.textContent = name.charAt(0).toUpperCase();\n\t\t\t\twrap.appendChild(badge);\n\t\t\t}\n\t\t}\n\n\t\tfunction signIn() {\n\t\t\twindow.open(\n\t\t\t\t\"/auth/github?origin=\" + encodeURIComponent(location.origin),\n\t\t\t\t\"ef_auth\",\n\t\t\t\t\"width=600,height=700,left=200,top=100\"\n\t\t\t);\n\t\t}\n\n\t\tfunction signOut() {\n\t\t\ttry {\n\t\t\t\tlocalStorage.removeItem(TOKEN_KEY);\n\t\t\t\tlocalStorage.removeItem(USER_KEY);\n\t\t\t} catch (e) {}\n\t\t\tstate.token = null;\n\t\t\tstate.user = null;\n\t\t\tstate.repos = [];\n\t\t\tstate.keys = [];\n\t\t\tstate.reports = [];\n\t\t\tstate.reposLoaded = false;\n\t\t\tstate.keysLoaded = false;\n\t\t\tstate.reportsLoaded = false;\n\t\t\tstate.reposError = null;\n\t\t\tstate.keysError = null;\n\t\t\tstate.reportsError = null;\n\t\t\tselected = {};\n\t\t\tvar reveal = byId(\"reveal\");\n\t\t\tif (reveal) reveal.classList.add(\"hidden\");\n\t\t\tvar preview = byId(\"report-preview\");\n\t\t\tif (preview) {\n\t\t\t\tpreview.classList.add(\"hidden\");\n\t\t\t\tclear(preview);\n\t\t\t}\n\t\t\tvar filter = byId(\"repo-filter\");\n\t\t\tif (filter) filter.value = \"\";\n\t\t\trenderAuth();\n\t\t}\n\n\t\t// ── Repositories ─────────────────────────────────────────────────\n\t\tfunction setReposStatus(message, kind) {\n\t\t\tvar s = byId(\"repos-status\");\n\t\t\tif (!s) return;\n\t\t\tclear(s);\n\t\t\ts.className = \"px-5 py-3 text-sm \" + (kind === \"error\" ? \"text-error\" : \"text-base-content/60\");\n\t\t\tif (kind === \"loading\") {\n\t\t\t\ts.appendChild(makeEl(\"span\", \"loading loading-spinner loading-xs mr-2 align-middle\"));\n\t\t\t}\n\t\t\tvar span = makeEl(\"span\");\n\t\t\tspan.textContent = message;\n\t\t\ts.appendChild(span);\n\t\t}\n\n\t\tfunction loadRepos() {\n\t\t\tstate.reposLoaded = false;\n\t\t\tstate.reposError = null;\n\t\t\tsetReposStatus(\"Loading repositories...\", \"loading\");\n\t\t\tvar generate = byId(\"generate\");\n\t\t\tif (generate) generate.disabled = true;\n\t\t\tapi(\"/api/repos\").then(function (repos) {\n\t\t\t\tstate.repos = Array.isArray(repos) ? repos : [];\n\t\t\t\tstate.reposLoaded = true;\n\t\t\t}).catch(function (err) {\n\t\t\t\tstate.repos = [];\n\t\t\t\tstate.reposLoaded = true;\n\t\t\t\tstate.reposError = err.message;\n\t\t\t}).then(function () {\n\t\t\t\trenderRepos();\n\t\t\t});\n\t\t}\n\n\t\tfunction groupByOwner(repos) {\n\t\t\tvar groups = [];\n\t\t\tvar index = {};\n\t\t\tfor (var i = 0; i < repos.length; i++) {\n\t\t\t\tvar r = repos[i];\n\t\t\t\tvar full = r.full_name || \"\";\n\t\t\t\tvar slash = full.indexOf(\"/\");\n\t\t\t\tvar owner = slash > -1 ? full.slice(0, slash) : \"\";\n\t\t\t\tvar name = slash > -1 ? full.slice(slash + 1) : full;\n\t\t\t\tif (!Object.prototype.hasOwnProperty.call(index, owner)) {\n\t\t\t\t\tindex[owner] = { owner: owner, items: [] };\n\t\t\t\t\tgroups.push(index[owner]);\n\t\t\t\t}\n\t\t\t\tindex[owner].items.push({ full_name: full, name: name, private: !!r.private });\n\t\t\t}\n\t\t\treturn groups;\n\t\t}\n\n\t\tfunction repoRow(repo, owner) {\n\t\t\tvar input = makeEl(\"input\", \"checkbox checkbox-sm checkbox-primary\", { \"type\": \"checkbox\", \"value\": repo.full_name, \"aria-label\": repo.full_name });\n\t\t\tinput.checked = Object.prototype.hasOwnProperty.call(selected, repo.full_name);\n\t\t\tinput.addEventListener(\"change\", function () {\n\t\t\t\tif (input.checked) selected[repo.full_name] = true;\n\t\t\t\telse delete selected[repo.full_name];\n\t\t\t\tupdateSelectionUi();\n\t\t\t});\n\n\t\t\tvar label = makeEl(\"label\", \"flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 hover:bg-base-200\");\n\t\t\tlabel.appendChild(input);\n\n\t\t\tvar nameEl = makeEl(\"span\", \"min-w-0 truncate font-mono text-sm\");\n\t\t\tif (owner) {\n\t\t\t\tvar ownerEl = makeEl(\"span\", \"text-base-content/40\");\n\t\t\t\townerEl.textContent = owner + \"/\";\n\t\t\t\tnameEl.appendChild(ownerEl);\n\t\t\t}\n\t\t\tnameEl.appendChild(document.createTextNode(repo.name));\n\t\t\tlabel.appendChild(nameEl);\n\n\t\t\tlabel.appendChild(makeEl(\"span\", \"flex-1\"));\n\n\t\t\tvar badge = makeEl(\"span\", \"badge badge-sm gap-1 \" + (repo.private ? \"badge-warning\" : \"badge-ghost\"));\n\t\t\tbadge.textContent = repo.private ? \"Private\" : \"Public\";\n\t\t\tlabel.appendChild(badge);\n\n\t\t\treturn label;\n\t\t}\n\n\t\tfunction renderRepos() {\n\t\t\tvar list = byId(\"repo-list\");\n\t\t\tvar tools = byId(\"repo-tools\");\n\t\t\tvar filterEl = byId(\"repo-filter\");\n\t\t\tif (!list) return;\n\t\t\tclear(list);\n\n\t\t\tif (state.reposError) {\n\t\t\t\tif (tools) tools.classList.add(\"hidden\");\n\t\t\t\tsetReposStatus(\"Could not load repositories. \" + state.reposError, \"error\");\n\t\t\t\tupdateSelectionUi();\n\t\t\t\treturn;\n\t\t\t}\n\n\t\t\tif (!state.repos.length) {\n\t\t\t\tif (tools) tools.classList.add(\"hidden\");\n\t\t\t\tsetReposStatus(\"No repositories found. Check that the GitHub App is installed for your account.\", \"empty\");\n\t\t\t\tupdateSelectionUi();\n\t\t\t\treturn;\n\t\t\t}\n\n\t\t\tif (tools) tools.classList.remove(\"hidden\");\n\n\t\t\tvar filter = filterEl ? (filterEl.value || \"\").trim().toLowerCase() : \"\";\n\t\t\tvar matches = state.repos.filter(function (r) {\n\t\t\t\treturn (r.full_name || \"\").toLowerCase().indexOf(filter) > -1;\n\t\t\t});\n\n\t\t\tif (!matches.length) {\n\t\t\t\tsetReposStatus(\"No repositories match the current filter.\", \"empty\");\n\t\t\t\tupdateSelectionUi();\n\t\t\t\treturn;\n\t\t\t}\n\n\t\t\tsetReposStatus(\"\", \"idle\");\n\t\t\tvar groups = groupByOwner(matches);\n\t\t\tfor (var g = 0; g < groups.length; g++) {\n\t\t\t\tvar group = groups[g];\n\t\t\t\tvar groupEl = makeEl(\"div\");\n\t\t\t\tvar ownerLabel = makeEl(\"div\", \"px-2 pb-1 pt-3 font-mono text-[11px] uppercase tracking-wide text-base-content/40\");\n\t\t\t\townerLabel.textContent = group.owner;\n\t\t\t\tgroupEl.appendChild(ownerLabel);\n\t\t\t\tfor (var j = 0; j < group.items.length; j++) {\n\t\t\t\t\tgroupEl.appendChild(repoRow(group.items[j], group.owner));\n\t\t\t\t}\n\t\t\t\tlist.appendChild(groupEl);\n\t\t\t}\n\n\t\t\tupdateSelectionUi();\n\t\t}\n\n\t\tfunction selectedNames() {\n\t\t\tvar out = [];\n\t\t\tfor (var k in selected) {\n\t\t\t\tif (Object.prototype.hasOwnProperty.call(selected, k)) out.push(k);\n\t\t\t}\n\t\t\treturn out;\n\t\t}\n\n\t\tfunction updateSelectionUi() {\n\t\t\tvar names = selectedNames();\n\t\t\tvar n = names.length;\n\t\t\tvar count = byId(\"sel-count\");\n\t\t\tif (count) count.textContent = n === 0 ? \"No repositories selected\" : n + (n === 1 ? \" repository selected\" : \" repositories selected\");\n\t\t\tvar generate = byId(\"generate\");\n\t\t\tif (generate) generate.disabled = n === 0;\n\t\t\tvar clearBtn = byId(\"clear-all\");\n\t\t\tif (clearBtn) clearBtn.disabled = n === 0;\n\n\t\t\tvar selectAll = byId(\"select-all\");\n\t\t\tif (selectAll) {\n\t\t\t\tvar allSelected = state.reposLoaded && state.repos.length > 0 && state.repos.every(function (r) {\n\t\t\t\t\treturn Object.prototype.hasOwnProperty.call(selected, r.full_name);\n\t\t\t\t});\n\t\t\t\tselectAll.textContent = allSelected ? \"Clear all\" : \"Select all\";\n\t\t\t}\n\t\t}\n\n\t\t// ── Keys ─────────────────────────────────────────────────────────\n\t\tfunction fmtDate(iso) {\n\t\t\tvar d = new Date(iso);\n\t\t\tif (isNaN(d.getTime())) return iso || \"\";\n\t\t\treturn d.toLocaleDateString(undefined, { year: \"numeric\", month: \"short\", day: \"numeric\" });\n\t\t}\n\n\t\tfunction loadKeys() {\n\t\t\tstate.keysLoaded = false;\n\t\t\tstate.keysError = null;\n\t\t\tvar list = byId(\"keys-list\");\n\t\t\tif (!list) return;\n\t\t\tclear(list);\n\t\t\tvar li = makeEl(\"li\", \"flex items-center gap-2 py-6 text-sm text-base-content/50\");\n\t\t\tli.appendChild(makeEl(\"span\", \"loading loading-spinner loading-sm\"));\n\t\t\tvar span = makeEl(\"span\");\n\t\t\tspan.textContent = \"Loading keys...\";\n\t\t\tli.appendChild(span);\n\t\t\tlist.appendChild(li);\n\n\t\t\tapi(\"/api/keys\").then(function (keys) {\n\t\t\t\tstate.keys = Array.isArray(keys) ? keys : [];\n\t\t\t\tstate.keysLoaded = true;\n\t\t\t}).catch(function (err) {\n\t\t\t\tstate.keys = [];\n\t\t\t\tstate.keysLoaded = true;\n\t\t\t\tstate.keysError = err.message;\n\t\t\t}).then(function () {\n\t\t\t\trenderKeys();\n\t\t\t});\n\t\t}\n\n\t\tfunction keysMessage(text, kind) {\n\t\t\tvar li = makeEl(\"li\", \"py-6 text-center text-sm \" + (kind === \"error\" ? \"text-error\" : \"text-base-content/50\"));\n\t\t\tli.textContent = text;\n\t\t\treturn li;\n\t\t}\n\n\t\tfunction renderKeys() {\n\t\t\tvar list = byId(\"keys-list\");\n\t\t\tif (!list) return;\n\t\t\tclear(list);\n\n\t\t\tif (state.keysError) {\n\t\t\t\tlist.appendChild(keysMessage(\"Could not load keys. \" + state.keysError, \"error\"));\n\t\t\t\treturn;\n\t\t\t}\n\t\t\tif (!state.keys.length) {\n\t\t\t\tlist.appendChild(keysMessage(\"No keys yet. Create one to let an agent read feedback.\", \"empty\"));\n\t\t\t\treturn;\n\t\t\t}\n\n\t\t\tfor (var i = 0; i < state.keys.length; i++) {\n\t\t\t\tlist.appendChild(keyItem(state.keys[i]));\n\t\t\t}\n\t\t}\n\n\t\tfunction keyItem(key) {\n\t\t\tvar li = makeEl(\"li\", \"flex items-start justify-between gap-4 rounded-xl border border-base-200 p-4\" + (key.revoked ? \" opacity-60\" : \"\"));\n\n\t\t\tvar main = makeEl(\"div\", \"min-w-0 flex-1\");\n\t\t\tvar chips = makeEl(\"div\", \"flex flex-wrap gap-2\");\n\t\t\tvar repos = key.repos || [];\n\t\t\tfor (var r = 0; r < repos.length; r++) {\n\t\t\t\tvar chip = makeEl(\"span\", \"badge badge-sm badge-ghost font-mono\" + (key.revoked ? \" line-through\" : \"\"));\n\t\t\t\tchip.textContent = repos[r];\n\t\t\t\tchips.appendChild(chip);\n\t\t\t}\n\t\t\tmain.appendChild(chips);\n\t\t\tvar meta = makeEl(\"div\", \"mt-2 text-xs text-base-content/50\");\n\t\t\tmeta.textContent = \"Created \" + fmtDate(key.created_at) + (key.revoked ? \" · revoked\" : \"\");\n\t\t\tmain.appendChild(meta);\n\n\t\t\tvar side = makeEl(\"div\", \"flex flex-col items-end gap-2\");\n\t\t\tvar id = makeEl(\"span\", \"font-mono text-xs text-base-content/40\");\n\t\t\tid.textContent = \"#\" + key.id;\n\t\t\tside.appendChild(id);\n\t\t\tif (key.revoked) {\n\t\t\t\tvar revoked = makeEl(\"span\", \"badge badge-sm badge-error\");\n\t\t\t\trevoked.textContent = \"Revoked\";\n\t\t\t\tside.appendChild(revoked);\n\t\t\t} else {\n\t\t\t\tvar btn = makeEl(\"button\", \"btn btn-error btn-outline btn-xs\", { \"type\": \"button\", \"aria-label\": \"Revoke key \" + key.id });\n\t\t\t\tbtn.textContent = \"Revoke\";\n\t\t\t\tbtn.addEventListener(\"click\", function () { revokeKey(key.id, btn); });\n\t\t\t\tside.appendChild(btn);\n\t\t\t}\n\n\t\t\tli.appendChild(main);\n\t\t\tli.appendChild(side);\n\t\t\treturn li;\n\t\t}\n\n\t\tfunction revokeKey(id, btn) {\n\t\t\tif (!window.confirm(\"Revoke this key? Any agent using it will lose access immediately.\")) return;\n\t\t\tbtn.disabled = true;\n\t\t\tbtn.textContent = \"Revoking...\";\n\t\t\tapi(\"/api/keys/\" + id, { method: \"DELETE\" }).then(function () {\n\t\t\t\ttoast(\"Key revoked.\");\n\t\t\t\tloadKeys();\n\t\t\t}).catch(function (err) {\n\t\t\t\ttoast(\"Could not revoke key: \" + err.message, \"error\");\n\t\t\t\tbtn.disabled = false;\n\t\t\t\tbtn.textContent = \"Revoke\";\n\t\t\t});\n\t\t}\n\n\t\t// ── Reveal + create ──────────────────────────────────────────────\n\t\tfunction copyText(text, btn) {\n\t\t\tfunction done() {\n\t\t\t\tvar prev = btn.textContent;\n\t\t\t\tbtn.textContent = \"Copied\";\n\t\t\t\tsetTimeout(function () { btn.textContent = prev; }, 1600);\n\t\t\t}\n\t\t\tfunction fallback() {\n\t\t\t\tvar ta = document.createElement(\"textarea\");\n\t\t\t\tta.value = text;\n\t\t\t\tta.setAttribute(\"readonly\", \"\");\n\t\t\t\tta.style.position = \"fixed\";\n\t\t\t\tta.style.left = \"-9999px\";\n\t\t\t\tdocument.body.appendChild(ta);\n\t\t\t\tta.select();\n\t\t\t\tvar ok = false;\n\t\t\t\ttry { ok = document.execCommand(\"copy\"); } catch (e) { ok = false; }\n\t\t\t\tdocument.body.removeChild(ta);\n\t\t\t\tif (ok) done();\n\t\t\t\telse toast(\"Copy failed. Select the key and copy it manually.\", \"error\");\n\t\t\t}\n\t\t\tif (navigator.clipboard && navigator.clipboard.writeText) {\n\t\t\t\tnavigator.clipboard.writeText(text).then(done).catch(fallback);\n\t\t\t} else {\n\t\t\t\tfallback();\n\t\t\t}\n\t\t}\n\n\t\tfunction showReveal(plainKey, repos) {\n\t\t\tvar reveal = byId(\"reveal\");\n\t\t\tvar keyEl = byId(\"reveal-key\");\n\t\t\tvar reposEl = byId(\"reveal-repos\");\n\t\t\tif (!reveal) return;\n\t\t\tif (keyEl) keyEl.textContent = plainKey;\n\t\t\tif (reposEl) {\n\t\t\t\tclear(reposEl);\n\t\t\t\tvar list = repos || [];\n\t\t\t\tfor (var i = 0; i < list.length; i++) {\n\t\t\t\t\tvar chip = makeEl(\"span\", \"badge badge-sm badge-ghost font-mono\");\n\t\t\t\t\tchip.textContent = list[i];\n\t\t\t\t\treposEl.appendChild(chip);\n\t\t\t\t}\n\t\t\t}\n\t\t\treveal.classList.remove(\"hidden\");\n\t\t\tif (reveal.scrollIntoView) reveal.scrollIntoView({ behavior: \"smooth\", block: \"center\" });\n\t\t\tvar copy = byId(\"reveal-copy\");\n\t\t\tif (copy) copy.focus();\n\t\t}\n\n\t\t// ── Create-key modal ─────────────────────────────────────────────\n\t\tfunction openCreateModal() {\n\t\t\tvar modal = byId(\"create-key-modal\");\n\t\t\tif (!modal) return;\n\t\t\tselected = {};\n\t\t\tvar filter = byId(\"repo-filter\");\n\t\t\tif (filter) filter.value = \"\";\n\t\t\tif (state.reposLoaded && !state.reposError) {\n\t\t\t\trenderRepos();\n\t\t\t} else {\n\t\t\t\tloadRepos();\n\t\t\t}\n\t\t\tif (typeof modal.showModal === \"function\") modal.showModal();\n\t\t\telse modal.setAttribute(\"open\", \"\");\n\t\t\tif (filter) setTimeout(function () { filter.focus(); }, 60);\n\t\t}\n\n\t\tfunction closeCreateModal() {\n\t\t\tvar modal = byId(\"create-key-modal\");\n\t\t\tif (!modal) return;\n\t\t\tif (typeof modal.close === \"function\") modal.close();\n\t\t\telse modal.removeAttribute(\"open\");\n\t\t}\n\n\t\tfunction generate() {\n\t\t\tvar repos = selectedNames();\n\t\t\tif (!repos.length) return;\n\t\t\tvar btn = byId(\"generate\");\n\t\t\tvar prev = btn ? btn.textContent : \"\";\n\t\t\tif (btn) { btn.disabled = true; btn.textContent = \"Generating...\"; }\n\t\t\tapi(\"/api/keys\", { method: \"POST\", body: JSON.stringify({ repos: repos }) }).then(function (res) {\n\t\t\t\tcloseCreateModal();\n\t\t\t\tshowReveal(res.key, res.repos || repos);\n\t\t\t\ttoast(\"Key created. Copy it now - it is shown once.\");\n\t\t\t\tselected = {};\n\t\t\t\trenderRepos();\n\t\t\t\tloadKeys();\n\t\t\t}).catch(function (err) {\n\t\t\t\ttoast(\"Could not create key: \" + err.message, \"error\");\n\t\t\t}).then(function () {\n\t\t\t\tif (btn) { btn.textContent = prev; }\n\t\t\t\tupdateSelectionUi();\n\t\t\t});\n\t\t}\n\n\t\t// ── Overview ─────────────────────────────────────────────────────\n\t\tfunction statCard(label, value, icon, href) {\n\t\t\tvar card = makeEl(href ? \"a\" : \"div\", \"card border border-base-300/60 bg-base-100 p-5 transition hover:border-primary/40 hover:shadow-sm\");\n\t\t\tif (href) card.setAttribute(\"href\", href);\n\t\t\tvar top = makeEl(\"div\", \"flex items-center justify-between gap-2\");\n\t\t\tvar iconWrap = makeEl(\"span\", \"grid size-9 place-items-center rounded-lg bg-primary/10 text-primary\");\n\t\t\ticonWrap.appendChild(makeEl(\"span\", \"iconify size-5 \" + icon));\n\t\t\ttop.appendChild(iconWrap);\n\t\t\tif (href) top.appendChild(makeEl(\"span\", \"iconify size-4 text-base-content/30 lucide--arrow-up-right\"));\n\t\t\tcard.appendChild(top);\n\t\t\tvar v = makeEl(\"div\", \"mt-3 text-2xl font-semibold tracking-tight\");\n\t\t\tv.textContent = String(value);\n\t\t\tcard.appendChild(v);\n\t\t\tvar l = makeEl(\"div\", \"mt-0.5 text-sm text-base-content/60\");\n\t\t\tl.textContent = label;\n\t\t\tcard.appendChild(l);\n\t\t\treturn card;\n\t\t}\n\n\t\tfunction renderOverview(data) {\n\t\t\tvar el = byId(\"overview-stats\");\n\t\t\tif (!el) return;\n\t\t\tclear(el);\n\t\t\tvar repos = data.repos || [];\n\t\t\tvar keys = data.keys || [];\n\t\t\tvar activeKeys = 0;\n\t\t\tfor (var i = 0; i < keys.length; i++) { if (!keys[i].revoked) activeKeys++; }\n\t\t\tvar reports = data.reports || [];\n\t\t\tel.appendChild(statCard(\"Repositories\", repos.length, \"lucide--git-branch\", \"/panel/keys\"));\n\t\t\tel.appendChild(statCard(\"Active API keys\", activeKeys, \"lucide--key-round\", \"/panel/keys\"));\n\t\t\tel.appendChild(statCard(\"Reports\", reports.length, \"lucide--inbox\", \"/panel/reports\"));\n\t\t}\n\n\t\tfunction loadOverview() {\n\t\t\tvar el = byId(\"overview-stats\");\n\t\t\tif (!el) return;\n\t\t\tPromise.all([\n\t\t\t\tapi(\"/api/repos\").catch(function () { return []; }),\n\t\t\t\tapi(\"/api/keys\").catch(function () { return []; }),\n\t\t\t\tapi(\"/api/reports\").catch(function () { return []; })\n\t\t\t]).then(function (res) {\n\t\t\t\trenderOverview({ repos: res[0] || [], keys: res[1] || [], reports: res[2] || [] });\n\t\t\t});\n\t\t}\n\n\t\t// ── Reports ──────────────────────────────────────────────────────\n\t\tfunction snippet(value, max) {\n\t\t\tvar s = value == null ? \"\" : String(value);\n\t\t\ts = s.split(\"\\n\").join(\" \").split(\"\\t\").join(\" \").trim();\n\t\t\tif (s.length <= max) return s;\n\t\t\treturn s.slice(0, max - 1) + \"...\";\n\t\t}\n\n\t\tfunction isObj(v) {\n\t\t\treturn v !== null && typeof v === \"object\";\n\t\t}\n\n\t\tfunction textOf(v) {\n\t\t\tif (v == null) return \"\";\n\t\t\tif (typeof v === \"string\") return v;\n\t\t\ttry { return JSON.stringify(v); } catch (e) { return String(v); }\n\t\t}\n\n\t\tfunction safeStringify(v) {\n\t\t\ttry { return JSON.stringify(v, null, 2); } catch (e) { return String(v); }\n\t\t}\n\n\t\tfunction noticeDiv(text, kind) {\n\t\t\tvar d = makeEl(\"div\", \"px-5 py-4 text-sm \" + (kind === \"error\" ? \"text-error\" : \"text-base-content/50\"));\n\t\t\td.textContent = text;\n\t\t\treturn d;\n\t\t}\n\n\t\tfunction reportsMessage(text, kind) {\n\t\t\tvar li = makeEl(\"li\", \"py-6 text-center text-sm \" + (kind === \"error\" ? \"text-error\" : \"text-base-content/50\"));\n\t\t\tli.textContent = text;\n\t\t\treturn li;\n\t\t}\n\n\t\tfunction loadReports() {\n\t\t\tstate.reportsLoaded = false;\n\t\t\tstate.reportsError = null;\n\t\t\tvar list = byId(\"reports-list\");\n\t\t\tif (!list) return;\n\t\t\tclear(list);\n\t\t\tvar li = makeEl(\"li\", \"flex items-center gap-2 py-6 text-sm text-base-content/50\");\n\t\t\tli.appendChild(makeEl(\"span\", \"loading loading-spinner loading-sm\"));\n\t\t\tvar span = makeEl(\"span\");\n\t\t\tspan.textContent = \"Loading reports...\";\n\t\t\tli.appendChild(span);\n\t\t\tlist.appendChild(li);\n\n\t\t\tapi(\"/api/reports\").then(function (reports) {\n\t\t\t\tstate.reports = Array.isArray(reports) ? reports : [];\n\t\t\t\tstate.reportsLoaded = true;\n\t\t\t}).catch(function (err) {\n\t\t\t\tstate.reports = [];\n\t\t\t\tstate.reportsLoaded = true;\n\t\t\t\tstate.reportsError = err.message;\n\t\t\t}).then(function () {\n\t\t\t\trenderReports();\n\t\t\t});\n\t\t}\n\n\t\tfunction renderReports() {\n\t\t\tvar list = byId(\"reports-list\");\n\t\t\tif (!list) return;\n\t\t\tclear(list);\n\n\t\t\tif (state.reportsError) {\n\t\t\t\tlist.appendChild(reportsMessage(\"Could not load reports. \" + state.reportsError, \"error\"));\n\t\t\t\treturn;\n\t\t\t}\n\t\t\tif (!state.reports.length) {\n\t\t\t\tlist.appendChild(reportsMessage(\"No reports yet.\", \"empty\"));\n\t\t\t\treturn;\n\t\t\t}\n\n\t\t\tfor (var i = 0; i < state.reports.length; i++) {\n\t\t\t\tlist.appendChild(reportRow(state.reports[i]));\n\t\t\t}\n\t\t}\n\n\t\tfunction reportRow(report) {\n\t\t\tvar li = makeEl(\"li\", \"flex items-start justify-between gap-4 rounded-xl border border-base-200 p-4\");\n\n\t\t\tvar main = makeEl(\"div\", \"min-w-0 flex-1\");\n\t\t\tvar head = makeEl(\"div\", \"flex flex-wrap items-center gap-2\");\n\t\t\tif (report.repo) {\n\t\t\t\tvar chip = makeEl(\"span\", \"badge badge-sm badge-ghost font-mono\");\n\t\t\t\tchip.textContent = report.repo;\n\t\t\t\thead.appendChild(chip);\n\t\t\t}\n\t\t\tif (report.selector) {\n\t\t\t\tvar sel = makeEl(\"code\", \"max-w-full truncate font-mono text-xs text-base-content/70\");\n\t\t\t\tsel.textContent = report.selector;\n\t\t\t\tsel.title = report.selector;\n\t\t\t\thead.appendChild(sel);\n\t\t\t}\n\t\t\tmain.appendChild(head);\n\n\t\t\tvar p = makeEl(\"p\", \"mt-2 text-sm text-base-content/80\");\n\t\t\tp.textContent = snippet(report.comment, 160) || \"(no comment)\";\n\t\t\tmain.appendChild(p);\n\n\t\t\tvar meta = makeEl(\"div\", \"mt-2 text-xs text-base-content/50\");\n\t\t\tmeta.textContent = \"Created \" + fmtDate(report.created_at);\n\t\t\tmain.appendChild(meta);\n\n\t\t\tvar side = makeEl(\"div\", \"flex flex-col items-end gap-2\");\n\t\t\tvar preview = makeEl(\"button\", \"btn btn-ghost btn-xs\", { \"type\": \"button\", \"aria-label\": \"Preview report \" + report.id });\n\t\t\tpreview.textContent = \"Preview\";\n\t\t\tpreview.addEventListener(\"click\", function () { openReport(report.id); });\n\t\t\tside.appendChild(preview);\n\t\t\tif (report.issue_url) {\n\t\t\t\tvar issueLink = makeEl(\"a\", \"link link-primary text-xs\", { \"href\": report.issue_url, \"target\": \"_blank\", \"rel\": \"noopener noreferrer\", \"aria-label\": \"Open GitHub issue for report \" + report.id });\n\t\t\t\tissueLink.textContent = \"Issue\";\n\t\t\t\tside.appendChild(issueLink);\n\t\t\t}\n\t\t\tli.appendChild(main);\n\t\t\tli.appendChild(side);\n\t\t\treturn li;\n\t\t}\n\n\t\tfunction openReport(id) {\n\t\t\tvar panel = byId(\"report-preview\");\n\t\t\tif (!panel) return;\n\t\t\tclear(panel);\n\t\t\tvar loading = makeEl(\"div\", \"flex items-center gap-2 border-b border-base-200 px-5 py-4 text-sm text-base-content/50\");\n\t\t\tloading.appendChild(makeEl(\"span\", \"loading loading-spinner loading-sm\"));\n\t\t\tvar span = makeEl(\"span\");\n\t\t\tspan.textContent = \"Loading report...\";\n\t\t\tloading.appendChild(span);\n\t\t\tpanel.appendChild(loading);\n\t\t\tpanel.classList.remove(\"hidden\");\n\t\t\tif (panel.scrollIntoView) panel.scrollIntoView({ behavior: \"smooth\", block: \"start\" });\n\n\t\t\tapi(\"/api/reports/\" + encodeURIComponent(id)).then(function (data) {\n\t\t\t\trenderReportPreview(data);\n\t\t\t}).catch(function (err) {\n\t\t\t\tclear(panel);\n\t\t\t\tpanel.appendChild(noticeDiv(\"Could not load report. \" + err.message, \"error\"));\n\t\t\t\ttoast(\"Could not load report: \" + err.message, \"error\");\n\t\t\t});\n\t\t}\n\n\t\tfunction formatViewport(vp) {\n\t\t\tif (vp == null) return \"\";\n\t\t\tif (typeof vp === \"string\" || typeof vp === \"number\") return String(vp);\n\t\t\tif (isObj(vp) && vp.width != null && vp.height != null) return vp.width + \" x \" + vp.height;\n\t\t\treturn textOf(vp);\n\t\t}\n\n\t\tfunction formatHistory(history) {\n\t\t\tif (history == null) return \"\";\n\t\t\tif (Array.isArray(history)) {\n\t\t\t\tvar out = history.length + (history.length === 1 ? \" entry\" : \" entries\");\n\t\t\t\tif (history.length) {\n\t\t\t\t\tvar last = history[history.length - 1];\n\t\t\t\t\tvar lastText = typeof last === \"string\" ? last : textOf(last);\n\t\t\t\t\tlastText = snippet(lastText, 60);\n\t\t\t\t\tif (lastText) out += \" - last: \" + lastText;\n\t\t\t\t}\n\t\t\t\treturn out;\n\t\t\t}\n\t\t\treturn textOf(history);\n\t\t}\n\n\t\tfunction contextRow(grid, label, value) {\n\t\t\tvar text = value == null ? \"\" : String(value);\n\t\t\tif (!text) return;\n\t\t\tvar row = makeEl(\"div\", \"min-w-0\");\n\t\t\tvar k = makeEl(\"div\", \"text-xs text-base-content/40\");\n\t\t\tk.textContent = label;\n\t\t\tvar v = makeEl(\"div\", \"truncate text-sm text-base-content/80\");\n\t\t\tv.textContent = text;\n\t\t\tv.title = text;\n\t\t\trow.appendChild(k);\n\t\t\trow.appendChild(v);\n\t\t\tgrid.appendChild(row);\n\t\t}\n\n\t\tfunction contextSection(ctx) {\n\t\t\tvar section = makeEl(\"div\", \"mt-4\");\n\t\t\tvar label = makeEl(\"div\", \"mb-2 text-xs font-medium uppercase tracking-wide text-base-content/40\");\n\t\t\tlabel.textContent = \"Context\";\n\t\t\tsection.appendChild(label);\n\n\t\t\tif (!isObj(ctx)) {\n\t\t\t\tvar none = makeEl(\"p\", \"text-sm text-base-content/50\");\n\t\t\t\tnone.textContent = \"No context captured.\";\n\t\t\t\tsection.appendChild(none);\n\t\t\t\treturn section;\n\t\t\t}\n\n\t\t\tvar grid = makeEl(\"div\", \"grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2\");\n\t\t\tcontextRow(grid, \"URL\", ctx.url);\n\t\t\tcontextRow(grid, \"Viewport\", formatViewport(ctx.viewport));\n\t\t\tcontextRow(grid, \"CSS framework\", ctx.cssFramework);\n\t\t\tcontextRow(grid, \"User agent\", ctx.userAgent);\n\t\t\tcontextRow(grid, \"Data component\", ctx.dataComponent);\n\t\t\tcontextRow(grid, \"Session history\", formatHistory(ctx.sessionHistory));\n\t\t\tsection.appendChild(grid);\n\n\t\t\tvar raw = makeEl(\"details\", \"mt-3 text-xs\");\n\t\t\tvar sum = makeEl(\"summary\", \"cursor-pointer text-base-content/50\");\n\t\t\tsum.textContent = \"Raw context JSON\";\n\t\t\traw.appendChild(sum);\n\t\t\tvar pre = makeEl(\"pre\", \"mt-2 max-h-64 overflow-auto rounded-lg bg-base-300/40 p-3 font-mono text-xs text-base-content/80\");\n\t\t\tpre.textContent = safeStringify(ctx);\n\t\t\traw.appendChild(pre);\n\t\t\tsection.appendChild(raw);\n\t\t\treturn section;\n\t\t}\n\n\t\tfunction snapshotSection(snapshotHtml) {\n\t\t\tvar section = makeEl(\"div\", \"p-5\");\n\t\t\tvar details = makeEl(\"details\", \"text-sm\");\n\t\t\tvar sum = makeEl(\"summary\", \"cursor-pointer text-base-content/60\");\n\t\t\tsum.textContent = \"Full-page snapshot\";\n\t\t\tdetails.appendChild(sum);\n\t\t\tvar note = makeEl(\"p\", \"mt-2 text-xs text-base-content/40\");\n\t\t\tnote.textContent = \"Rendered in a sandboxed frame. Scripts are disabled.\";\n\t\t\tdetails.appendChild(note);\n\t\t\t// srcdoc is set via setAttribute so the snapshot HTML is treated as\n\t\t\t// the frame's document, not interpolated into markup.\n\t\t\tvar frame = makeEl(\"iframe\", \"mt-2 h-[400px] w-full rounded-lg border border-base-200 bg-white\", { \"sandbox\": \"\", \"title\": \"Captured page snapshot\", \"loading\": \"lazy\" });\n\t\t\tframe.setAttribute(\"srcdoc\", snapshotHtml);\n\t\t\tdetails.appendChild(frame);\n\t\t\tsection.appendChild(details);\n\t\t\treturn section;\n\t\t}\n\n\t\tfunction renderReportPreview(data) {\n\t\t\tvar panel = byId(\"report-preview\");\n\t\t\tif (!panel) return;\n\t\t\tclear(panel);\n\n\t\t\tvar wrap = makeEl(\"div\", \"border-b border-base-200 bg-base-200/30 p-5\");\n\n\t\t\tvar head = makeEl(\"div\", \"flex flex-wrap items-start justify-between gap-3\");\n\t\t\tvar titleWrap = makeEl(\"div\", \"min-w-0\");\n\t\t\tvar title = makeEl(\"h3\", \"text-sm font-semibold\");\n\t\t\ttitle.textContent = \"Report #\" + data.id;\n\t\t\ttitleWrap.appendChild(title);\n\t\t\tvar sub = makeEl(\"div\", \"mt-1 flex flex-wrap items-center gap-2\");\n\t\t\tif (data.repo) {\n\t\t\t\tvar chip = makeEl(\"span\", \"badge badge-sm badge-ghost font-mono\");\n\t\t\t\tchip.textContent = data.repo;\n\t\t\t\tsub.appendChild(chip);\n\t\t\t}\n\t\t\tif (data.selector) {\n\t\t\t\tvar sel = makeEl(\"code\", \"truncate font-mono text-xs text-base-content/70\");\n\t\t\t\tsel.textContent = data.selector;\n\t\t\t\tsel.title = data.selector;\n\t\t\t\tsub.appendChild(sel);\n\t\t\t}\n\t\t\ttitleWrap.appendChild(sub);\n\t\t\thead.appendChild(titleWrap);\n\n\t\t\tvar actions = makeEl(\"div\", \"flex items-center gap-2\");\n\t\t\tif (data.issue_url) {\n\t\t\t\tvar issueLink = makeEl(\"a\", \"btn btn-ghost btn-xs\", { \"href\": data.issue_url, \"target\": \"_blank\", \"rel\": \"noopener noreferrer\" });\n\t\t\t\tissueLink.textContent = \"View issue on GitHub\";\n\t\t\t\tactions.appendChild(issueLink);\n\t\t\t}\n\t\t\tvar dismiss = makeEl(\"button\", \"btn btn-ghost btn-xs\", { \"type\": \"button\", \"aria-label\": \"Dismiss report preview\" });\n\t\t\tdismiss.textContent = \"Dismiss\";\n\t\t\tdismiss.addEventListener(\"click\", function () {\n\t\t\t\tpanel.classList.add(\"hidden\");\n\t\t\t\tclear(panel);\n\t\t\t});\n\t\t\tactions.appendChild(dismiss);\n\t\t\thead.appendChild(actions);\n\t\t\twrap.appendChild(head);\n\n\t\t\tif (data.comment) {\n\t\t\t\tvar comment = makeEl(\"p\", \"mt-3 whitespace-pre-wrap text-sm text-base-content/80\");\n\t\t\t\tcomment.textContent = data.comment;\n\t\t\t\twrap.appendChild(comment);\n\t\t\t}\n\n\t\t\tvar meta = makeEl(\"div\", \"mt-2 text-xs text-base-content/50\");\n\t\t\tmeta.textContent = \"Created \" + fmtDate(data.created_at);\n\t\t\twrap.appendChild(meta);\n\n\t\t\tif (data.url) {\n\t\t\t\tvar urlP = makeEl(\"p\", \"mt-3 text-xs text-base-content/60\");\n\t\t\t\tvar urlLabel = makeEl(\"span\", \"text-base-content/40\");\n\t\t\t\turlLabel.textContent = \"Page: \";\n\t\t\t\turlP.appendChild(urlLabel);\n\t\t\t\tvar pageLink = makeEl(\"a\", \"link link-primary break-all\", { \"href\": data.url, \"target\": \"_blank\", \"rel\": \"noopener noreferrer\" });\n\t\t\t\tpageLink.textContent = data.url;\n\t\t\t\turlP.appendChild(pageLink);\n\t\t\t\twrap.appendChild(urlP);\n\t\t\t}\n\n\t\t\twrap.appendChild(contextSection(data.context));\n\t\t\tpanel.appendChild(wrap);\n\n\t\t\tif (data.has_screenshot && data.screenshot) {\n\t\t\t\tvar shotWrap = makeEl(\"div\", \"border-b border-base-200 p-5\");\n\t\t\t\tvar shotHead = makeEl(\"div\", \"mb-2 text-xs font-medium uppercase tracking-wide text-base-content/40\");\n\t\t\t\tshotHead.textContent = \"Screenshot\";\n\t\t\t\tshotWrap.appendChild(shotHead);\n\t\t\t\tvar img = makeEl(\"img\", \"w-full rounded-lg border border-base-200\", { \"alt\": \"Screenshot of the captured page\" });\n\t\t\t\timg.src = \"data:image/png;base64,\" + data.screenshot;\n\t\t\t\tshotWrap.appendChild(img);\n\t\t\t\tpanel.appendChild(shotWrap);\n\t\t\t}\n\n\t\t\tif (data.has_snapshot && data.snapshot) {\n\t\t\t\tpanel.appendChild(snapshotSection(data.snapshot));\n\t\t\t}\n\t\t}\n\n\t\t// ── Bootstrap + events ───────────────────────────────────────────\n\t\tfunction loadPageData() {\n\t\t\tvar page = currentPage();\n\t\t\tif (page === \"overview\") { loadOverview(); return; }\n\t\t\tif (page === \"keys\") { loadKeys(); return; }\n\t\t\tif (page === \"reports\") { loadReports(); return; }\n\t\t\t// Fallback (unknown page): load everything that has a container.\n\t\t\tloadRepos();\n\t\t\tloadKeys();\n\t\t\tloadReports();\n\t\t}\n\n\t\tfunction bootstrap() {\n\t\t\trenderAuth();\n\t\t\tif (!state.token) return;\n\t\t\tapi(\"/me\").then(function (me) {\n\t\t\t\tstate.user = { login: me.login, avatar: me.avatar_url };\n\t\t\t\ttry { localStorage.setItem(USER_KEY, JSON.stringify(state.user)); } catch (e) {}\n\t\t\t\trenderAuth();\n\t\t\t\tloadPageData();\n\t\t\t}).catch(function () {});\n\t\t}\n\n\t\tfunction wire() {\n\t\t\tvar signin = byId(\"signin\");\n\t\t\tif (signin) signin.addEventListener(\"click\", signIn);\n\n\t\t\tvar signout = byId(\"signout\");\n\t\t\tif (signout) signout.addEventListener(\"click\", function () { signOut(); toast(\"Signed out.\"); });\n\n\t\t\tvar refresh = byId(\"refresh\");\n\t\t\tif (refresh) refresh.addEventListener(\"click\", loadKeys);\n\n\t\t\tvar reportsRefresh = byId(\"reports-refresh\");\n\t\t\tif (reportsRefresh) reportsRefresh.addEventListener(\"click\", loadReports);\n\n\t\t\tvar reload = byId(\"reload-repos\");\n\t\t\tif (reload) reload.addEventListener(\"click\", loadRepos);\n\n\t\t\tvar createKey = byId(\"create-key\");\n\t\t\tif (createKey) createKey.addEventListener(\"click\", openCreateModal);\n\n\t\t\tvar createClose = byId(\"create-key-close\");\n\t\t\tif (createClose) createClose.addEventListener(\"click\", closeCreateModal);\n\n\t\t\tvar modal = byId(\"create-key-modal\");\n\t\t\tif (modal) {\n\t\t\t\tmodal.addEventListener(\"click\", function (e) {\n\t\t\t\t\tif (e.target === modal) closeCreateModal();\n\t\t\t\t});\n\t\t\t}\n\n\t\t\tvar generateBtn = byId(\"generate\");\n\t\t\tif (generateBtn) generateBtn.addEventListener(\"click\", generate);\n\n\t\t\tvar filter = byId(\"repo-filter\");\n\t\t\tif (filter) filter.addEventListener(\"input\", renderRepos);\n\n\t\t\tvar selectAll = byId(\"select-all\");\n\t\t\tif (selectAll) selectAll.addEventListener(\"click\", function () {\n\t\t\t\tvar filterEl = byId(\"repo-filter\");\n\t\t\t\tvar f = filterEl ? (filterEl.value || \"\").trim().toLowerCase() : \"\";\n\t\t\t\tvar visible = state.repos.filter(function (r) {\n\t\t\t\t\treturn (r.full_name || \"\").toLowerCase().indexOf(f) > -1;\n\t\t\t\t});\n\t\t\t\tvar allSelected = visible.length > 0 && visible.every(function (r) {\n\t\t\t\t\treturn Object.prototype.hasOwnProperty.call(selected, r.full_name);\n\t\t\t\t});\n\t\t\t\tfor (var i = 0; i < visible.length; i++) {\n\t\t\t\t\tif (allSelected) delete selected[visible[i].full_name];\n\t\t\t\t\telse selected[visible[i].full_name] = true;\n\t\t\t\t}\n\t\t\t\trenderRepos();\n\t\t\t});\n\n\t\t\tvar clearAll = byId(\"clear-all\");\n\t\t\tif (clearAll) clearAll.addEventListener(\"click\", function () {\n\t\t\t\tselected = {};\n\t\t\t\trenderRepos();\n\t\t\t});\n\n\t\t\tvar dismiss = byId(\"reveal-dismiss\");\n\t\t\tif (dismiss) dismiss.addEventListener(\"click\", function () {\n\t\t\t\tvar reveal = byId(\"reveal\");\n\t\t\t\tif (reveal) reveal.classList.add(\"hidden\");\n\t\t\t});\n\n\t\t\tvar copy = byId(\"reveal-copy\");\n\t\t\tif (copy) copy.addEventListener(\"click\", function () {\n\t\t\t\tvar keyEl = byId(\"reveal-key\");\n\t\t\t\tif (keyEl) copyText(keyEl.textContent, copy);\n\t\t\t});\n\n\t\t\twindow.addEventListener(\"message\", function (event) {\n\t\t\t\tif (event.origin !== location.origin) return;\n\t\t\t\tvar data = event.data;\n\t\t\t\tif (!data || data.type !== \"emergent_feedback_auth\" || !data.token) return;\n\t\t\t\ttry {\n\t\t\t\t\tlocalStorage.setItem(TOKEN_KEY, data.token);\n\t\t\t\t\tlocalStorage.setItem(USER_KEY, JSON.stringify({ login: data.login || \"\", avatar: data.avatar || \"\" }));\n\t\t\t\t} catch (e) {}\n\t\t\t\tstate.token = data.token;\n\t\t\t\tstate.user = { login: data.login || \"\", avatar: data.avatar || \"\" };\n\t\t\t\tstate.reposLoaded = false;\n\t\t\t\tstate.keysLoaded = false;\n\t\t\t\tstate.reportsLoaded = false;\n\t\t\t\tselected = {};\n\t\t\t\tvar preview = byId(\"report-preview\");\n\t\t\t\tif (preview) {\n\t\t\t\t\tpreview.classList.add(\"hidden\");\n\t\t\t\t\tclear(preview);\n\t\t\t\t}\n\t\t\t\ttoast(\"Signed in as \" + (data.login || \"GitHub user\") + \".\");\n\t\t\t\tbootstrap();\n\t\t\t});\n\t\t}\n\n\t\twire();\n\n\t\t// Prefer an existing session token; otherwise adopt the cookie the\n\t\t// OAuth callback may have set on a full-page redirect.\n\t\tif (!state.token) {\n\t\t\tif (consumeCookieToken()) state.token = getToken();\n\t\t}\n\t\tbootstrap();\n\t})();\n\t</script>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

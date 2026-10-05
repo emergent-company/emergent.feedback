@@ -223,6 +223,8 @@ func TestBuildRouterRegistersAllRoutes(t *testing.T) {
 	expected := []string{
 		// Public
 		"GET /panel",
+		"GET /panel/keys",
+		"GET /panel/reports",
 		"GET /",
 		"GET /emergent-feedback.js",
 		"GET /emergent-feedback-replay.js",

@@ -143,12 +143,14 @@ func TestAPIEndToEnd(t *testing.T) {
 	})
 
 	t.Run("02 panel", func(t *testing.T) {
-		rec := do(http.MethodGet, "/panel", "", nil)
-		if rec.Code != http.StatusOK {
-			t.Fatalf("status = %d, want 200", rec.Code)
-		}
-		if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "text/html") {
-			t.Fatalf("content-type = %q, want text/html", ct)
+		for _, path := range []string{"/panel", "/panel/keys", "/panel/reports"} {
+			rec := do(http.MethodGet, path, "", nil)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("%s status = %d, want 200", path, rec.Code)
+			}
+			if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "text/html") {
+				t.Fatalf("%s content-type = %q, want text/html", path, ct)
+			}
 		}
 	})
 
