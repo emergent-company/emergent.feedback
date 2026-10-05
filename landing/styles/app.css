@@ -113,6 +113,17 @@
     --animate-wave: wave 2s ease-in-out infinite;
     --animate-vibrate: vibrate 0.3s ease-in-out infinite;
     --animate-hourglass: hourglass 10s ease-in-out infinite;
+    --animate-float: float 7s ease-in-out infinite;
+}
+
+@keyframes float {
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-8px);
+    }
 }
 
 @keyframes background-shift {
@@ -230,6 +241,17 @@
 
 @utility hero-fade-bottom {
     background-image: linear-gradient(to bottom, transparent, var(--color-base-100));
+}
+
+/* Decorative swash behind the highlighted hero word (Scalo storage hero).
+   Exact spec: primary @10% → secondary @5%, 4px radius, sits behind the text. */
+@utility swash {
+    background-image: linear-gradient(
+        to right,
+        color-mix(in oklab, var(--color-primary) 10%, transparent),
+        color-mix(in oklab, var(--color-secondary) 5%, transparent)
+    );
+    border-radius: 4px;
 }
 
 /* ── Custom components ───────────────────────────────────────────────────── */
