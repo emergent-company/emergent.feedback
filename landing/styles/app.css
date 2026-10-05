@@ -1,0 +1,283 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   Scalo landing stylesheet — layered AFTER go-daisy's app.css.
+   Entry: `tailwindcss -i ./styles/app.css -o ../server/app/static/css/scalo.css`
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* Google Fonts (must precede all other rules) */
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;1000&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400;1,500&display=swap");
+
+/* Tailwind 4 entry */
+@import "tailwindcss";
+
+/* Class sources: scan templ + generated Go so utilities used there are emitted. */
+@source "../../server/**/*.templ";
+@source "../../server/**/*.go";
+
+/* daisyUI plugin */
+@plugin "daisyui" {
+    exclude: rootscrollgutter;
+}
+
+/* Scalo theme — exact dark-theme color/radius values from Scalo's daisyui.css. */
+@plugin "daisyui/theme" {
+    name: "scalo";
+    color-scheme: dark;
+    prefersdark: true;
+    --root-bg: #0f1011;
+    --color-primary: #167bff;
+    --color-primary-content: #ffffff;
+    --color-secondary: #9c5de8;
+    --color-secondary-content: #ffffff;
+    --color-accent: #00d3bb;
+    --color-accent-content: #f3fbf6;
+    --color-neutral: #dce1e6;
+    --color-neutral-content: #1e2832;
+    --color-info: #14b4ff;
+    --color-info-content: #ffffff;
+    --color-success: #17c964;
+    --color-success-content: #ffffff;
+    --color-warning: #f5a524;
+    --color-warning-content: #150a00;
+    --color-error: #f31260;
+    --color-error-content: #ffffff;
+
+    --color-base-100: #16181a;
+    --color-base-200: #24282c;
+    --color-base-300: #303438;
+    --color-base-content: #f0f4f8;
+
+    --radius-field: 0.25rem;
+    --radius-box: 0.25rem;
+    --rounded-box: 0.25rem;
+    --radius-selector: 0.25rem;
+    --size-selector: 0.25rem;
+    --size-field: 0.25rem;
+    --border: 1px;
+    --card-p: 20px;
+    --card-fs: var(--text-base);
+
+    --depth: 0;
+    --noise: 0;
+}
+
+/* Iconify (lucide prefix) */
+@plugin "@iconify/tailwind4" {
+    prefixes: lucide;
+}
+
+/* Dark variant — theme + system mode (adapted to the scalo theme name). */
+@variant dark {
+    &:where([data-theme="scalo"] *) {
+        @slot;
+    }
+    &:not([data-theme="light"] *) {
+        @media (prefers-color-scheme: dark) {
+            @slot;
+        }
+    }
+}
+
+/* Container utility */
+@utility container {
+    margin-inline: auto;
+    @apply px-[1rem] md:px-[2rem] lg:px-[3rem] xl:px-[4rem] 2xl:px-[6rem];
+}
+
+/* ── Typography ──────────────────────────────────────────────────────────── */
+@theme {
+    --font-sans: "DM Sans", sans-serif;
+    --font-mono: "DM Mono", monospace;
+
+    --text-xs: 12px;
+    --text-sm: 14px;
+    --text-base: 16px;
+    --text-lg: 18px;
+    --text-xl: 20px;
+}
+
+@layer base {
+    html {
+        scroll-behavior: smooth;
+    }
+
+    body {
+        @apply font-sans text-base;
+    }
+}
+
+/* ── Animations ──────────────────────────────────────────────────────────── */
+@theme {
+    --animate-background-shift: background-shift 10s ease infinite;
+    --animate-wave-path-dash: wave-path-dash 30s linear infinite;
+    --animate-wave: wave 2s ease-in-out infinite;
+    --animate-vibrate: vibrate 0.3s ease-in-out infinite;
+    --animate-hourglass: hourglass 10s ease-in-out infinite;
+}
+
+@keyframes background-shift {
+    0% {
+        background-position: 0 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+    100% {
+        background-position: 0 50%;
+    }
+}
+
+@keyframes wave-path-dash {
+    0% {
+        stroke-dashoffset: 1040;
+        opacity: 1;
+    }
+    25% {
+        stroke-dashoffset: 40;
+    }
+    100% {
+        stroke-dashoffset: 40;
+    }
+}
+
+@keyframes wave {
+    0%,
+    100% {
+        transform: rotate(0deg);
+    }
+    25% {
+        transform: rotate(5deg);
+    }
+    50% {
+        transform: rotate(-5deg);
+    }
+    75% {
+        transform: rotate(5deg);
+    }
+}
+
+@keyframes vibrate {
+    0%,
+    100% {
+        transform: rotate(0deg);
+        translate: 0;
+    }
+    25% {
+        transform: rotate(4deg);
+        translate: 1px;
+    }
+    50% {
+        transform: rotate(-4deg);
+        translate: -1px;
+    }
+    75% {
+        transform: rotate(4deg);
+        translate: 1px;
+    }
+}
+
+@keyframes hourglass {
+    0% {
+        transform: rotate(0deg);
+    }
+    40%,
+    50%,
+    60% {
+        transform: rotate(180deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* ── Custom components ───────────────────────────────────────────────────── */
+.btn {
+    @apply font-medium;
+}
+
+.card {
+    .card-title {
+        @apply text-base font-medium;
+    }
+
+    .card-body {
+        @apply gap-0;
+    }
+}
+
+.table {
+    th {
+        @apply font-medium;
+    }
+}
+
+.menu {
+    .menu-title {
+        @apply text-base-content/70 font-medium;
+    }
+}
+
+.timeline:not(.timeline-vertical) > li > hr {
+    height: 2px;
+}
+
+.timeline.timeline-vertical > li > hr {
+    width: 2px;
+}
+
+.fieldset {
+    .fieldset-legend {
+        @apply text-base-content/80 text-sm font-normal;
+    }
+    .fieldset-label,
+    .label {
+        @apply text-base-content/80 text-sm;
+    }
+}
+
+.checkbox,
+.radio,
+.range,
+.toggle {
+    &:disabled {
+        @apply opacity-35;
+    }
+}
+
+.label {
+    @apply text-base-content/80 cursor-pointer;
+}
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+    -webkit-background-clip: text;
+}
+
+/* Scrollbars */
+.hide-scrollbar::-webkit-scrollbar {
+    display: none; /* Hide scrollbar for Chrome, Safari */
+}
+
+.hide-scrollbar {
+    -ms-overflow-style: none; /* Hide scrollbar for IE, Edge */
+    scrollbar-width: none; /* Hide scrollbar for Firefox */
+}
+
+/* ── Custom plugins ──────────────────────────────────────────────────────── */
+.simplebar-vertical {
+    .simplebar-scrollbar {
+        &:before {
+            @apply !bg-base-content/20;
+            left: 3px !important;
+        }
+
+        &:hover {
+            &:before {
+                @apply !bg-base-content/35;
+                left: 3px !important;
+            }
+        }
+    }
+}

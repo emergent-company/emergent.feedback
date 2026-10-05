@@ -11,6 +11,9 @@ var staticFiles embed.FS
 //go:embed schema/envelope.v1.json
 var envelopeSchemaJSON []byte
 
+//go:embed static/css/scalo.css
+var scaloCSS []byte
+
 // DefaultStaticFS returns the embedded client bundles.
 func DefaultStaticFS() fs.FS {
 	sub, err := fs.Sub(staticFiles, "static")
@@ -24,5 +27,12 @@ func DefaultStaticFS() fs.FS {
 func DefaultEnvelopeSchema() []byte {
 	out := make([]byte, len(envelopeSchemaJSON))
 	copy(out, envelopeSchemaJSON)
+	return out
+}
+
+// DefaultCSS returns a copy of the embedded Scalo landing stylesheet.
+func DefaultCSS() []byte {
+	out := make([]byte, len(scaloCSS))
+	copy(out, scaloCSS)
 	return out
 }

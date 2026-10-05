@@ -35,6 +35,21 @@ tasks:
     cmds:
       - npm run watch
 
+  # ── Landing CSS ─────────────────────────────────────────────────────────────
+
+  build:css:
+    desc: "Build the Scalo landing CSS (minified)"
+    dir: landing
+    cmds:
+      - npm install
+      - npm run build
+    sources:
+      - styles/**/*.css
+      - package.json
+      - package-lock.json
+    generates:
+      - ../server/app/static/css/scalo.css
+
   # ── Server ──────────────────────────────────────────────────────────────────
 
   generate:templ:
@@ -59,6 +74,7 @@ tasks:
       - server/**/*.go
       - server/app/static/emergent-feedback.js
       - server/app/static/emergent-feedback-replay.js
+      - server/app/static/css/scalo.css
       - go.mod
       - go.sum
     generates:
@@ -67,16 +83,17 @@ tasks:
   # ── Combined ─────────────────────────────────────────────────────────────────
 
   build:
-    desc: "Build both JS client and Go server"
+    desc: "Build JS client, landing CSS, and Go server"
     cmds:
       - task: build:client
+      - task: build:css
       - task: build:server
 
   # ── Development ──────────────────────────────────────────────────────────────
 
   dev:
     desc: "Run the server locally (requires env vars to be set)"
-    deps: [build:client:dev, generate:templ]
+    deps: [build:client:dev, build:css, generate:templ]
     cmds:
       - go run ./server
 

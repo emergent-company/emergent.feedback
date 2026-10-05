@@ -102,6 +102,11 @@ func BuildRouter(opts Options) (*echo.Echo, error) {
 	e.GET("/emergent-feedback.js", echo.WrapHandler(http.FileServer(http.FS(staticFS))))
 	e.GET("/emergent-feedback-replay.js", echo.WrapHandler(http.FileServer(http.FS(staticFS))))
 
+	// ── Scalo landing stylesheet (embedded; layered AFTER go-daisy app.css) ──
+	e.GET("/static/css/scalo.css", func(c echo.Context) error {
+		return c.Blob(http.StatusOK, "text/css", DefaultCSS())
+	})
+
 	// ── go-daisy static assets (CSS/JS) ───────────────────────────────────────
 	e.GET("/static/*", echo.WrapHandler(staticfs.Handler("/static/")))
 

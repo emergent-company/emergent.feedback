@@ -1,0 +1,24 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "references": {
+    "scalo": {
+      "path": "/root/scalo-html",
+      "description": "Purchased daisyUI 5 + Tailwind 4 Scalo startup template. Reuse its sections, partials, styles and images when building landing/marketing UI. Local only — do not redistribute (single-project paid license)."
+    }
+  },
+  "mcp": {
+    "playwright": {
+      "type": "local",
+      "command": ["npx", "-y", "@playwright/mcp@latest"],
+      "enabled": true
+    },
+    "unsplash": {
+      "type": "local",
+      "command": ["npx", "-y", "unsplash-mcp-server"],
+      "enabled": false,
+      "environment": {
+        "UNSPLASH_ACCESS_KEY": ""
+      }
+    }
+  }
+}

@@ -1,20 +1,102 @@
 package panel
 
-import "github.com/emergent-company/go-daisy/components/ui"
+import (
+	"github.com/emergent-company/go-daisy/components/layout"
+	"github.com/emergent-company/go-daisy/components/ui"
+)
+
+// panelBrand is the shared brand mark: a primary monogram tile plus the product
+// name. markOnly drops the wordmark where horizontal space is tight.
+templ panelBrand(markOnly bool) {
+	<a href="/" class="flex select-none items-center gap-2.5">
+		<span class="grid size-7 place-items-center rounded-lg bg-primary" aria-hidden="true">
+			<span class="size-3 rounded-[3px] bg-primary-content"></span>
+		</span>
+		if !markOnly {
+			<span class="text-[15px] font-semibold tracking-tight">emergent.feedback</span>
+		}
+	</a>
+}
+
+// panelSidebarGroups is the panel's left-nav. The Workspace group uses in-page
+// anchors (Overview / API keys / Reports) so it mirrors the memory admin
+// sections; Links points at the public surfaces.
+func panelSidebarGroups() []layout.SidebarGroup {
+	return []layout.SidebarGroup{
+		{
+			Label: "Workspace",
+			Items: []layout.SidebarItem{
+				{Label: "Overview", Href: "#overview", Icon: "lucide--layout-dashboard", Active: true},
+				{Label: "API keys", Href: "#keys", Icon: "lucide--key-round"},
+				{Label: "Reports", Href: "#reports", Icon: "lucide--inbox"},
+			},
+		},
+		{
+			Label: "Links",
+			Items: []layout.SidebarItem{
+				{Label: "Landing page", Href: "/", Icon: "lucide--globe"},
+				{Label: "GitHub", Href: "https://github.com/emergent-company/emergent.feedback", Icon: "lucide--github"},
+				{Label: "Docs", Href: "https://github.com/emergent-company/emergent.feedback/tree/main/docs", Icon: "lucide--book-open"},
+			},
+		},
+	}
+}
+
+// panelSidebar mirrors memory's hand-rolled sidebar (same #_layout-sidebar id,
+// h-14 header, and .sidebar-menu/.menu-label/.menu-item classes) so the
+// go-daisy responsive drawer + desktop collapse CSS keeps working. Each link is
+// a layout.SidebarMenuItem (plain anchor, no HTMX nav — the panel is one page).
+templ panelSidebar() {
+	<div id="_layout-sidebar" class="flex flex-col bg-base-100">
+		<div class="flex h-14 shrink-0 items-center gap-3 px-5">
+			@panelBrand(false)
+		</div>
+		<div class="sidebar-menu grow overflow-y-auto">
+			<div class="mb-3 space-y-0.5 px-2.5 pt-4">
+				for i, group := range panelSidebarGroups() {
+					if group.Label != "" {
+						<p class={ "menu-label px-2.5 pb-1.5", templ.KV("pt-5", i > 0), templ.KV("pt-0", i == 0) }>{ group.Label }</p>
+					}
+					for _, item := range group.Items {
+						@layout.SidebarMenuItem(item.Label, item.Href, item.Icon, item.Active)
+					}
+				}
+			</div>
+		</div>
+	</div>
+	<script>
+	(function () {
+		var sidebar = document.getElementById("_layout-sidebar");
+		if (!sidebar) return;
+		// Below lg the sidebar is an off-canvas drawer; close it when a nav link
+		// is tapped so the destination is visible. Mirrors go-daisy's
+		// layout.Sidebar behavior.
+		sidebar.addEventListener("click", function (e) {
+			if (window.innerWidth >= 1024) return;
+			if (!e.target.closest("a")) return;
+			var cb = document.getElementById("_layout-sidebar-toggle-trigger");
+			if (cb) cb.checked = false;
+		});
+	})();
+	</script>
+}
 
 // PanelPage renders the API-key management panel. It is a server-rendered
 // go-daisy page whose dynamic regions (repos, keys, reveal, toasts) are filled
 // in by the inline vanilla-JS controller at the bottom of the page.
 templ PanelPage() {
 	<!DOCTYPE html>
-	<html lang="en" data-theme="light">
+	<html lang="en" data-theme="dark">
 	<head>
 		<meta charset="UTF-8"/>
 		<meta name="viewport" content="width=device-width, initial-scale=1"/>
+		<meta name="color-scheme" content="dark"/>
 		<title>emergent.feedback · API keys</title>
 		<link rel="stylesheet" href="/static/css/app.css"/>
 	</head>
 	<body class="min-h-screen bg-base-200">
+		<div id="modal-container"></div>
+
 		<!-- ── Signed-out gate ─────────────────────────────────────────────── -->
 		<div id="gate" class="hidden">
 			<div class="flex min-h-screen items-center justify-center p-6">
@@ -46,31 +128,52 @@ templ PanelPage() {
 
 		<!-- ── Signed-in panel ────────────────────────────────────────────── -->
 		<div id="app" class="hidden">
-			<header class="navbar sticky top-0 z-20 min-h-14 border-b border-base-200 bg-base-100/90 backdrop-blur">
-				<div class="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-4">
-					<div class="flex items-center gap-2">
-						<span class="grid size-6 place-items-center rounded-md bg-primary" aria-hidden="true">
-							<span class="size-2.5 rounded-[3px] bg-primary-content"></span>
-						</span>
-						<span class="text-sm font-semibold tracking-tight">emergent.feedback</span>
+			@layout.AppShell("emergent.feedback") {
+			@panelSidebar()
+			<div class="flex min-w-0 grow flex-col overflow-hidden">
+				<div class="bg-base-100 border-base-content/5 z-10 h-14 shrink-0 border-b">
+					@layout.Navbar("emergent.feedback", panelBrand(false)) {
+					<span id="user-login" class="hidden max-w-[10rem] truncate text-sm font-medium sm:block"></span>
+					@ui.Dropdown(ui.DropdownEnd, templ.Attributes{"data-testid": "account-menu"}) {
+					<div tabindex="0" role="button" class="cursor-pointer rounded-full p-px outline-none transition hover:ring-1 hover:ring-base-content/25 focus-visible:ring-1 focus-visible:ring-base-content/45 active:ring-1 active:ring-base-content/30" aria-label="Account menu" aria-haspopup="menu">
+						@ui.AvatarFull(ui.AvatarProps{Name: "user", Icon: "lucide--user", Size: ui.AvatarSM, Tone: ui.AvatarToneMuted, Attrs: templ.Attributes{"id": "user-avatar"}})
 					</div>
-					<div class="flex items-center gap-3">
-						@ui.AvatarFull(ui.AvatarProps{Name: "user", Size: ui.AvatarSM, Fallback: ui.AvatarFallbackInitials, Attrs: templ.Attributes{"id": "user-avatar"}})
-						<span id="user-login" class="max-w-[10rem] truncate text-sm font-medium"></span>
-						@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeButton, Variant: ui.ButtonGhost, Size: ui.ButtonSM, Attrs: templ.Attributes{"id": "signout"}}) {
-							Sign out
-						}
-					</div>
+					@ui.DropdownMenu(templ.Attributes{"aria-label": "Account", "class": "min-w-56 border-base-content/10 z-50"}) {
+					<li class="menu-title pointer-events-none select-none px-2 pt-2 pb-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-base-content/50">Signed in with GitHub</li>
+					<li class="pointer-events-none">
+						<div class="flex items-center gap-2 px-1 py-0.5">
+							@ui.IconSpan("lucide--github", "size-4 text-base-content/60")
+							<span class="text-sm text-base-content/80">GitHub session</span>
+						</div>
+					</li>
+					<li aria-hidden="true"></li>
+					<li>
+						<button id="signout" type="button" class="text-error hover:bg-error/10 flex w-full cursor-pointer items-center gap-2 text-left">
+							@ui.IconSpan("lucide--log-out", "size-4")
+							<span>Sign out</span>
+						</button>
+					</li>
+					}
+					}
+					}
 				</div>
-			</header>
-
-			<main id="main" class="mx-auto w-full max-w-5xl px-4 py-8">
-				<div class="mb-6 max-w-2xl">
-					<h1 class="text-2xl font-semibold tracking-tight">API keys</h1>
-					<p class="mt-1.5 text-sm text-base-content/70">
-						Create keys for agents that read feedback. Each key is limited to the repositories you select, and the plaintext value is shown only once.
-					</p>
-				</div>
+				<main id="main" class="grow overflow-auto">
+					@layout.Container(layout.ContainerLG, nil) {
+					<header id="overview" class="mb-6 scroll-mt-6">
+						@ui.Eyebrow("API access", ui.EyebrowProps{Size: "text-[11px]", Margin: "mb-1"})
+						<div class="flex flex-wrap items-end justify-between gap-4">
+							<div class="min-w-0">
+								<h1 class="text-2xl font-semibold tracking-tight lg:text-3xl">API keys</h1>
+								<p class="mt-1.5 max-w-2xl text-sm text-base-content/70">
+									Create keys for agents that read feedback. Each key is limited to the repositories you select, and the plaintext value is shown only once.
+								</p>
+							</div>
+							<div class="flex flex-wrap items-center gap-2">
+								@ui.Badge(ui.BadgeProps{Label: "Scoped to repos", Variant: ui.BadgeGhost, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM})
+								@ui.Badge(ui.BadgeProps{Label: "Shown once", Variant: ui.BadgeWarning, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM, Icon: "lucide--eye-off"})
+							</div>
+						</div>
+					</header>
 
 				<!-- One-time reveal (filled on create) -->
 				<div id="reveal" class="hidden">
@@ -100,19 +203,21 @@ templ PanelPage() {
 					</div>
 				</div>
 
-				<div class="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
-					<!-- Create -->
-					@ui.CardRaw("border border-base-200 shadow-sm", "gap-0 p-0", nil) {
-						<div class="flex items-center justify-between gap-3 border-b border-base-200 px-5 py-4">
+				<!-- Create + existing keys -->
+				<section id="keys" class="scroll-mt-6">
+					<div class="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+						<!-- Create -->
+						@ui.CardRaw("card-border overflow-hidden", "gap-0 p-0", nil) {
+						<div class="flex items-center justify-between gap-3 border-b border-base-content/5 px-5 py-4">
 							<div>
 								<h2 class="text-base font-semibold tracking-tight">Create a key</h2>
 								<p class="mt-0.5 text-xs text-base-content/60">Select the repositories this key may read.</p>
 							</div>
-							@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeButton, Variant: ui.ButtonGhost, Size: ui.ButtonSM, Attrs: templ.Attributes{"id": "reload-repos"}}) {
+							@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeButton, Variant: ui.ButtonGhost, Size: ui.ButtonSM, Icon: "lucide--refresh-cw", Attrs: templ.Attributes{"id": "reload-repos"}}) {
 								Reload
 							}
 						</div>
-						<div id="repo-tools" class="hidden border-b border-base-200">
+						<div id="repo-tools" class="hidden border-b border-base-content/5">
 							<div class="flex flex-wrap items-center gap-2 px-5 py-3">
 								<input id="repo-filter" class="input input-bordered input-sm w-full flex-1" type="search" placeholder="Filter repositories" aria-label="Filter repositories" autocomplete="off"/>
 								<button id="select-all" class="btn btn-ghost btn-xs" type="button">Select all</button>
@@ -121,44 +226,50 @@ templ PanelPage() {
 						</div>
 						<div id="repo-list" class="max-h-80 overflow-y-auto p-2" role="group" aria-label="Repositories"></div>
 						<div id="repos-status" class="px-5 py-4 text-sm text-base-content/60" role="status" aria-live="polite"></div>
-						<div class="flex items-center justify-between gap-3 border-t border-base-200 bg-base-200/40 px-5 py-4">
+						<div class="flex items-center justify-between gap-3 border-t border-base-content/5 bg-base-200/40 px-5 py-4">
 							<span id="sel-count" class="text-sm text-base-content/70">No repositories selected</span>
 							@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeButton, Variant: ui.ButtonPrimary, Attrs: templ.Attributes{"id": "generate", "disabled": true}}) {
 								Generate key
 							}
 						</div>
-					}
+						}
 
-					<!-- Existing -->
-					@ui.CardRaw("border border-base-200 shadow-sm", "gap-0 p-0", nil) {
-						<div class="flex items-center justify-between gap-3 border-b border-base-200 px-5 py-4">
+						<!-- Existing -->
+						@ui.CardRaw("card-border overflow-hidden", "gap-0 p-0", nil) {
+						<div class="flex items-center justify-between gap-3 border-b border-base-content/5 px-5 py-4">
 							<div>
 								<h2 class="text-base font-semibold tracking-tight">Existing keys</h2>
 								<p class="mt-0.5 text-xs text-base-content/60">Keys you have created for this account.</p>
 							</div>
-							@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeButton, Variant: ui.ButtonGhost, Size: ui.ButtonSM, Attrs: templ.Attributes{"id": "refresh"}}) {
+							@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeButton, Variant: ui.ButtonGhost, Size: ui.ButtonSM, Icon: "lucide--refresh-cw", Attrs: templ.Attributes{"id": "refresh"}}) {
 								Refresh
 							}
 						</div>
 						<ul id="keys-list" class="flex flex-col gap-3 p-5" aria-live="polite"></ul>
-					}
-				</div>
+						}
+					</div>
+				</section>
 
 				<!-- Reports (full width) -->
-				@ui.CardRaw("mt-6 border border-base-200 shadow-sm", "gap-0 p-0", nil) {
-					<div class="flex items-center justify-between gap-3 border-b border-base-200 px-5 py-4">
+				<section id="reports" class="mt-6 scroll-mt-6">
+					@ui.CardRaw("card-border overflow-hidden", "gap-0 p-0", nil) {
+					<div class="flex items-center justify-between gap-3 border-b border-base-content/5 px-5 py-4">
 						<div>
 							<h2 class="text-base font-semibold tracking-tight">Reports</h2>
 							<p class="mt-0.5 text-xs text-base-content/60">Feedback captured by the overlay. Select a report to preview it.</p>
 						</div>
-						@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeButton, Variant: ui.ButtonGhost, Size: ui.ButtonSM, Attrs: templ.Attributes{"id": "reports-refresh"}}) {
+						@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeButton, Variant: ui.ButtonGhost, Size: ui.ButtonSM, Icon: "lucide--refresh-cw", Attrs: templ.Attributes{"id": "reports-refresh"}}) {
 							Refresh
 						}
 					</div>
 					<div id="report-preview" class="hidden" role="region" aria-label="Report preview"></div>
 					<ul id="reports-list" class="flex flex-col gap-3 p-5" aria-live="polite"></ul>
-				}
-			</main>
+					}
+				</section>
+					}
+				</main>
+			</div>
+			}
 		</div>
 
 		<div id="toast-container" class="toast toast-end toast-bottom z-50"></div>

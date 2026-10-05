@@ -6,6 +6,7 @@ bin/
 # Node
 client/node_modules/
 client/test-dist/
+landing/node_modules/
 
 # Data
 data/
