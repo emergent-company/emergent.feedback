@@ -272,14 +272,48 @@ docker build -t emergent-feedback .
 
 ### Environment variables
 
+**Required**
+
+| Variable | Description |
+|----------|-------------|
+| `GH_APP_CLIENT_ID` | GitHub OAuth App client ID |
+| `GH_APP_CLIENT_SECRET` | GitHub OAuth App client secret |
+| `GH_REDIRECT_URI` | Must match the OAuth App callback URL (`https://your-domain.example.com/auth/callback`) |
+| `JWT_SECRET` | Secret used to sign session JWTs (`openssl rand -hex 32`) |
+
+**Server / storage**
+
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `8080` | HTTP listen port |
-| `DB_PATH` | `./feedback-overlay.db` | SQLite database path |
-| `GH_APP_CLIENT_ID` | — | OAuth App client ID |
-| `GH_APP_CLIENT_SECRET` | — | OAuth App client secret |
-| `GH_REDIRECT_URI` | — | Must match the OAuth App callback URL |
-| `JWT_SECRET` | — | Secret used to sign session JWTs |
+| `DB_PATH` | `/data/feedback-overlay.db` | SQLite database path (used when `DATABASE_URL` is unset) |
+| `DATABASE_URL` | — | Postgres DSN; when set, uses Postgres instead of SQLite |
+| `ALLOWED_ORIGINS` | `*` | Comma-separated CORS origins |
+| `MAX_BODY_BYTES` | `10MB` | Maximum request body size |
+
+**GitHub issue authoring** (optional)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ISSUE_AUTHOR_MODE` | `bot` | `bot` (server token / GitHub App) or `user` (each reporter's own token) |
+| `GH_BOT_TOKEN` | — | Bot token used to author issues |
+| `GH_APP_ID` | — | GitHub App ID (App-based authoring) |
+| `GH_INSTALLATION_ID` | — | GitHub App installation ID |
+| `GH_APP_PRIVATE_KEY` | — | GitHub App private key PEM, inline |
+| `GH_APP_PRIVATE_KEY_PATH` | — | Path to the GitHub App private key PEM (preferred over inline) |
+
+**Integrations** (optional)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MCP_API_KEY` | — | Enables the `/mcp` endpoint; agents authenticate with `Authorization: Bearer <key>` |
+| `FEEDBACK_LLM_BASE_URL` | — | OpenAI-compatible base URL; enables LLM issue auto-title |
+| `FEEDBACK_LLM_API_KEY` | — | API key for LLM auto-title |
+| `FEEDBACK_LLM_MODEL` | `gpt-4o-mini` | Model used for auto-title |
+| `FEEDBACK_NOTIFY_WEBHOOK` | — | URL to POST lifecycle events (resolved/verified) to |
+
+> In `bot` mode with no GitHub App or `GH_BOT_TOKEN` configured, the server warns and
+> falls back to authoring issues with each reporter's own GitHub token.
 
 ---
 
