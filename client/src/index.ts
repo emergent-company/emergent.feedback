@@ -237,7 +237,16 @@ import { startReporterNotify, stopReporterNotify } from "./notify";
 
     if (getMode() !== "active") return;
 
-    await openFeedbackDialog(target);
+    try {
+      await openFeedbackDialog(target);
+    } catch (err) {
+      // Never leave the page stuck in capture/comment mode on an unexpected error.
+      console.error("[emergent.feedback] failed to open feedback dialog:", err);
+      forceMode("active");
+      document.body.style.cursor = "crosshair";
+      document.addEventListener("mouseover", onMouseOver, true);
+      document.addEventListener("click", onElementClick, true);
+    }
   }
 
   // ── Badge click — open the dialog for that element ──────────────────────────
