@@ -1,4 +1,4 @@
-# feedback-overlay
+# emergent.feedback
 
 A lightweight, drop-in feedback tool for any web app. Users hold `Alt+Shift` (configurable) to enter element-selection mode, click any element to leave a comment, and export feedback directly to GitHub Issues — with full CSS context, computed styles, and element HTML attached automatically.
 
@@ -25,7 +25,7 @@ Add the following snippet to your HTML, just before `</body>`:
 
 ```html
 <script
-  src="https://feedback.emergent-company.ai/feedback-overlay.js"
+  src="https://feedback.emergent-company.ai/emergent-feedback.js"
   data-api="https://feedback.emergent-company.ai"
   data-repo="your-org/your-repo"
   data-label="feedback"
@@ -41,6 +41,24 @@ Add the following snippet to your HTML, just before `</body>`:
 | `data-hotkey` | No | Activation key combo. Defaults to `alt+shift`. Options: `alt+shift`, `ctrl+shift`, `meta+shift` |
 | `data-branch` | No | Git branch being tested. Shown in dialog and included in issue body |
 | `data-version` | No | App version being tested. Shown in dialog and included in issue body |
+
+### Host metadata via `<meta name="ef:*">` (planned)
+
+> Not implemented yet. See `docs/design.md` (v4) for the full design.
+
+Attach arbitrary product metadata from the document `<head>` using the `ef:`
+prefix. Flat names become keys; dotted names nest (max 3 segments). Collected
+into `context.app` and rendered in the dialog, the GitHub issue body, and the
+panel preview.
+
+```html
+<meta name="ef:env" content="staging">
+<meta name="ef:tenant.id" content="acme">
+<meta name="ef:feature.area" content="billing">
+```
+
+Sensitive keys/values (tokens, secrets, email, etc.) are dropped before attach;
+input is capped (≤ 500 chars/value, ≤ 50 keys, ≤ 4 KB total).
 
 ### 2. Ensure GitHub labels exist
 
@@ -81,7 +99,7 @@ If `Alt+Shift` conflicts with another tool, override it via `data-hotkey`:
 
 ```html
 <script
-  src="https://feedback.emergent-company.ai/feedback-overlay.js"
+  src="https://feedback.emergent-company.ai/emergent-feedback.js"
   data-repo="your-org/your-repo"
   data-hotkey="ctrl+shift"
   async
@@ -116,7 +134,7 @@ Go to **GitHub → Settings → Developer settings → OAuth Apps → New OAuth 
 
 | Field | Value |
 |-------|-------|
-| Application name | feedback-overlay |
+| Application name | emergent.feedback |
 | Homepage URL | `https://your-domain.example.com` |
 | Authorization callback URL | `https://your-domain.example.com/auth/callback` |
 
@@ -133,8 +151,8 @@ openssl rand -hex 32
 ```yaml
 # docker-compose.yml
 services:
-  feedback-overlay:
-    image: ghcr.io/emergent-company/feedback-overlay:latest
+  emergent-feedback:
+    image: ghcr.io/emergent-company/emergent-feedback:latest
     restart: unless-stopped
     ports:
       - "8080:8080"
@@ -172,7 +190,7 @@ Point `data-api` to your own domain:
 
 ```html
 <script
-  src="https://your-domain.example.com/feedback-overlay.js"
+  src="https://your-domain.example.com/emergent-feedback.js"
   data-api="https://your-domain.example.com"
   data-repo="your-org/your-repo"
   async
@@ -249,7 +267,7 @@ npm run build --prefix client
 go build ./server/...
 
 # Build Docker image
-docker build -t feedback-overlay .
+docker build -t emergent-feedback .
 ```
 
 ### Environment variables
@@ -270,7 +288,7 @@ docker build -t feedback-overlay .
 This repo includes an [opencode](https://opencode.ai) AI skill for AI-assisted installation, configuration, and self-hosting:
 
 ```
-.opencode/skills/feedback-overlay/SKILL.md
+.opencode/skills/emergent-feedback/SKILL.md
 ```
 
 opencode auto-discovers project skills. No manual setup needed.
@@ -285,4 +303,4 @@ This project uses [Semantic Versioning](https://semver.org). The current version
 {"ok": true, "version": "0.3.1", "commit": "ff46ac7"}
 ```
 
-Releases are tagged in Git (`v0.2.0`) and published as GitHub Releases with a corresponding Docker image tag on GHCR (`ghcr.io/emergent-company/feedback-overlay:v0.2.0`).
+Releases are tagged in Git (`v0.2.0`) and published as GitHub Releases with a corresponding Docker image tag on GHCR (`ghcr.io/emergent-company/emergent-feedback:v0.2.0`).

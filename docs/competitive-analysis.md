@@ -3,7 +3,7 @@
 Date: 2026-10-01
 Scope: full landscape of tools that let a user point at UI, leave feedback, and route it to engineering — with a focus on drop-in script-tag overlays that export to GitHub Issues with DOM/CSS context.
 
-Our product: **feedback-overlay** — one `<script>` tag, element-level commenting, GitHub Issues export with selector + computed styles + framework detection + viewport + HTML. Self-hostable, open source.
+Our product: **emergent.feedback** — one `<script>` tag, element-level commenting, GitHub Issues export with selector + computed styles + framework detection + viewport + HTML. Self-hostable, open source.
 
 ---
 
