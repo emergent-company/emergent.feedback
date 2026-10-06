@@ -2,7 +2,7 @@
 
 import type { OverlayConfig } from "./config";
 
-export type OverlayMode = "idle" | "active" | "capturing" | "commenting";
+export type OverlayMode = "idle" | "active" | "capturing" | "commenting" | "editing";
 
 type ModeChangeCallback = (mode: OverlayMode) => void;
 
@@ -56,6 +56,9 @@ export function startActivationListener(config: Pick<OverlayConfig, "hotkey">): 
 }
 
 function handleKeyDown(e: KeyboardEvent): void {
+  // Escape while "editing" is owned by the dialog's own Escape handler, which
+  // runs the same cancel path as the Cancel button. Only the pre-dialog modes
+  // are handled here.
   if (e.key === "Escape" && (mode === "active" || mode === "capturing")) {
     setMode("idle");
     return;
@@ -71,7 +74,8 @@ function handleKeyDown(e: KeyboardEvent): void {
     // dismiss the dialog first (it will return to "active" or "idle" on its own).
     if (mode === "idle") {
       setMode("active");
-    } else if (mode === "active") {
+    } else if (mode === "active" || mode === "editing") {
+      // Editing is part of comment mode: the combo exits it back to idle.
       setMode("idle");
     }
   }

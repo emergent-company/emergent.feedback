@@ -240,6 +240,7 @@ func buildSingleItem(sb *strings.Builder, f store.Feedback, level string) {
 		if intent := getMap(env, "intent"); len(intent) > 0 {
 			sb.WriteString("## Intent\n\n")
 			writeIntent(sb, ctx, intent)
+			writeChanges(sb, ctx, "## Requested changes")
 			sb.WriteString("\n")
 		}
 
@@ -307,6 +308,7 @@ func buildMultiItem(sb *strings.Builder, items []store.Feedback, level string) {
 			if intent := getMap(env, "intent"); len(intent) > 0 {
 				sb.WriteString("### Intent\n\n")
 				writeIntent(sb, ctx, intent)
+				writeChanges(sb, ctx, "### Requested changes")
 				sb.WriteString("\n")
 			}
 			writeRepro(sb, ctx, level)
@@ -326,6 +328,7 @@ func buildMultiItem(sb *strings.Builder, items []store.Feedback, level string) {
 // whatToDo generates the "## What to do" sentence from intent:
 // "Change `Component` (`file:line`) so that <expected>. Currently <actual>."
 // Falls back to a selector + comment sentence when intent is absent.
+// Live style edits (intent.changes) are surfaced as a concise clause.
 func whatToDo(ctx map[string]any, env map[string]any, f store.Feedback) string {
 	source := getMap(env, "target", "source")
 	element := getMap(env, "target", "element")
@@ -345,8 +348,12 @@ func whatToDo(ctx map[string]any, env map[string]any, f store.Feedback) string {
 
 	expected := strVal(intent["expected"])
 	actual := strVal(intent["actual"])
+	changes := changeCount(intent)
 
 	if expected == "" && actual == "" {
+		if changes > 0 {
+			return fmt.Sprintf("Apply %d live style change(s) recorded on the selected element(s).", changes)
+		}
 		return fmt.Sprintf("Address the feedback on `%s`: %s", f.Selector, redactSecrets(f.Comment))
 	}
 
@@ -369,6 +376,9 @@ func whatToDo(ctx map[string]any, env map[string]any, f store.Feedback) string {
 	}
 	if actual != "" {
 		fmt.Fprintf(&sb, " Currently %s.", actual)
+	}
+	if changes > 0 {
+		fmt.Fprintf(&sb, " Apply %d live style change(s) recorded on the selected element(s).", changes)
 	}
 	return sb.String()
 }
@@ -456,6 +466,100 @@ func writeIntent(sb *strings.Builder, ctx map[string]any, intent map[string]any)
 			fmt.Fprintf(sb, "- **Scope:** %s [stated]\n", line)
 		}
 	}
+	if targets := targetSelectors(ctx); len(targets) > 1 {
+		fmt.Fprintf(sb, "- **Targets:** %s [captured]\n", strings.Join(targets, ", "))
+	}
+}
+
+// writeChanges renders the live style edits recorded under intent.changes as a
+// bulleted list. Each change is one line:
+//
+//	- `target` — group: `before` → `after`
+//
+// where an empty before is rendered as "(none)". Emits nothing when there are
+// no changes (or when the changes array is absent/malformed).
+func writeChanges(sb *strings.Builder, ctx map[string]any, heading string) {
+	intent := getMap(ctx, "intent")
+	raw, ok := intent["changes"].([]any)
+	if !ok {
+		return
+	}
+	var lines []string
+	for _, v := range raw {
+		c, ok := v.(map[string]any)
+		if !ok {
+			continue
+		}
+		before := strVal(c["before"])
+		if before == "" {
+			before = "(none)"
+		}
+		lines = append(lines, fmt.Sprintf("- `%s` — %s: `%s` → `%s`",
+			mdTickSafe(redactSecrets(strVal(c["target"]))),
+			mdTickSafe(redactSecrets(strVal(c["group"]))),
+			mdTickSafe(redactSecrets(before)),
+			mdTickSafe(redactSecrets(strVal(c["after"]))),
+		))
+	}
+	if len(lines) == 0 {
+		return
+	}
+	sb.WriteString(heading)
+	sb.WriteString("\n\n")
+	for _, l := range lines {
+		sb.WriteString(l)
+		sb.WriteString("\n")
+	}
+	sb.WriteString("\n")
+}
+
+// changeCount returns the number of renderable live style changes recorded on
+// the intent — only entries that are maps, matching what writeChanges renders.
+func changeCount(intent map[string]any) int {
+	arr, ok := intent["changes"].([]any)
+	if !ok {
+		return 0
+	}
+	n := 0
+	for _, v := range arr {
+		if _, ok := v.(map[string]any); ok {
+			n++
+		}
+	}
+	return n
+}
+
+// mdTickSafe neutralizes markdown injection in values interpolated inside an
+// inline-code span: it strips backticks and replaces CR/LF with a space so a
+// hostile value cannot break out of the span or inject lines.
+func mdTickSafe(s string) string {
+	if s == "" {
+		return s
+	}
+	s = strings.ReplaceAll(s, "`", "")
+	s = strings.ReplaceAll(s, "\r", " ")
+	s = strings.ReplaceAll(s, "\n", " ")
+	return s
+}
+
+// targetSelectors returns the selector strings from ctx.targets (the list of
+// selected elements), preserving order.
+func targetSelectors(ctx map[string]any) []string {
+	raw, ok := ctx["targets"].([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(raw))
+	for _, v := range raw {
+		m, ok := v.(map[string]any)
+		if !ok {
+			continue
+		}
+		if s := strVal(m["selector"]); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 func writeRepro(sb *strings.Builder, ctx map[string]any, level string) {

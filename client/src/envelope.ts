@@ -60,6 +60,25 @@ export interface IntentScope {
   targets: string[];
 }
 
+/** One live style edit applied to the page: selector + token group + before→after. */
+export interface StyleChange {
+  /** CSS selector of the element the change was applied to. */
+  target: string;
+  /** Token group id (e.g. "padding", "textColor"). */
+  group: string;
+  /** Previous state (class name or inline style value), empty when none. */
+  before: string;
+  /** Applied state (class name or inline style value). */
+  after: string;
+}
+
+/** A selected element captured for multi-element editing. */
+export interface SelectionTarget {
+  selector: string;
+  tagName: string;
+  dataComponent?: string;
+}
+
 /** Structured human intent — the part competitors never capture. */
 export interface FeedbackIntent {
   kind: "bug" | "enhancement" | "question" | "task";
@@ -69,6 +88,8 @@ export interface FeedbackIntent {
   /** True when the user manually edited the prefilled `actual` value. */
   actualEdited?: boolean;
   scope: IntentScope;
+  /** Live style edits applied by the user before submitting. */
+  changes?: StyleChange[];
 }
 
 /** Machine-checkable "done when" contract. */
@@ -104,6 +125,7 @@ export const TRUST_ORDER: string[] = [
   "target.element.fingerprint",
   "intent.expected",
   "intent.actual",
+  "intent.changes",
   "target.element.selector",
   "visual.screenshot_ref",
   "target.element.computed_styles",
@@ -141,6 +163,8 @@ export function computeProvenance(input: ProvenanceInput): Record<string, Proven
   const actual = input.intent?.actual?.trim();
 
   const expectedState: Provenance = expected ? "stated" : "absent";
+  const changesState: Provenance =
+    input.intent?.changes && input.intent.changes.length > 0 ? "stated" : "absent";
   const actualState: Provenance = actual
     ? input.intent?.actualEdited
       ? "stated"
@@ -152,6 +176,7 @@ export function computeProvenance(input: ProvenanceInput): Record<string, Proven
     "target.element.fingerprint": "captured",
     "intent.expected": expectedState,
     "intent.actual": actualState,
+    "intent.changes": changesState,
     "target.element.selector": "captured",
     "visual.screenshot_ref": input.hasScreenshot ? "captured" : "absent",
     "target.element.computed_styles": "captured",

@@ -300,6 +300,45 @@ No storage change: metadata rides in `context_json` under `context.app`.
 - API keys stored hashed only; repo-scoped; never embedded in issues.
 - Snapshot/screenshot/context served only for exported feedback, within the key's repo scope.
 
+## Live style editing (v5, implemented)
+
+The overlay can dock to the side of the page (non-modal, page undimmed and
+interactive) and let the reporter change **padding** and **colors** on one or
+more selected elements by choosing tokens from a project-provided theme. The
+applied class/style edits are recorded and rendered in the issue and panel.
+
+### Data added to the payload
+
+- `context.targets: SelectionTarget[]` — every selected element
+  (`{ selector, tagName, dataComponent? }`). The primary target's full capture
+  (`context.computedStyles`, `outerHTML`, fingerprint, …) is unchanged.
+- `context.intent.changes: StyleChange[]` — applied edits, where
+  `StyleChange = { target: string; group: string; before: string; after: string }`
+  (`before`/`after` are token class names or style values; `before` may be empty).
+  Scope breadth becomes `multi` when more than one target is selected.
+- Provenance: `intent.changes` is `stated` when non-empty, else `absent`.
+
+No storage schema change — everything rides inside `context_json`.
+
+### Rendering
+
+| Surface | Change |
+|---|---|
+| `client/src/dialog.ts` | docked rail + dock toggle, targets list, token palette, changes summary |
+| `client/src/index.ts` | `editing` mode; picking stays live; commit on save, revert on cancel |
+| `server/handler/issue.go` | `## Requested changes` (`buildSingleItem`) / `### Requested changes` (`buildMultiItem`); `whatToDo` clause |
+| `server/handler/envelope.go` | `buildIntent` surfaces `changes`; `buildTarget` surfaces `targets` |
+| `server/panel/panel.templ` | "Requested changes" list + `Targets (N)` row in `contextSection` |
+
+### Theme token contract
+
+Host app serves JSON at the `data-theme-url` script attribute; the overlay
+validates and normalizes it and falls back to daisyUI `--color-*` variables read
+from the live page plus a built-in spacing scale when absent. See the README
+"Project theme tokens" section for the full manifest schema. Each token applies
+as a class (default) or an inline style; class names, style properties and style
+values are validated and all token text is escaped before rendering.
+
 ## Remaining
 
 - **P2**: user panel (`/panel`) for managing API keys — list user's repos
@@ -307,3 +346,5 @@ No storage change: metadata rides in `context_json` under `context.app`.
 - Snapshot storage: SQLite BLOB is fine to start; S3 when volume grows.
 - Whether `traceId` should also be sent as a GitHub issue label/tag for
   grouping (likely noise — keep it in context only).
+- Live editing: persist applied edits server-side (currently reverted on cancel /
+  session end and kept only when submitted), and expose theme editing in the panel.

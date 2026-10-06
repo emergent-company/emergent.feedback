@@ -214,6 +214,84 @@ func TestBuildEnvelopeNestedRepro(t *testing.T) {
 	}
 }
 
+func TestBuildEnvelopeSurfacesChangesAndTargets(t *testing.T) {
+	ctx := map[string]any{
+		"intent": map[string]any{
+			"changes": []any{
+				map[string]any{"target": "main > section > button.cta", "group": "padding", "before": "p-2", "after": "p-4"},
+				map[string]any{"target": "main > section > button.cta", "group": "backgroundColor", "before": "", "after": "bg-primary"},
+			},
+		},
+		"targets": []any{
+			map[string]any{"selector": "main > section > button.cta", "tagName": "button", "dataComponent": "CTA"},
+		},
+	}
+	ctxJSON, _ := json.Marshal(ctx)
+	f := store.Feedback{ID: 42, ContextJSON: string(ctxJSON), Selector: "button.cta", Comment: "x"}
+
+	env := BuildEnvelope(f)
+
+	intent := getMap(env, "intent")
+	changes, ok := intent["changes"].([]any)
+	if !ok || len(changes) != 2 {
+		t.Fatalf("intent.changes = %v, want 2 changes", intent["changes"])
+	}
+	c0, ok := changes[0].(map[string]any)
+	if !ok {
+		t.Fatalf("changes[0] not an object: %v", changes[0])
+	}
+	if c0["target"] != "main > section > button.cta" || c0["after"] != "p-4" {
+		t.Fatalf("changes[0] = %v", c0)
+	}
+	c1, ok := changes[1].(map[string]any)
+	if !ok || c1["before"] != "" || c1["after"] != "bg-primary" {
+		t.Fatalf("changes[1] = %v", changes[1])
+	}
+
+	targets, ok := getMap(env, "target")["targets"].([]any)
+	if !ok || len(targets) != 1 {
+		t.Fatalf("target.targets = %v, want 1 target", getMap(env, "target")["targets"])
+	}
+	t0, ok := targets[0].(map[string]any)
+	if !ok || t0["selector"] != "main > section > button.cta" {
+		t.Fatalf("targets[0] = %v", targets[0])
+	}
+}
+
+func TestTrustOrderIncludesIntentChanges(t *testing.T) {
+	var idxActual, idxChanges, idxSelector = -1, -1, -1
+	for i, k := range trustOrder {
+		switch k {
+		case "intent.actual":
+			idxActual = i
+		case "intent.changes":
+			idxChanges = i
+		case "target.element.selector":
+			idxSelector = i
+		}
+	}
+	if idxChanges < 0 {
+		t.Fatalf("trustOrder missing intent.changes: %v", trustOrder)
+	}
+	// Must sit after intent.actual and before target.element.selector,
+	// matching the client TRUST_ORDER.
+	if idxActual >= idxChanges || idxChanges >= idxSelector {
+		t.Fatalf("intent.changes mispositioned in trustOrder: %v", trustOrder)
+	}
+}
+
+func TestProvenanceBadgeIntentChanges(t *testing.T) {
+	ctx := map[string]any{
+		"intent": map[string]any{"changes": []any{map[string]any{"after": "p-4"}}},
+	}
+	if got := provenanceBadge(ctx, "intent.changes", false); got != "stated" {
+		t.Fatalf("provenanceBadge(intent.changes) = %q, want stated", got)
+	}
+	if got := provenanceBadge(map[string]any{"intent": map[string]any{"changes": []any{}}}, "intent.changes", false); got != "absent" {
+		t.Fatalf("provenanceBadge(intent.changes empty) = %q, want absent", got)
+	}
+}
+
 func TestBuildEnvelopeReproTopLevelFallback(t *testing.T) {
 	ctx := map[string]any{
 		"steps":   []any{"Legacy step"},

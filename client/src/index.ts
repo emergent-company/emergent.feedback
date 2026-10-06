@@ -23,7 +23,21 @@ import {
   type Verification,
   type ElementFingerprint,
   type SourceRef,
+  type SelectionTarget,
 } from "./envelope";
+import { loadTokens } from "./tokens";
+import {
+  addTarget as addSelectionTarget,
+  toggleTarget as toggleSelectionTarget,
+  pickTarget as pickSelectionTarget,
+  getTargets as getSelectionTargets,
+  getChanges as getSelectionChanges,
+  clear as clearSelection,
+  revertAll as revertSelection,
+  commit as commitSelection,
+  handleHover as handleSelectionHover,
+  isPickMode,
+} from "./selection";
 import { redactText, redactAttributes, redactElementHTML } from "./redact";
 import { startConsoleCapture, getConsoleErrors } from "./console";
 import { startVerifyLoop, stopVerifyLoop } from "./verify";
@@ -59,10 +73,16 @@ import { initTheme, onThemeChange, applyTheme } from "./theme";
   // ── Mode transitions ────────────────────────────────────────────────────────
   onModeChange(async (mode) => {
     if (mode === "active") {
+      // Warm the theme-token cache so the first click opens instantly.
+      void loadTokens(config);
       showIndicator(config.hotkey);
       activateOverlay();
       startVerifyLoop(api);
       startReporterNotify(api);
+    } else if (mode === "editing") {
+      // Comment mode with the docked panel open: listeners stay attached so the
+      // user can keep picking elements.
+      hideIndicator();
     } else if (mode === "idle") {
       hideIndicator();
       deactivateOverlay();
@@ -96,6 +116,10 @@ import { initTheme, onThemeChange, applyTheme } from "./theme";
     document.removeEventListener("click", onElementClick, true);
     clearHighlight();
     clearBadges();
+    // Undo live edits unless they were already committed via save/export
+    // (commitSelection clears the applied list, so this becomes a no-op).
+    revertSelection();
+    clearSelection();
     closeDialog();
   }
 
@@ -104,15 +128,28 @@ import { initTheme, onThemeChange, applyTheme } from "./theme";
     const target = e.target as Element;
     if (!target || target === document.body || target === document.documentElement) return;
     if (isOwnElement(target)) return;
-    highlight(target);
+    if (getMode() === "editing") {
+      handleSelectionHover(target);
+    } else {
+      highlight(target);
+    }
   }
 
+  /** True for the overlay's own chrome (never a capture target). */
   function isOwnElement(el: Element): boolean {
-    return el.id.startsWith("__ef_");
+    if (el.id && el.id.startsWith("__ef_")) return true;
+    return !!el.closest?.(
+      '#__ef_dialog__, #__ef_highlight__, #__ef_tooltip__, #__ef_toast__, #__ef_indicator__, [id^="__ef_badge__"]'
+    );
   }
 
-  // ── Shared: open feedback dialog for an element ─────────────────────────────
-  async function openFeedbackDialog(target: Element): Promise<void> {
+  /** Nearest data-component name for an element (used for target labels). */
+  function nearestComponentName(el: Element): string | undefined {
+    return el.closest("[data-component]")?.getAttribute("data-component") ?? undefined;
+  }
+
+  // ── Shared: open the (docked) editor for a first target ─────────────────────
+  async function openEditor(target: Element): Promise<void> {
     const selector = buildSelector(target);
     const context = gatherContext(target);
     const rawHierarchy = gatherComponentHierarchy(target);
@@ -141,11 +178,24 @@ import { initTheme, onThemeChange, applyTheme } from "./theme";
 
     const user = auth.getUser()!;
 
-    // Fetch existing comments for this element.
+    // Fetch existing comments for the primary element.
     const allComments = await api.listComments(window.location.href).catch(() => []);
     const existingComments = allComments.filter((c) => c.selector === selector);
 
-    forceMode("commenting");
+    const tokens = await loadTokens(config);
+
+    // Seed the multi-select set with the clicked element (revert any edits
+    // left over from a previous target so the page is clean).
+    revertSelection();
+    clearSelection();
+    addSelectionTarget(target, selector, nearestComponentName(target));
+
+    forceMode("editing");
+    // Re-attach pick listeners for the editing session (page stays interactive
+    // everywhere except the docked rail).
+    document.body.style.cursor = "crosshair";
+    document.addEventListener("mouseover", onMouseOver, true);
+    document.addEventListener("click", onElementClick, true);
 
     // Build the default issue title. Prefer data-component over the CSS selector.
     const dataComponent = context["dataComponent"] as string | undefined;
@@ -170,17 +220,27 @@ import { initTheme, onThemeChange, applyTheme } from "./theme";
       selectedComponentIdx,
       onComponentChange: (idx) => {
         closeDialog();
-        openFeedbackDialog(rawHierarchy[idx].element);
+        openEditor(rawHierarchy[idx].element);
       },
+      tokens,
+      getTargets: getSelectionTargets,
+      getChanges: () => getSelectionChanges(),
       onSubmit: async (comment, type: FeedbackType, intent: FeedbackIntent) => {
         const screenshot = await captureElement(target);
         const snapshot = captureSnapshot();
         const replay = config.replay ? await getReplayPayloadAsync() : undefined;
+        // All targets ride along in the context; applied edits ride in intent.changes.
+        const targets: SelectionTarget[] = getSelectionTargets().map((t) => ({
+          selector: t.selector,
+          tagName: t.el.tagName.toLowerCase(),
+          ...(t.dataComponent ? { dataComponent: t.dataComponent } : {}),
+        }));
         // intent/explanation/provenance are only known at submit time — merge
         // them into the capture-time context before shipping.
         const contextWithIntent = {
           ...context,
           intent,
+          targets,
           explanation: scoreExplanation(comment, intent),
           provenance: computeProvenance({
             intent,
@@ -207,7 +267,8 @@ import { initTheme, onThemeChange, applyTheme } from "./theme";
           snapshot,
           ...(replay ? { replay } : {}),
         });
-        // Refresh badges, return to active mode.
+        // Keep the applied edits on the page; stop tracking them.
+        commitSelection();
         await refreshBadges();
         forceMode("active");
         return result.id;
@@ -220,16 +281,15 @@ import { initTheme, onThemeChange, applyTheme } from "./theme";
           title: issueTopic,
         });
         showToast("Issue created successfully!");
-        // Refresh badges after export.
+        commitSelection();
         await refreshBadges();
         forceMode("active");
       },
       onCancel: () => {
+        // Drop live edits + selection, then return to comment mode.
+        revertSelection();
+        clearSelection();
         forceMode("active");
-        // Re-attach listeners since mode was already "active".
-        document.body.style.cursor = "crosshair";
-        document.addEventListener("mouseover", onMouseOver, true);
-        document.addEventListener("click", onElementClick, true);
       },
     });
   }
@@ -242,17 +302,31 @@ import { initTheme, onThemeChange, applyTheme } from "./theme";
     e.preventDefault();
     e.stopPropagation();
 
-    if (getMode() !== "active") return;
+    const mode = getMode();
 
-    try {
-      await openFeedbackDialog(target);
-    } catch (err) {
-      // Never leave the page stuck in capture/comment mode on an unexpected error.
-      console.error("[emergent.feedback] failed to open feedback dialog:", err);
-      forceMode("active");
-      document.body.style.cursor = "crosshair";
-      document.addEventListener("mouseover", onMouseOver, true);
-      document.addEventListener("click", onElementClick, true);
+    if (mode === "active") {
+      try {
+        await openEditor(target);
+      } catch (err) {
+        // Never leave the page stuck in capture/comment mode on an unexpected error.
+        console.error("[emergent.feedback] failed to open feedback dialog:", err);
+        forceMode("active");
+        document.body.style.cursor = "crosshair";
+        document.addEventListener("mouseover", onMouseOver, true);
+        document.addEventListener("click", onElementClick, true);
+      }
+      return;
+    }
+
+    if (mode === "editing") {
+      // Picking more elements extends the selection; a plain click toggles.
+      const selector = buildSelector(target);
+      const dataComponent = nearestComponentName(target);
+      if (isPickMode()) {
+        pickSelectionTarget(target, selector, dataComponent);
+      } else {
+        toggleSelectionTarget(target, selector, dataComponent);
+      }
     }
   }
 
@@ -262,7 +336,7 @@ import { initTheme, onThemeChange, applyTheme } from "./theme";
     let el: Element | null = null;
     try { el = document.querySelector(selector); } catch {}
     if (el) {
-      openFeedbackDialog(el);
+      openEditor(el);
     }
   }
 
