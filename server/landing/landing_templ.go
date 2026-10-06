@@ -14,10 +14,12 @@ import (
 )
 
 // LandingPage is the public commercial one-pager served at "/".
-// Server-rendered with go-daisy components on the Scalo theme (built from the
-// purchased Scalo daisyUI 5 template). go-daisy's app.css provides the base;
-// scalo.css layers the Scalo theme + custom components on top. The overlay
-// itself is loaded at the very bottom so visitors can try it live on this page.
+// Server-rendered with go-daisy components, themed by the shared Memory brand
+// theme (`memory` dark / `memory-light`). The Scalo template is the markup
+// source; its sections are re-implemented in templ. go-daisy's app.css provides
+// the base; theme.css layers the Memory palette + custom components on top. The
+// overlay itself is loaded at the very bottom so visitors can try it live on
+// this page.
 //
 // Layout note: every top-level section (nav, hero, sections, footer) uses the
 // same `mx-auto w-full max-w-6xl px-4` content column so the page reads as one
@@ -43,15 +45,15 @@ func LandingPage(version string) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<!doctype html><html lang=\"en\" data-theme=\"scalo\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<!doctype html><html lang=\"en\" data-theme=\"memory\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = theme.Head(theme.Config{Light: "scalo-light", Dark: "scalo"}).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = theme.Head(theme.Config{Light: "memory-light", Dark: "memory"}).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<title>emergent.feedback</title><meta name=\"description\" content=\"emergent.feedback turns vague bug reports into fully-contextual GitHub issues. Drop in one script tag, hold the hotkey, click the broken element, and the exact selector, environment and screenshot land in GitHub.\"><link rel=\"stylesheet\" href=\"/static/css/app.css\"><link rel=\"stylesheet\" href=\"/static/css/scalo.css\"></head><body class=\"min-h-screen bg-base-100 text-base-content antialiased\"><!-- ── Nav ─────────────────────────────────────────────────────────── --><header class=\"sticky top-0 z-30 border-b border-base-300/60 bg-base-100/80 backdrop-blur\"><div class=\"mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-3\"><a href=\"/\" class=\"flex items-center gap-2\"><span class=\"grid size-7 place-items-center rounded-lg bg-primary\" aria-hidden=\"true\"><span class=\"size-3 rounded-[3px] bg-primary-content\"></span></span> <span class=\"text-sm font-semibold tracking-tight\">emergent.feedback</span></a><nav class=\"hidden items-center gap-1 lg:flex\" aria-label=\"Primary\"><a href=\"#how-it-works\" class=\"btn btn-ghost btn-sm\">How it works</a> <a href=\"#what-it-captures\" class=\"btn btn-ghost btn-sm\">What it captures</a> <a href=\"#mcp\" class=\"btn btn-ghost btn-sm\">MCP</a> <a href=\"#pricing\" class=\"btn btn-ghost btn-sm\">Pricing</a> <a href=\"#self-host\" class=\"btn btn-ghost btn-sm\">Self-host</a></nav><div class=\"flex items-center gap-2\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<title>emergent.feedback</title><meta name=\"description\" content=\"emergent.feedback turns vague bug reports into fully-contextual GitHub issues. Drop in one script tag, hold the hotkey, click the broken element, and the exact selector, environment and screenshot land in GitHub.\"><link rel=\"stylesheet\" href=\"/static/css/app.css\"><link rel=\"stylesheet\" href=\"/static/css/theme.css\"></head><body class=\"min-h-screen bg-base-100 text-base-content antialiased\"><!-- ── Nav ─────────────────────────────────────────────────────────── --><header class=\"sticky top-0 z-30 border-b border-base-300/60 bg-base-100/80 backdrop-blur\"><div class=\"mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-3\"><a href=\"/\" class=\"flex items-center gap-2\"><span class=\"grid size-7 place-items-center rounded-lg bg-primary\" aria-hidden=\"true\"><span class=\"size-3 rounded-[3px] bg-primary-content\"></span></span> <span class=\"text-sm font-semibold tracking-tight\">emergent.feedback</span></a><nav class=\"hidden items-center gap-1 lg:flex\" aria-label=\"Primary\"><a href=\"#how-it-works\" class=\"btn btn-ghost btn-sm\">How it works</a> <a href=\"#what-it-captures\" class=\"btn btn-ghost btn-sm\">What it captures</a> <a href=\"#mcp\" class=\"btn btn-ghost btn-sm\">MCP</a> <a href=\"#pricing\" class=\"btn btn-ghost btn-sm\">Pricing</a> <a href=\"#self-host\" class=\"btn btn-ghost btn-sm\">Self-host</a></nav><div class=\"flex items-center gap-2\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -92,7 +94,7 @@ func LandingPage(version string) templ.Component {
 		var templ_7745c5c3_Var3 string
 		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs("button[data-component=\"checkout\"]")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `server/landing/landing.templ`, Line: 185, Col: 50}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `server/landing/landing.templ`, Line: 187, Col: 50}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 		if templ_7745c5c3_Err != nil {
@@ -347,7 +349,7 @@ func LandingPage(version string) templ.Component {
   }
 }`)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `server/landing/landing.templ`, Line: 584, Col: 2}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `server/landing/landing.templ`, Line: 586, Col: 2}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 		if templ_7745c5c3_Err != nil {
@@ -367,7 +369,7 @@ func LandingPage(version string) templ.Component {
   }
 }`)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `server/landing/landing.templ`, Line: 602, Col: 2}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `server/landing/landing.templ`, Line: 604, Col: 2}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 		if templ_7745c5c3_Err != nil {
@@ -548,7 +550,7 @@ func LandingPage(version string) templ.Component {
 		var templ_7745c5c3_Var19 string
 		templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs("<script src=\"https://feedback.your-domain.com/emergent-feedback.js\" data-api=\"https://feedback.your-domain.com\" data-repo=\"owner/repo\" async></script>")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `server/landing/landing.templ`, Line: 708, Col: 202}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `server/landing/landing.templ`, Line: 710, Col: 202}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 		if templ_7745c5c3_Err != nil {
@@ -561,7 +563,7 @@ func LandingPage(version string) templ.Component {
 		var templ_7745c5c3_Var20 string
 		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(version)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `server/landing/landing.templ`, Line: 759, Col: 73}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `server/landing/landing.templ`, Line: 761, Col: 73}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 		if templ_7745c5c3_Err != nil {

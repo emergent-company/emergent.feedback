@@ -6,25 +6,27 @@ import (
 )
 
 // LandingPage is the public commercial one-pager served at "/".
-// Server-rendered with go-daisy components on the Scalo theme (built from the
-// purchased Scalo daisyUI 5 template). go-daisy's app.css provides the base;
-// scalo.css layers the Scalo theme + custom components on top. The overlay
-// itself is loaded at the very bottom so visitors can try it live on this page.
+// Server-rendered with go-daisy components, themed by the shared Memory brand
+// theme (`memory` dark / `memory-light`). The Scalo template is the markup
+// source; its sections are re-implemented in templ. go-daisy's app.css provides
+// the base; theme.css layers the Memory palette + custom components on top. The
+// overlay itself is loaded at the very bottom so visitors can try it live on
+// this page.
 //
 // Layout note: every top-level section (nav, hero, sections, footer) uses the
 // same `mx-auto w-full max-w-6xl px-4` content column so the page reads as one
 // aligned grid. Inner prose is narrowed independently (max-w-2xl / 3xl).
 templ LandingPage(version string) {
 	<!DOCTYPE html>
-	<html lang="en" data-theme="scalo">
+	<html lang="en" data-theme="memory">
 	<head>
 		<meta charset="UTF-8"/>
 		<meta name="viewport" content="width=device-width, initial-scale=1"/>
-		@theme.Head(theme.Config{Light: "scalo-light", Dark: "scalo"})
+		@theme.Head(theme.Config{Light: "memory-light", Dark: "memory"})
 		<title>emergent.feedback</title>
 		<meta name="description" content="emergent.feedback turns vague bug reports into fully-contextual GitHub issues. Drop in one script tag, hold the hotkey, click the broken element, and the exact selector, environment and screenshot land in GitHub."/>
 		<link rel="stylesheet" href="/static/css/app.css"/>
-		<link rel="stylesheet" href="/static/css/scalo.css"/>
+		<link rel="stylesheet" href="/static/css/theme.css"/>
 	</head>
 	<body class="min-h-screen bg-base-100 text-base-content antialiased">
 		<!-- ── Nav ─────────────────────────────────────────────────────────── -->

@@ -8,11 +8,11 @@ const BAR_ID = "__ef_indicator__";
 const STYLES = `
 #${BAR_ID} {
   /* Theme tokens — the activation bar is intentionally dark in both themes. */
-  --ef-bar-bg: rgba(17, 24, 39, 0.92);
-  --ef-bar-accent: #22c55e;
-  --ef-bar-text: #f9fafb;
-  --ef-bar-key-bg: rgba(255,255,255,0.12);
-  --ef-bar-key-border: rgba(255,255,255,0.22);
+  --ef-bar-bg: oklch(0.215 0.016 274 / 0.92);
+  --ef-bar-accent: oklch(0.76 0.15 162);
+  --ef-bar-text: oklch(0.93 0.008 265);
+  --ef-bar-key-bg: oklch(0.93 0.008 265 / 0.12);
+  --ef-bar-key-border: oklch(0.93 0.008 265 / 0.22);
   all: initial;
   position: fixed;
   top: 0;
@@ -58,7 +58,7 @@ const STYLES = `
 }
 html[data-ef-theme="dark"] #${BAR_ID},
 #${BAR_ID}[data-ef-theme="dark"] {
-  --ef-bar-bg: rgba(10, 13, 20, 0.94);
+  --ef-bar-bg: oklch(0.175 0.014 274 / 0.94);
 }
 @keyframes ef-pulse {
   0%, 100% { opacity: 1; }

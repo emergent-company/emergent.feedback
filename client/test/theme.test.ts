@@ -101,6 +101,14 @@ test("auto detects a Tailwind-style dark class on html/body", () => {
   assert.equal(resolveTheme(cfg("auto")), "light");
 });
 
+test("emergent.memory data-theme names resolve to the correct theme", () => {
+  installDOM({ html: fakeEl({ attrs: { "data-theme": "memory" } }), systemDark: false });
+  assert.equal(resolveTheme(cfg("auto")), "dark");
+
+  installDOM({ html: fakeEl({ attrs: { "data-theme": "memory-light" } }), systemDark: true });
+  assert.equal(resolveTheme(cfg("auto")), "light");
+});
+
 test("auto detects host background luminance", () => {
   installDOM({ html: fakeEl({ bg: "rgb(18,18,20)" }), systemDark: false });
   assert.equal(resolveTheme(cfg("auto")), "dark");

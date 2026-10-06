@@ -35,10 +35,10 @@ tasks:
     cmds:
       - npm run watch
 
-  # ── Landing CSS ─────────────────────────────────────────────────────────────
+  # ── Theme CSS ───────────────────────────────────────────────────────────────
 
   build:css:
-    desc: "Build the Scalo landing CSS (minified)"
+    desc: "Build the Memory brand theme CSS (minified)"
     dir: landing
     cmds:
       - npm install
@@ -48,7 +48,7 @@ tasks:
       - package.json
       - package-lock.json
     generates:
-      - ../server/app/static/css/scalo.css
+      - ../server/app/static/css/theme.css
 
   # ── Server ──────────────────────────────────────────────────────────────────
 
@@ -74,7 +74,7 @@ tasks:
       - server/**/*.go
       - server/app/static/emergent-feedback.js
       - server/app/static/emergent-feedback-replay.js
-      - server/app/static/css/scalo.css
+      - server/app/static/css/theme.css
       - go.mod
       - go.sum
     generates:

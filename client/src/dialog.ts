@@ -55,53 +55,55 @@ function injectStyles(): void {
       /* Theme tokens — light defaults; overridden under [data-ef-theme="dark"].
          Scoped to the overlay root so nothing leaks into the host page. */
       --ef-backdrop: rgba(0,0,0,0.55);
-      --ef-card-bg: #ffffff;
+      --ef-card-bg: oklch(1 0 0);
       --ef-card-shadow: 0 12px 48px rgba(0,0,0,0.28);
-      --ef-border: #e8e8e8;
-      --ef-border-subtle: #f2f2f2;
-      --ef-control-border: #dddddd;
-      --ef-input-border: #cccccc;
-      --ef-heading: #0f0f0f;
-      --ef-text: #222222;
-      --ef-text-soft: #333333;
-      --ef-text-strong: #111111;
-      --ef-muted: #767676;
-      --ef-muted-strong: #555555;
-      --ef-muted-soft: #666666;
-      --ef-chip-fg: #444444;
-      --ef-surface: #fafafa;
-      --ef-surface-alt: #f2f2f2;
-      --ef-surface-select: #f7f7f7;
-      --ef-control-bg: #ffffff;
-      --ef-hover-bg: #fafafa;
-      --ef-control-border-hover: #bbbbbb;
-      --ef-btn-secondary-bg: #efefef;
-      --ef-btn-secondary-hover-bg: #e0e0e0;
-      --ef-btn-secondary-text: #222222;
-      --ef-btn-export-bg: #1a1a1a;
-      --ef-btn-export-hover-bg: #333333;
-      --ef-btn-export-text: #ffffff;
-      --ef-btn-export-disabled-bg: #888888;
-      --ef-primary: #4f86f7;
-      --ef-primary-hover: #3a6fd8;
-      --ef-primary-disabled: #a0baf7;
-      --ef-focus-ring: rgba(79,134,247,0.15);
-      --ef-focus-ring-input: rgba(79,134,247,0.12);
-      --ef-focus-ring-chip: rgba(79,134,247,0.2);
-      --ef-chip-on-bg: #eef3ff;
-      --ef-chip-on-text: #2b5fd0;
-      --ef-error: #c53030;
-      --ef-accent: #d97706;
-      --ef-accent-soft: rgba(217,119,6,0.12);
-      --ef-swatch-checker: #e6e6e6;
-      --ef-swatch-border: rgba(0,0,0,0.15);
-      --ef-code-bg: #1e1e2e;
-      --ef-code-border: #313149;
-      --ef-code-text: #cdd6f4;
-      --ef-bug-bg: #fff0f0;
-      --ef-bug: #d73a4a;
-      --ef-enh-bg: #f0fbff;
-      --ef-enh: #0969da;
+      --ef-border: oklch(0.93 0.006 274);
+      --ef-border-subtle: oklch(0.975 0.004 274);
+      --ef-control-border: color-mix(in oklab, oklch(0.93 0.006 274) 80%, oklch(0.30 0.018 274) 20%);
+      --ef-input-border: color-mix(in oklab, oklch(0.93 0.006 274) 68%, oklch(0.30 0.018 274) 32%);
+      --ef-heading: oklch(0.30 0.018 274);
+      --ef-text: color-mix(in oklab, oklch(0.30 0.018 274) 85%, oklch(1 0 0) 15%);
+      --ef-text-soft: color-mix(in oklab, oklch(0.30 0.018 274) 76%, oklch(1 0 0) 24%);
+      --ef-text-strong: color-mix(in oklab, oklch(0.30 0.018 274) 92%, oklch(1 0 0) 8%);
+      --ef-muted: color-mix(in oklab, oklch(0.30 0.018 274) 40%, oklch(1 0 0) 60%);
+      --ef-muted-strong: color-mix(in oklab, oklch(0.30 0.018 274) 55%, oklch(1 0 0) 45%);
+      --ef-muted-soft: color-mix(in oklab, oklch(0.30 0.018 274) 50%, oklch(1 0 0) 50%);
+      --ef-chip-fg: color-mix(in oklab, oklch(0.30 0.018 274) 65%, oklch(1 0 0) 35%);
+      --ef-surface: oklch(0.975 0.004 274);
+      --ef-surface-alt: oklch(0.93 0.006 274);
+      --ef-surface-select: oklch(0.975 0.004 274);
+      --ef-control-bg: oklch(1 0 0);
+      --ef-hover-bg: oklch(0.975 0.004 274);
+      --ef-control-border-hover: color-mix(in oklab, oklch(0.93 0.006 274) 55%, oklch(0.30 0.018 274) 45%);
+      --ef-btn-secondary-bg: oklch(0.975 0.004 274);
+      --ef-btn-secondary-hover-bg: oklch(0.93 0.006 274);
+      --ef-btn-secondary-text: oklch(0.30 0.018 274);
+      --ef-btn-export-bg: oklch(0.60 0.12 78);
+      --ef-btn-export-hover-bg: oklch(0.56 0.115 78);
+      --ef-btn-export-text: oklch(0.99 0.01 78);
+      --ef-btn-export-disabled-bg: color-mix(in oklab, oklch(0.60 0.12 78) 45%, oklch(1 0 0) 55%);
+      --ef-primary: oklch(0.60 0.12 78);
+      --ef-primary-hover: oklch(0.56 0.115 78);
+      --ef-primary-disabled: color-mix(in oklab, oklch(0.60 0.12 78) 45%, oklch(1 0 0) 55%);
+      --ef-primary-content: oklch(0.2 0.04 78);
+      --ef-focus-ring: oklch(0.60 0.12 78 / 0.15);
+      --ef-focus-ring-input: oklch(0.60 0.12 78 / 0.12);
+      --ef-focus-ring-chip: oklch(0.60 0.12 78 / 0.2);
+      --ef-chip-on-bg: color-mix(in oklab, oklch(0.60 0.12 78) 15%, oklch(1 0 0) 85%);
+      --ef-chip-on-text: oklch(0.50 0.115 78);
+      --ef-error: oklch(0.55 0.19 26);
+      --ef-accent: oklch(0.58 0.13 162);
+      --ef-accent-content: oklch(0.17 0.04 162);
+      --ef-accent-soft: oklch(0.58 0.13 162 / 0.12);
+      --ef-swatch-checker: oklch(0.93 0.006 274);
+      --ef-swatch-border: oklch(0.30 0.018 274 / 0.15);
+      --ef-code-bg: oklch(0.135 0.012 274);
+      --ef-code-border: oklch(0.175 0.014 274);
+      --ef-code-text: oklch(0.93 0.008 265);
+      --ef-bug-bg: color-mix(in oklab, oklch(0.55 0.19 26) 12%, oklch(1 0 0) 88%);
+      --ef-bug: oklch(0.55 0.19 26);
+      --ef-enh-bg: color-mix(in oklab, oklch(0.52 0.12 240) 12%, oklch(1 0 0) 88%);
+      --ef-enh: oklch(0.52 0.12 240);
       position: fixed;
       inset: 0;
       z-index: 2147483647;
@@ -290,7 +292,7 @@ function injectStyles(): void {
       font-family: inherit;
       transition: background 0.12s;
     }
-    #__ef_dialog__ .ef-btn-primary { background: var(--ef-primary); color: #fff; }
+    #__ef_dialog__ .ef-btn-primary { background: var(--ef-primary); color: var(--ef-primary-content); }
     #__ef_dialog__ .ef-btn-primary:hover { background: var(--ef-primary-hover); }
     #__ef_dialog__ .ef-btn-primary:disabled { background: var(--ef-primary-disabled); cursor: default; }
     #__ef_dialog__ .ef-btn-secondary { background: var(--ef-btn-secondary-bg); color: var(--ef-btn-secondary-text); }
@@ -714,7 +716,7 @@ function injectStyles(): void {
       line-height: 16px;
       text-align: center;
       background: var(--ef-accent);
-      color: #fff;
+      color: var(--ef-accent-content);
       border-radius: 8px;
       font-size: 10px;
       font-weight: 700;
@@ -944,53 +946,55 @@ function injectStyles(): void {
     html[data-ef-theme="dark"] #__ef_dialog__,
     #__ef_dialog__[data-ef-theme="dark"] {
       --ef-backdrop: rgba(0,0,0,0.68);
-      --ef-card-bg: #1c1f26;
+      --ef-card-bg: oklch(0.215 0.016 274);
       --ef-card-shadow: 0 12px 48px rgba(0,0,0,0.6);
-      --ef-border: #333944;
-      --ef-border-subtle: #2a2f38;
-      --ef-control-border: #3a424f;
-      --ef-input-border: #3a424f;
-      --ef-heading: #f2f4f7;
-      --ef-text: #dde1e7;
-      --ef-text-soft: #c3c8d0;
-      --ef-text-strong: #f2f4f7;
-      --ef-muted: #9aa3b0;
-      --ef-muted-strong: #b6bdc8;
-      --ef-muted-soft: #9aa3b0;
-      --ef-chip-fg: #c3c8d0;
-      --ef-surface: #22262e;
-      --ef-surface-alt: #282d36;
-      --ef-surface-select: #22262e;
-      --ef-control-bg: #24272d;
-      --ef-hover-bg: #2b303a;
-      --ef-control-border-hover: #4a5361;
-      --ef-btn-secondary-bg: #2a2f38;
-      --ef-btn-secondary-hover-bg: #333a45;
-      --ef-btn-secondary-text: #e6e9ee;
-      --ef-btn-export-bg: #eef1f5;
-      --ef-btn-export-hover-bg: #ffffff;
-      --ef-btn-export-text: #16181d;
-      --ef-btn-export-disabled-bg: #4a505b;
-      --ef-primary: #5b8def;
-      --ef-primary-hover: #6f9cf2;
-      --ef-primary-disabled: #33415c;
-      --ef-focus-ring: rgba(91,141,239,0.25);
-      --ef-focus-ring-input: rgba(91,141,239,0.2);
-      --ef-focus-ring-chip: rgba(91,141,239,0.3);
-      --ef-chip-on-bg: #23324f;
-      --ef-chip-on-text: #9dc0ff;
-      --ef-error: #ff6b6b;
-      --ef-accent: #fbbf24;
-      --ef-accent-soft: rgba(251,191,36,0.16);
-      --ef-swatch-checker: #3a424f;
-      --ef-swatch-border: rgba(255,255,255,0.18);
-      --ef-code-bg: #14161c;
-      --ef-code-border: #3b4152;
-      --ef-code-text: #cdd6f4;
-      --ef-bug-bg: #3a2226;
-      --ef-bug: #ff8a94;
-      --ef-enh-bg: #12293d;
-      --ef-enh: #6cb6ff;
+      --ef-border: oklch(0.135 0.012 274);
+      --ef-border-subtle: oklch(0.175 0.014 274);
+      --ef-control-border: color-mix(in oklab, oklch(0.135 0.012 274) 75%, oklch(0.93 0.008 265) 25%);
+      --ef-input-border: color-mix(in oklab, oklch(0.135 0.012 274) 70%, oklch(0.93 0.008 265) 30%);
+      --ef-heading: oklch(0.93 0.008 265);
+      --ef-text: color-mix(in oklab, oklch(0.93 0.008 265) 90%, oklch(0.215 0.016 274) 10%);
+      --ef-text-soft: color-mix(in oklab, oklch(0.93 0.008 265) 80%, oklch(0.215 0.016 274) 20%);
+      --ef-text-strong: oklch(0.93 0.008 265);
+      --ef-muted: color-mix(in oklab, oklch(0.93 0.008 265) 40%, oklch(0.215 0.016 274) 60%);
+      --ef-muted-strong: color-mix(in oklab, oklch(0.93 0.008 265) 55%, oklch(0.215 0.016 274) 45%);
+      --ef-muted-soft: color-mix(in oklab, oklch(0.93 0.008 265) 50%, oklch(0.215 0.016 274) 50%);
+      --ef-chip-fg: color-mix(in oklab, oklch(0.93 0.008 265) 65%, oklch(0.215 0.016 274) 35%);
+      --ef-surface: oklch(0.175 0.014 274);
+      --ef-surface-alt: oklch(0.175 0.014 274);
+      --ef-surface-select: oklch(0.175 0.014 274);
+      --ef-control-bg: oklch(0.215 0.016 274);
+      --ef-hover-bg: oklch(0.175 0.014 274);
+      --ef-control-border-hover: color-mix(in oklab, oklch(0.135 0.012 274) 55%, oklch(0.93 0.008 265) 45%);
+      --ef-btn-secondary-bg: oklch(0.175 0.014 274);
+      --ef-btn-secondary-hover-bg: oklch(0.135 0.012 274);
+      --ef-btn-secondary-text: oklch(0.93 0.008 265);
+      --ef-btn-export-bg: oklch(0.74 0.135 78);
+      --ef-btn-export-hover-bg: oklch(0.79 0.14 78);
+      --ef-btn-export-text: oklch(0.2 0.04 78);
+      --ef-btn-export-disabled-bg: color-mix(in oklab, oklch(0.74 0.135 78) 35%, oklch(0.215 0.016 274) 65%);
+      --ef-primary: oklch(0.74 0.135 78);
+      --ef-primary-hover: oklch(0.79 0.14 78);
+      --ef-primary-disabled: color-mix(in oklab, oklch(0.74 0.135 78) 35%, oklch(0.215 0.016 274) 65%);
+      --ef-primary-content: oklch(0.2 0.04 78);
+      --ef-focus-ring: oklch(0.74 0.135 78 / 0.25);
+      --ef-focus-ring-input: oklch(0.74 0.135 78 / 0.2);
+      --ef-focus-ring-chip: oklch(0.74 0.135 78 / 0.3);
+      --ef-chip-on-bg: color-mix(in oklab, oklch(0.74 0.135 78) 20%, oklch(0.215 0.016 274) 80%);
+      --ef-chip-on-text: oklch(0.82 0.14 78);
+      --ef-error: oklch(0.63 0.2 26);
+      --ef-accent: oklch(0.76 0.15 162);
+      --ef-accent-content: oklch(0.17 0.04 162);
+      --ef-accent-soft: oklch(0.76 0.15 162 / 0.16);
+      --ef-swatch-checker: oklch(0.135 0.012 274);
+      --ef-swatch-border: oklch(0.93 0.008 265 / 0.18);
+      --ef-code-bg: oklch(0.135 0.012 274);
+      --ef-code-border: color-mix(in oklab, oklch(0.135 0.012 274) 70%, oklch(0.93 0.008 265) 30%);
+      --ef-code-text: oklch(0.93 0.008 265);
+      --ef-bug-bg: color-mix(in oklab, oklch(0.63 0.2 26) 20%, oklch(0.215 0.016 274) 80%);
+      --ef-bug: oklch(0.63 0.2 26);
+      --ef-enh-bg: color-mix(in oklab, oklch(0.69 0.115 240) 20%, oklch(0.215 0.016 274) 80%);
+      --ef-enh: oklch(0.69 0.115 240);
     }
   `;
   document.head.appendChild(style);
@@ -1779,8 +1783,8 @@ function injectToastStyles(): void {
   style.textContent = `
     #${TOAST_ID} {
       /* Theme tokens — light defaults; overridden under [data-ef-theme="dark"]. */
-      --ef-toast-bg: #1a1a1a;
-      --ef-toast-text: #ffffff;
+      --ef-toast-bg: oklch(0.215 0.016 274);
+      --ef-toast-text: oklch(0.93 0.008 265);
       --ef-toast-shadow: 0 4px 20px rgba(0,0,0,0.3);
       position: fixed;
       bottom: 24px;
@@ -1804,8 +1808,8 @@ function injectToastStyles(): void {
     }
     html[data-ef-theme="dark"] #${TOAST_ID},
     #${TOAST_ID}[data-ef-theme="dark"] {
-      --ef-toast-bg: #2a2f38;
-      --ef-toast-text: #f2f4f7;
+      --ef-toast-bg: oklch(0.175 0.014 274);
+      --ef-toast-text: oklch(0.93 0.008 265);
       --ef-toast-shadow: 0 4px 24px rgba(0,0,0,0.55);
     }
   `;
