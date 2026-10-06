@@ -18,17 +18,18 @@ templ panelBrand(markOnly bool) {
 	</a>
 }
 
-// panelSidebarGroups is the panel's left-nav. The Workspace group uses in-page
-// anchors (Overview / API keys / Reports) so it mirrors the memory admin
-// sections; Links points at the public surfaces.
-func panelSidebarGroups() []layout.SidebarGroup {
+// panelSidebarGroups is the panel's left-nav. The Workspace group maps to the
+// three real panel routes; active is the current page key ("overview", "keys"
+// or "reports") so the correct item is highlighted on load. Links points at the
+// public surfaces.
+func panelSidebarGroups(active string) []layout.SidebarGroup {
 	return []layout.SidebarGroup{
 		{
 			Label: "Workspace",
 			Items: []layout.SidebarItem{
-				{Label: "Overview", Href: "#overview", Icon: "lucide--layout-dashboard", Active: true},
-				{Label: "API keys", Href: "#keys", Icon: "lucide--key-round"},
-				{Label: "Reports", Href: "#reports", Icon: "lucide--inbox"},
+				{Label: "Overview", Href: "/panel", Icon: "lucide--layout-dashboard", Active: active == "overview"},
+				{Label: "API keys", Href: "/panel/keys", Icon: "lucide--key-round", Active: active == "keys"},
+				{Label: "Reports", Href: "/panel/reports", Icon: "lucide--inbox", Active: active == "reports"},
 			},
 		},
 		{
@@ -45,15 +46,15 @@ func panelSidebarGroups() []layout.SidebarGroup {
 // panelSidebar mirrors memory's hand-rolled sidebar (same #_layout-sidebar id,
 // h-14 header, and .sidebar-menu/.menu-label/.menu-item classes) so the
 // go-daisy responsive drawer + desktop collapse CSS keeps working. Each link is
-// a layout.SidebarMenuItem (plain anchor, no HTMX nav — the panel is one page).
-templ panelSidebar() {
+// a layout.SidebarMenuItem (plain anchor, full-page navigation between routes).
+templ panelSidebar(active string) {
 	<div id="_layout-sidebar" class="flex flex-col bg-base-100">
 		<div class="flex h-14 shrink-0 items-center gap-3 px-5">
 			@panelBrand(false)
 		</div>
 		<div class="sidebar-menu grow overflow-y-auto">
 			<div class="mb-3 space-y-0.5 px-2.5 pt-4">
-				for i, group := range panelSidebarGroups() {
+				for i, group := range panelSidebarGroups(active) {
 					if group.Label != "" {
 						<p class={ "menu-label px-2.5 pb-1.5", templ.KV("pt-5", i > 0), templ.KV("pt-0", i == 0) }>{ group.Label }</p>
 					}
@@ -81,191 +82,93 @@ templ panelSidebar() {
 	</script>
 }
 
-// PanelPage renders the API-key management panel. It is a server-rendered
-// go-daisy page whose dynamic regions (repos, keys, reveal, toasts) are filled
-// in by the inline vanilla-JS controller at the bottom of the page.
-templ PanelPage() {
+// panelGate is the signed-out gate shown before the app shell.
+templ panelGate() {
+	<div id="gate" class="hidden">
+		<div class="flex min-h-screen items-center justify-center p-6">
+			<div class="w-full max-w-md">
+				@ui.Card("", nil) {
+				<div class="flex items-center gap-2">
+					<span class="grid size-6 place-items-center rounded-md bg-primary" aria-hidden="true">
+						<span class="size-2.5 rounded-[3px] bg-primary-content"></span>
+					</span>
+					<span class="text-sm font-semibold tracking-tight">emergent.feedback</span>
+				</div>
+				<h1 class="mt-5 text-lg font-semibold tracking-tight">Sign in</h1>
+				<p class="mt-1 text-sm text-base-content/70">
+					Sign in with GitHub to manage the API keys and reports for the repositories you choose.
+				</p>
+				<div class="mt-3 w-fit">
+					@ui.Badge(ui.BadgeProps{Label: "Scoped to repos", Variant: ui.BadgeGhost, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM})
+				</div>
+				@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeButton, Variant: ui.ButtonPrimary, Block: true, ExtraClass: "mt-5", Attrs: templ.Attributes{"id": "signin"}}) {
+					Sign in with GitHub
+				}
+				<p class="mt-4 text-xs text-base-content/50">
+					A key grants scoped access to feedback data only. You can revoke one at any time.
+				</p>
+				}
+			</div>
+		</div>
+	</div>
+}
+
+// panelNavbar is the shared top bar: brand, signed-in login and account menu.
+templ panelNavbar() {
+	<div class="bg-base-100 border-base-content/5 z-10 h-14 shrink-0 border-b">
+		@layout.Navbar("emergent.feedback", panelBrand(false)) {
+		<span id="user-login" class="hidden max-w-[10rem] truncate text-sm font-medium sm:block"></span>
+		@ui.Dropdown(ui.DropdownEnd, templ.Attributes{"data-testid": "account-menu"}) {
+		<div tabindex="0" role="button" class="cursor-pointer rounded-full p-px outline-none transition hover:ring-1 hover:ring-base-content/25 focus-visible:ring-1 focus-visible:ring-base-content/45 active:ring-1 active:ring-base-content/30" aria-label="Account menu" aria-haspopup="menu">
+			@ui.AvatarFull(ui.AvatarProps{Name: "user", Icon: "lucide--user", Size: ui.AvatarSM, Tone: ui.AvatarToneMuted, Attrs: templ.Attributes{"id": "user-avatar"}})
+		</div>
+		@ui.DropdownMenu(templ.Attributes{"aria-label": "Account", "class": "min-w-56 border-base-content/10 z-50"}) {
+		<li class="menu-title pointer-events-none select-none px-2 pt-2 pb-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-base-content/50">Signed in with GitHub</li>
+		<li class="pointer-events-none">
+			<div class="flex items-center gap-2 px-1 py-0.5">
+				@ui.IconSpan("lucide--github", "size-4 text-base-content/60")
+				<span class="text-sm text-base-content/80">GitHub session</span>
+			</div>
+		</li>
+		<li aria-hidden="true"></li>
+		<li>
+			<button id="signout" type="button" class="text-error hover:bg-error/10 flex w-full cursor-pointer items-center gap-2 text-left">
+				@ui.IconSpan("lucide--log-out", "size-4")
+				<span>Sign out</span>
+			</button>
+		</li>
+		}
+		}
+		}
+	</div>
+}
+
+// panelShell is the shared page chrome for every panel route: signed-out gate,
+// app shell, sidebar (with active-page highlight), navbar and the controller
+// script. Pages pass their content as children.
+templ panelShell(title string, active string) {
 	<!DOCTYPE html>
 	<html lang="en" data-theme="dark">
 	<head>
 		<meta charset="UTF-8"/>
 		<meta name="viewport" content="width=device-width, initial-scale=1"/>
 		<meta name="color-scheme" content="dark"/>
-		<title>emergent.feedback · API keys</title>
+		<title>{ title }</title>
 		<link rel="stylesheet" href="/static/css/app.css"/>
 	</head>
-	<body class="min-h-screen bg-base-200">
+	<body class="min-h-screen bg-base-200" data-panel-page={ active }>
 		<div id="modal-container"></div>
 
-		<!-- ── Signed-out gate ─────────────────────────────────────────────── -->
-		<div id="gate" class="hidden">
-			<div class="flex min-h-screen items-center justify-center p-6">
-				<div class="w-full max-w-md">
-					@ui.Card("", nil) {
-					<div class="flex items-center gap-2">
-						<span class="grid size-6 place-items-center rounded-md bg-primary" aria-hidden="true">
-							<span class="size-2.5 rounded-[3px] bg-primary-content"></span>
-						</span>
-						<span class="text-sm font-semibold tracking-tight">emergent.feedback</span>
-					</div>
-					<h1 class="mt-5 text-lg font-semibold tracking-tight">API keys</h1>
-					<p class="mt-1 text-sm text-base-content/70">
-						Sign in with GitHub to create keys that let an agent read feedback for the repositories you choose.
-					</p>
-					<div class="mt-3 w-fit">
-						@ui.Badge(ui.BadgeProps{Label: "Scoped to repos", Variant: ui.BadgeGhost, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM})
-					</div>
-					@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeButton, Variant: ui.ButtonPrimary, Block: true, ExtraClass: "mt-5", Attrs: templ.Attributes{"id": "signin"}}) {
-						Sign in with GitHub
-					}
-					<p class="mt-4 text-xs text-base-content/50">
-						A key grants scoped access to feedback data only. You can revoke one at any time.
-					</p>
-					}
-				</div>
-			</div>
-		</div>
+		@panelGate()
 
-		<!-- ── Signed-in panel ────────────────────────────────────────────── -->
 		<div id="app" class="hidden">
 			@layout.AppShell("emergent.feedback") {
-			@panelSidebar()
+			@panelSidebar(active)
 			<div class="flex min-w-0 grow flex-col overflow-hidden">
-				<div class="bg-base-100 border-base-content/5 z-10 h-14 shrink-0 border-b">
-					@layout.Navbar("emergent.feedback", panelBrand(false)) {
-					<span id="user-login" class="hidden max-w-[10rem] truncate text-sm font-medium sm:block"></span>
-					@ui.Dropdown(ui.DropdownEnd, templ.Attributes{"data-testid": "account-menu"}) {
-					<div tabindex="0" role="button" class="cursor-pointer rounded-full p-px outline-none transition hover:ring-1 hover:ring-base-content/25 focus-visible:ring-1 focus-visible:ring-base-content/45 active:ring-1 active:ring-base-content/30" aria-label="Account menu" aria-haspopup="menu">
-						@ui.AvatarFull(ui.AvatarProps{Name: "user", Icon: "lucide--user", Size: ui.AvatarSM, Tone: ui.AvatarToneMuted, Attrs: templ.Attributes{"id": "user-avatar"}})
-					</div>
-					@ui.DropdownMenu(templ.Attributes{"aria-label": "Account", "class": "min-w-56 border-base-content/10 z-50"}) {
-					<li class="menu-title pointer-events-none select-none px-2 pt-2 pb-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-base-content/50">Signed in with GitHub</li>
-					<li class="pointer-events-none">
-						<div class="flex items-center gap-2 px-1 py-0.5">
-							@ui.IconSpan("lucide--github", "size-4 text-base-content/60")
-							<span class="text-sm text-base-content/80">GitHub session</span>
-						</div>
-					</li>
-					<li aria-hidden="true"></li>
-					<li>
-						<button id="signout" type="button" class="text-error hover:bg-error/10 flex w-full cursor-pointer items-center gap-2 text-left">
-							@ui.IconSpan("lucide--log-out", "size-4")
-							<span>Sign out</span>
-						</button>
-					</li>
-					}
-					}
-					}
-				</div>
+				@panelNavbar()
 				<main id="main" class="grow overflow-auto">
 					@layout.Container(layout.ContainerLG, nil) {
-					<header id="overview" class="mb-6 scroll-mt-6">
-						@ui.Eyebrow("API access", ui.EyebrowProps{Size: "text-[11px]", Margin: "mb-1"})
-						<div class="flex flex-wrap items-end justify-between gap-4">
-							<div class="min-w-0">
-								<h1 class="text-2xl font-semibold tracking-tight lg:text-3xl">API keys</h1>
-								<p class="mt-1.5 max-w-2xl text-sm text-base-content/70">
-									Create keys for agents that read feedback. Each key is limited to the repositories you select, and the plaintext value is shown only once.
-								</p>
-							</div>
-							<div class="flex flex-wrap items-center gap-2">
-								@ui.Badge(ui.BadgeProps{Label: "Scoped to repos", Variant: ui.BadgeGhost, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM})
-								@ui.Badge(ui.BadgeProps{Label: "Shown once", Variant: ui.BadgeWarning, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM, Icon: "lucide--eye-off"})
-							</div>
-						</div>
-					</header>
-
-				<!-- One-time reveal (filled on create) -->
-				<div id="reveal" class="hidden">
-					<div class="card mb-6 border border-success/30 bg-base-100 shadow-sm">
-						<div class="card-body">
-							<div class="flex items-center justify-between gap-3">
-								<div class="flex items-center gap-2">
-									<h2 class="text-base font-semibold">Key created</h2>
-									@ui.Badge(ui.BadgeProps{Label: "Shown once", Variant: ui.BadgeWarning, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM})
-								</div>
-								@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeButton, Variant: ui.ButtonGhost, Size: ui.ButtonSM, Attrs: templ.Attributes{"id": "reveal-dismiss"}}) {
-									Dismiss
-								}
-							</div>
-							<p class="mt-1 text-sm text-base-content/70">Copy it now. This is the only time the full key is shown.</p>
-							<div id="reveal-repos" class="mt-3 flex flex-wrap gap-2"></div>
-							<div class="mt-4 flex items-stretch gap-2">
-								<code id="reveal-key" class="min-w-0 flex-1 break-all rounded-lg bg-neutral px-4 py-3 font-mono text-sm text-neutral-content"></code>
-								@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeButton, Variant: ui.ButtonPrimary, Attrs: templ.Attributes{"id": "reveal-copy", "aria-label": "Copy API key to clipboard"}}) {
-									Copy
-								}
-							</div>
-							<div class="mt-4">
-								@ui.Alert(ui.AlertProps{Type: ui.AlertWarning, Style: ui.AlertStyleSoft, Message: "Store it in a secret manager. It cannot be retrieved again - revoke and create a new one if lost."})
-							</div>
-						</div>
-					</div>
-				</div>
-
-				<!-- Create + existing keys -->
-				<section id="keys" class="scroll-mt-6">
-					<div class="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
-						<!-- Create -->
-						@ui.CardRaw("card-border overflow-hidden", "gap-0 p-0", nil) {
-						<div class="flex items-center justify-between gap-3 border-b border-base-content/5 px-5 py-4">
-							<div>
-								<h2 class="text-base font-semibold tracking-tight">Create a key</h2>
-								<p class="mt-0.5 text-xs text-base-content/60">Select the repositories this key may read.</p>
-							</div>
-							@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeButton, Variant: ui.ButtonGhost, Size: ui.ButtonSM, Icon: "lucide--refresh-cw", Attrs: templ.Attributes{"id": "reload-repos"}}) {
-								Reload
-							}
-						</div>
-						<div id="repo-tools" class="hidden border-b border-base-content/5">
-							<div class="flex flex-wrap items-center gap-2 px-5 py-3">
-								<input id="repo-filter" class="input input-bordered input-sm w-full flex-1" type="search" placeholder="Filter repositories" aria-label="Filter repositories" autocomplete="off"/>
-								<button id="select-all" class="btn btn-ghost btn-xs" type="button">Select all</button>
-								<button id="clear-all" class="btn btn-ghost btn-xs" type="button" disabled>Clear</button>
-							</div>
-						</div>
-						<div id="repo-list" class="max-h-80 overflow-y-auto p-2" role="group" aria-label="Repositories"></div>
-						<div id="repos-status" class="px-5 py-4 text-sm text-base-content/60" role="status" aria-live="polite"></div>
-						<div class="flex items-center justify-between gap-3 border-t border-base-content/5 bg-base-200/40 px-5 py-4">
-							<span id="sel-count" class="text-sm text-base-content/70">No repositories selected</span>
-							@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeButton, Variant: ui.ButtonPrimary, Attrs: templ.Attributes{"id": "generate", "disabled": true}}) {
-								Generate key
-							}
-						</div>
-						}
-
-						<!-- Existing -->
-						@ui.CardRaw("card-border overflow-hidden", "gap-0 p-0", nil) {
-						<div class="flex items-center justify-between gap-3 border-b border-base-content/5 px-5 py-4">
-							<div>
-								<h2 class="text-base font-semibold tracking-tight">Existing keys</h2>
-								<p class="mt-0.5 text-xs text-base-content/60">Keys you have created for this account.</p>
-							</div>
-							@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeButton, Variant: ui.ButtonGhost, Size: ui.ButtonSM, Icon: "lucide--refresh-cw", Attrs: templ.Attributes{"id": "refresh"}}) {
-								Refresh
-							}
-						</div>
-						<ul id="keys-list" class="flex flex-col gap-3 p-5" aria-live="polite"></ul>
-						}
-					</div>
-				</section>
-
-				<!-- Reports (full width) -->
-				<section id="reports" class="mt-6 scroll-mt-6">
-					@ui.CardRaw("card-border overflow-hidden", "gap-0 p-0", nil) {
-					<div class="flex items-center justify-between gap-3 border-b border-base-content/5 px-5 py-4">
-						<div>
-							<h2 class="text-base font-semibold tracking-tight">Reports</h2>
-							<p class="mt-0.5 text-xs text-base-content/60">Feedback captured by the overlay. Select a report to preview it.</p>
-						</div>
-						@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeButton, Variant: ui.ButtonGhost, Size: ui.ButtonSM, Icon: "lucide--refresh-cw", Attrs: templ.Attributes{"id": "reports-refresh"}}) {
-							Refresh
-						}
-					</div>
-					<div id="report-preview" class="hidden" role="region" aria-label="Report preview"></div>
-					<ul id="reports-list" class="flex flex-col gap-3 p-5" aria-live="polite"></ul>
-					}
-				</section>
+					{ children... }
 					}
 				</main>
 			</div>
@@ -275,934 +178,1232 @@ templ PanelPage() {
 		<div id="toast-container" class="toast toast-end toast-bottom z-50"></div>
 
 		@ui.ToastScript()
+		@panelScript()
+		<script src="/static/js/htmx.js"></script>
+	</body>
+	</html>
+}
 
-		<script>
-		(function () {
-			"use strict";
+// PanelOverviewPage is the /panel route: a summary of the signed-in account.
+templ PanelOverviewPage() {
+	@panelShell("emergent.feedback · Overview", "overview") {
+	<header id="overview" class="mb-6 scroll-mt-6">
+		@ui.Eyebrow("Workspace", ui.EyebrowProps{Size: "text-[11px]", Margin: "mb-1"})
+		<div class="flex flex-wrap items-end justify-between gap-4">
+			<div class="min-w-0">
+				<h1 class="text-2xl font-semibold tracking-tight lg:text-3xl">Overview</h1>
+				<p class="mt-1.5 max-w-2xl text-sm text-base-content/70">
+					Your repositories, API keys and captured reports at a glance.
+				</p>
+			</div>
+			<div class="flex flex-wrap items-center gap-2">
+				@ui.Badge(ui.BadgeProps{Label: "Scoped to repos", Variant: ui.BadgeGhost, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM})
+			</div>
+		</div>
+	</header>
 
-			var TOKEN_KEY = "__ef_token__";
-			var USER_KEY = "__ef_user__";
+	<section id="overview-stats" class="grid grid-cols-1 gap-4 sm:grid-cols-3" aria-live="polite">
+		<div class="col-span-full flex items-center justify-center gap-2 rounded-xl border border-base-300/60 bg-base-100 py-10 text-sm text-base-content/50">
+			<span class="loading loading-spinner loading-sm"></span>
+			<span>Loading summary...</span>
+		</div>
+	</section>
 
-			function byId(id) { return document.getElementById(id); }
+	<div class="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
+		<a href="/panel/keys" class="card border border-base-300/60 bg-base-100 p-6 transition hover:border-primary/40 hover:shadow-sm">
+			<div class="flex items-center gap-2">
+				<span class="grid size-9 place-items-center rounded-lg bg-primary/10 text-primary" aria-hidden="true">
+					@ui.IconSpan("lucide--key-round", "size-5")
+				</span>
+				<h2 class="text-base font-semibold tracking-tight">API keys</h2>
+			</div>
+			<p class="mt-3 text-sm text-base-content/70">
+				Create repo-scoped keys for agents that read feedback. The plaintext value is shown only once.
+			</p>
+			<span class="mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary">
+				Manage keys
+				@ui.IconSpan("lucide--arrow-right", "size-4")
+			</span>
+		</a>
+		<a href="/panel/reports" class="card border border-base-300/60 bg-base-100 p-6 transition hover:border-primary/40 hover:shadow-sm">
+			<div class="flex items-center gap-2">
+				<span class="grid size-9 place-items-center rounded-lg bg-secondary/10 text-secondary" aria-hidden="true">
+					@ui.IconSpan("lucide--inbox", "size-5")
+				</span>
+				<h2 class="text-base font-semibold tracking-tight">Reports</h2>
+			</div>
+			<p class="mt-3 text-sm text-base-content/70">
+				Browse feedback captured by the overlay and preview the context, screenshot and DOM snapshot.
+			</p>
+			<span class="mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary">
+				View reports
+				@ui.IconSpan("lucide--arrow-right", "size-4")
+			</span>
+		</a>
+	</div>
+	}
+}
 
-			function clear(node) {
-				if (!node) return;
-				while (node.firstChild) { node.removeChild(node.firstChild); }
-			}
+// PanelKeysPage is the /panel/keys route: API keys only. Creating a key happens
+// in the modal defined below.
+templ PanelKeysPage() {
+	@panelShell("emergent.feedback · API keys", "keys") {
+	<header id="keys" class="mb-6 scroll-mt-6">
+		@ui.Eyebrow("API access", ui.EyebrowProps{Size: "text-[11px]", Margin: "mb-1"})
+		<div class="flex flex-wrap items-end justify-between gap-4">
+			<div class="min-w-0">
+				<h1 class="text-2xl font-semibold tracking-tight lg:text-3xl">API keys</h1>
+				<p class="mt-1.5 max-w-2xl text-sm text-base-content/70">
+					Create keys for agents that read feedback. Each key is limited to the repositories you select, and the plaintext value is shown only once.
+				</p>
+			</div>
+			<div class="flex flex-wrap items-center gap-2">
+				@ui.Badge(ui.BadgeProps{Label: "Scoped to repos", Variant: ui.BadgeGhost, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM})
+				@ui.Badge(ui.BadgeProps{Label: "Shown once", Variant: ui.BadgeWarning, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM, Icon: "lucide--eye-off"})
+			</div>
+		</div>
+	</header>
 
-			function makeEl(tag, className, attrs) {
-				var n = document.createElement(tag);
-				if (className) n.className = className;
-				if (attrs) {
-					for (var k in attrs) {
-						if (Object.prototype.hasOwnProperty.call(attrs, k)) n.setAttribute(k, attrs[k]);
+	<!-- One-time reveal (filled on create) -->
+	<div id="reveal" class="hidden">
+		<div class="card mb-6 border border-success/30 bg-base-100 shadow-sm">
+			<div class="card-body">
+				<div class="flex items-center justify-between gap-3">
+					<div class="flex items-center gap-2">
+						<h2 class="text-base font-semibold">Key created</h2>
+						@ui.Badge(ui.BadgeProps{Label: "Shown once", Variant: ui.BadgeWarning, Style: ui.BadgeStyleSoft, Size: ui.BadgeSizeSM})
+					</div>
+					@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeButton, Variant: ui.ButtonGhost, Size: ui.ButtonSM, Attrs: templ.Attributes{"id": "reveal-dismiss"}}) {
+						Dismiss
 					}
+				</div>
+				<p class="mt-1 text-sm text-base-content/70">Copy it now. This is the only time the full key is shown.</p>
+				<div id="reveal-repos" class="mt-3 flex flex-wrap gap-2"></div>
+				<div class="mt-4 flex items-stretch gap-2">
+					<code id="reveal-key" class="min-w-0 flex-1 break-all rounded-lg bg-neutral px-4 py-3 font-mono text-sm text-neutral-content"></code>
+					@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeButton, Variant: ui.ButtonPrimary, Attrs: templ.Attributes{"id": "reveal-copy", "aria-label": "Copy API key to clipboard"}}) {
+						Copy
+					}
+				</div>
+				<div class="mt-4">
+					@ui.Alert(ui.AlertProps{Type: ui.AlertWarning, Style: ui.AlertStyleSoft, Message: "Store it in a secret manager. It cannot be retrieved again - revoke and create a new one if lost."})
+				</div>
+			</div>
+		</div>
+	</div>
+
+	@ui.CardRaw("card-border overflow-hidden", "gap-0 p-0", nil) {
+	<div class="flex items-center justify-between gap-3 border-b border-base-content/5 px-5 py-4">
+		<div>
+			<h2 class="text-base font-semibold tracking-tight">Your keys</h2>
+			<p class="mt-0.5 text-xs text-base-content/60">Keys you have created for this account.</p>
+		</div>
+		<div class="flex items-center gap-2">
+			@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeButton, Variant: ui.ButtonGhost, Size: ui.ButtonSM, Icon: "lucide--refresh-cw", Attrs: templ.Attributes{"id": "refresh"}}) {
+				Refresh
+			}
+			@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeButton, Variant: ui.ButtonPrimary, Size: ui.ButtonSM, Icon: "lucide--plus", Attrs: templ.Attributes{"id": "create-key"}}) {
+				Create key
+			}
+		</div>
+	</div>
+	<ul id="keys-list" class="flex flex-col gap-3 p-5" aria-live="polite"></ul>
+	}
+
+	@panelCreateKeyModal()
+	}
+}
+
+// panelCreateKeyModal is the repo-scoped key creation dialog (native <dialog>
+// with daisyUI modal classes).
+templ panelCreateKeyModal() {
+	<dialog id="create-key-modal" class="modal" aria-labelledby="create-key-title">
+		<div class="modal-box max-w-2xl p-0">
+			<div class="flex items-center justify-between gap-3 border-b border-base-content/5 px-5 py-4">
+				<div>
+					<h2 id="create-key-title" class="text-base font-semibold tracking-tight">Create a key</h2>
+					<p class="mt-0.5 text-xs text-base-content/60">Select the repositories this key may read.</p>
+				</div>
+				<button id="create-key-close" type="button" class="btn btn-ghost btn-sm btn-circle" aria-label="Close">
+					@ui.IconSpan("lucide--x", "size-4")
+				</button>
+			</div>
+			<div id="repo-tools" class="hidden border-b border-base-content/5">
+				<div class="flex flex-wrap items-center gap-2 px-5 py-3">
+					<input id="repo-filter" class="input input-bordered input-sm w-full flex-1" type="search" placeholder="Filter repositories" aria-label="Filter repositories" autocomplete="off"/>
+					<button id="select-all" class="btn btn-ghost btn-xs" type="button">Select all</button>
+					<button id="clear-all" class="btn btn-ghost btn-xs" type="button" disabled>Clear</button>
+					<button id="reload-repos" class="btn btn-ghost btn-xs" type="button" aria-label="Reload repositories">
+						@ui.IconSpan("lucide--refresh-cw", "size-3.5")
+					</button>
+				</div>
+			</div>
+			<div id="repo-list" class="max-h-80 overflow-y-auto p-2" role="group" aria-label="Repositories"></div>
+			<div id="repos-status" class="px-5 py-3 text-sm text-base-content/60" role="status" aria-live="polite"></div>
+			<div class="flex items-center justify-between gap-3 border-t border-base-content/5 bg-base-200/40 px-5 py-4">
+				<span id="sel-count" class="text-sm text-base-content/70">No repositories selected</span>
+				@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeButton, Variant: ui.ButtonPrimary, Attrs: templ.Attributes{"id": "generate", "disabled": true}}) {
+					Generate key
 				}
-				return n;
+			</div>
+		</div>
+		<form method="dialog" class="modal-backdrop">
+			<button>close</button>
+		</form>
+	</dialog>
+}
+
+// PanelReportsPage is the /panel/reports route: captured feedback only.
+templ PanelReportsPage() {
+	@panelShell("emergent.feedback · Reports", "reports") {
+	<header id="reports" class="mb-6 scroll-mt-6">
+		@ui.Eyebrow("Feedback", ui.EyebrowProps{Size: "text-[11px]", Margin: "mb-1"})
+		<div class="flex flex-wrap items-end justify-between gap-4">
+			<div class="min-w-0">
+				<h1 class="text-2xl font-semibold tracking-tight lg:text-3xl">Reports</h1>
+				<p class="mt-1.5 max-w-2xl text-sm text-base-content/70">
+					Feedback captured by the overlay. Select a report to preview its context, screenshot and DOM snapshot.
+				</p>
+			</div>
+			@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeButton, Variant: ui.ButtonGhost, Size: ui.ButtonSM, Icon: "lucide--refresh-cw", Attrs: templ.Attributes{"id": "reports-refresh"}}) {
+				Refresh
 			}
+		</div>
+	</header>
 
-			function getToken() {
-				try { return localStorage.getItem(TOKEN_KEY); } catch (e) { return null; }
-			}
+	<section>
+		@ui.CardRaw("card-border overflow-hidden", "gap-0 p-0", nil) {
+		<div id="report-preview" class="hidden" role="region" aria-label="Report preview"></div>
+		<ul id="reports-list" class="flex flex-col gap-3 p-5" aria-live="polite"></ul>
+		}
+	</section>
+	}
+}
 
-			function getUser() {
-				try { return JSON.parse(localStorage.getItem(USER_KEY) || "null"); } catch (e) { return null; }
-			}
+// panelScript is the shared vanilla-JS controller. It is page-aware via the
+// body's data-panel-page attribute so it only loads the data a page shows;
+// every DOM lookup is null-guarded because the same script ships on all routes.
+templ panelScript() {
+	<script>
+	(function () {
+		"use strict";
 
-			var state = {
-				token: getToken(),
-				user: getUser(),
-				repos: [],
-				reposLoaded: false,
-				reposError: null,
-				keys: [],
-				keysLoaded: false,
-				keysError: null,
-				reports: [],
-				reportsLoaded: false,
-				reportsError: null
-			};
-			var selected = {};
+		var TOKEN_KEY = "__ef_token__";
+		var USER_KEY = "__ef_user__";
 
-			// ── Cookie fallback: the OAuth callback may redirect to /panel when
-			// the popup opener is lost, setting ef_panel_token instead.
-			function readCookieToken() {
-				var parts = document.cookie ? document.cookie.split(";") : [];
-				for (var i = 0; i < parts.length; i++) {
-					var p = parts[i].trim();
-					if (p.indexOf("ef_panel_token=") === 0) {
-						return decodeURIComponent(p.slice("ef_panel_token=".length));
-					}
+		function byId(id) { return document.getElementById(id); }
+
+		function clear(node) {
+			if (!node) return;
+			while (node.firstChild) { node.removeChild(node.firstChild); }
+		}
+
+		function makeEl(tag, className, attrs) {
+			var n = document.createElement(tag);
+			if (className) n.className = className;
+			if (attrs) {
+				for (var k in attrs) {
+					if (Object.prototype.hasOwnProperty.call(attrs, k)) n.setAttribute(k, attrs[k]);
 				}
-				return "";
+			}
+			return n;
+		}
+
+		function currentPage() {
+			return (document.body && document.body.getAttribute("data-panel-page")) || "";
+		}
+
+		function getToken() {
+			try { return localStorage.getItem(TOKEN_KEY); } catch (e) { return null; }
+		}
+
+		function getUser() {
+			try { return JSON.parse(localStorage.getItem(USER_KEY) || "null"); } catch (e) { return null; }
+		}
+
+		var state = {
+			token: getToken(),
+			user: getUser(),
+			repos: [],
+			reposLoaded: false,
+			reposError: null,
+			keys: [],
+			keysLoaded: false,
+			keysError: null,
+			reports: [],
+			reportsLoaded: false,
+			reportsError: null
+		};
+		var selected = {};
+
+		// ── Cookie fallback: the OAuth callback may redirect to /panel when
+		// the popup opener is lost, setting ef_panel_token instead.
+		function readCookieToken() {
+			var parts = document.cookie ? document.cookie.split(";") : [];
+			for (var i = 0; i < parts.length; i++) {
+				var p = parts[i].trim();
+				if (p.indexOf("ef_panel_token=") === 0) {
+					return decodeURIComponent(p.slice("ef_panel_token=".length));
+				}
+			}
+			return "";
+		}
+
+		function consumeCookieToken() {
+			var t = readCookieToken();
+			if (!t) return false;
+			try { localStorage.setItem(TOKEN_KEY, t); } catch (e) {}
+			document.cookie = "ef_panel_token=; Max-Age=0; Path=/; SameSite=Lax";
+			return true;
+		}
+
+		// ── Feedback toast (auto-dismissed by ui.ToastScript) ────────────
+		function toast(message, kind) {
+			var box = byId("toast-container");
+			if (!box) return;
+			var alert = makeEl("div", "alert text-sm shadow-md toast-auto-dismiss " + (kind === "error" ? "alert-error" : "alert-success"), { "role": "alert", "data-duration": "3800" });
+			var span = makeEl("span");
+			span.textContent = message;
+			alert.appendChild(span);
+			box.appendChild(alert);
+		}
+
+		// ── API ──────────────────────────────────────────────────────────
+		function api(path, opts) {
+			opts = opts || {};
+			var headers = { "Accept": "application/json" };
+			if (opts.body) headers["Content-Type"] = "application/json";
+			if (state.token) headers["Authorization"] = "Bearer " + state.token;
+			return fetch(path, { method: opts.method || "GET", headers: headers, body: opts.body }).then(function (res) {
+				if (res.status === 401) {
+					signOut();
+					throw new Error("Your session expired. Sign in again.");
+				}
+				if (!res.ok) {
+					return res.text().then(function (raw) {
+						var msg = res.statusText || ("HTTP " + res.status);
+						try { var j = JSON.parse(raw); if (j && j.message) msg = j.message; } catch (e) {}
+						throw new Error(msg);
+					});
+				}
+				if (res.status === 204) return null;
+				return res.json();
+			});
+		}
+
+		// ── Auth state ───────────────────────────────────────────────────
+		function renderAuth() {
+			var signedIn = !!state.token;
+			var gate = byId("gate");
+			var app = byId("app");
+			if (signedIn) {
+				if (gate) gate.classList.add("hidden");
+				if (app) app.classList.remove("hidden");
+			} else {
+				if (app) app.classList.add("hidden");
+				if (gate) gate.classList.remove("hidden");
+			}
+			if (!signedIn) return;
+			var login = byId("user-login");
+			if (login) login.textContent = (state.user && state.user.login) || "";
+			setAvatar(state.user);
+		}
+
+		function setAvatar(user) {
+			var wrap = byId("user-avatar");
+			if (!wrap) return;
+			clear(wrap);
+			var src = user && user.avatar;
+			if (src) {
+				var frame = makeEl("div", "size-8 overflow-hidden rounded-full");
+				var img = makeEl("img", "h-full w-full object-cover", { "src": src, "alt": "" });
+				frame.appendChild(img);
+				wrap.appendChild(frame);
+			} else {
+				var name = (user && user.login) || "?";
+				var badge = makeEl("div", "flex size-8 items-center justify-center rounded-full bg-base-300 text-xs font-semibold");
+				badge.textContent = name.charAt(0).toUpperCase();
+				wrap.appendChild(badge);
+			}
+		}
+
+		function signIn() {
+			window.open(
+				"/auth/github?origin=" + encodeURIComponent(location.origin),
+				"ef_auth",
+				"width=600,height=700,left=200,top=100"
+			);
+		}
+
+		function signOut() {
+			try {
+				localStorage.removeItem(TOKEN_KEY);
+				localStorage.removeItem(USER_KEY);
+			} catch (e) {}
+			state.token = null;
+			state.user = null;
+			state.repos = [];
+			state.keys = [];
+			state.reports = [];
+			state.reposLoaded = false;
+			state.keysLoaded = false;
+			state.reportsLoaded = false;
+			state.reposError = null;
+			state.keysError = null;
+			state.reportsError = null;
+			selected = {};
+			var reveal = byId("reveal");
+			if (reveal) reveal.classList.add("hidden");
+			var preview = byId("report-preview");
+			if (preview) {
+				preview.classList.add("hidden");
+				clear(preview);
+			}
+			var filter = byId("repo-filter");
+			if (filter) filter.value = "";
+			renderAuth();
+		}
+
+		// ── Repositories ─────────────────────────────────────────────────
+		function setReposStatus(message, kind) {
+			var s = byId("repos-status");
+			if (!s) return;
+			clear(s);
+			s.className = "px-5 py-3 text-sm " + (kind === "error" ? "text-error" : "text-base-content/60");
+			if (kind === "loading") {
+				s.appendChild(makeEl("span", "loading loading-spinner loading-xs mr-2 align-middle"));
+			}
+			var span = makeEl("span");
+			span.textContent = message;
+			s.appendChild(span);
+		}
+
+		function loadRepos() {
+			state.reposLoaded = false;
+			state.reposError = null;
+			setReposStatus("Loading repositories...", "loading");
+			var generate = byId("generate");
+			if (generate) generate.disabled = true;
+			api("/api/repos").then(function (repos) {
+				state.repos = Array.isArray(repos) ? repos : [];
+				state.reposLoaded = true;
+			}).catch(function (err) {
+				state.repos = [];
+				state.reposLoaded = true;
+				state.reposError = err.message;
+			}).then(function () {
+				renderRepos();
+			});
+		}
+
+		function groupByOwner(repos) {
+			var groups = [];
+			var index = {};
+			for (var i = 0; i < repos.length; i++) {
+				var r = repos[i];
+				var full = r.full_name || "";
+				var slash = full.indexOf("/");
+				var owner = slash > -1 ? full.slice(0, slash) : "";
+				var name = slash > -1 ? full.slice(slash + 1) : full;
+				if (!Object.prototype.hasOwnProperty.call(index, owner)) {
+					index[owner] = { owner: owner, items: [] };
+					groups.push(index[owner]);
+				}
+				index[owner].items.push({ full_name: full, name: name, private: !!r.private });
+			}
+			return groups;
+		}
+
+		function repoRow(repo, owner) {
+			var input = makeEl("input", "checkbox checkbox-sm checkbox-primary", { "type": "checkbox", "value": repo.full_name, "aria-label": repo.full_name });
+			input.checked = Object.prototype.hasOwnProperty.call(selected, repo.full_name);
+			input.addEventListener("change", function () {
+				if (input.checked) selected[repo.full_name] = true;
+				else delete selected[repo.full_name];
+				updateSelectionUi();
+			});
+
+			var label = makeEl("label", "flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 hover:bg-base-200");
+			label.appendChild(input);
+
+			var nameEl = makeEl("span", "min-w-0 truncate font-mono text-sm");
+			if (owner) {
+				var ownerEl = makeEl("span", "text-base-content/40");
+				ownerEl.textContent = owner + "/";
+				nameEl.appendChild(ownerEl);
+			}
+			nameEl.appendChild(document.createTextNode(repo.name));
+			label.appendChild(nameEl);
+
+			label.appendChild(makeEl("span", "flex-1"));
+
+			var badge = makeEl("span", "badge badge-sm gap-1 " + (repo.private ? "badge-warning" : "badge-ghost"));
+			badge.textContent = repo.private ? "Private" : "Public";
+			label.appendChild(badge);
+
+			return label;
+		}
+
+		function renderRepos() {
+			var list = byId("repo-list");
+			var tools = byId("repo-tools");
+			var filterEl = byId("repo-filter");
+			if (!list) return;
+			clear(list);
+
+			if (state.reposError) {
+				if (tools) tools.classList.add("hidden");
+				setReposStatus("Could not load repositories. " + state.reposError, "error");
+				updateSelectionUi();
+				return;
 			}
 
-			function consumeCookieToken() {
-				var t = readCookieToken();
-				if (!t) return false;
-				try { localStorage.setItem(TOKEN_KEY, t); } catch (e) {}
-				document.cookie = "ef_panel_token=; Max-Age=0; Path=/; SameSite=Lax";
-				return true;
+			if (!state.repos.length) {
+				if (tools) tools.classList.add("hidden");
+				setReposStatus("No repositories found. Check that the GitHub App is installed for your account.", "empty");
+				updateSelectionUi();
+				return;
 			}
 
-			// ── Feedback toast (auto-dismissed by ui.ToastScript) ────────────
-			function toast(message, kind) {
-				var box = byId("toast-container");
-				if (!box) return;
-				var alert = makeEl("div", "alert text-sm shadow-md toast-auto-dismiss " + (kind === "error" ? "alert-error" : "alert-success"), { "role": "alert", "data-duration": "3800" });
-				var span = makeEl("span");
-				span.textContent = message;
-				alert.appendChild(span);
-				box.appendChild(alert);
+			if (tools) tools.classList.remove("hidden");
+
+			var filter = filterEl ? (filterEl.value || "").trim().toLowerCase() : "";
+			var matches = state.repos.filter(function (r) {
+				return (r.full_name || "").toLowerCase().indexOf(filter) > -1;
+			});
+
+			if (!matches.length) {
+				setReposStatus("No repositories match the current filter.", "empty");
+				updateSelectionUi();
+				return;
 			}
 
-			// ── API ──────────────────────────────────────────────────────────
-			function api(path, opts) {
-				opts = opts || {};
-				var headers = { "Accept": "application/json" };
-				if (opts.body) headers["Content-Type"] = "application/json";
-				if (state.token) headers["Authorization"] = "Bearer " + state.token;
-				return fetch(path, { method: opts.method || "GET", headers: headers, body: opts.body }).then(function (res) {
-					if (res.status === 401) {
-						signOut();
-						throw new Error("Your session expired. Sign in again.");
-					}
-					if (!res.ok) {
-						return res.text().then(function (raw) {
-							var msg = res.statusText || ("HTTP " + res.status);
-							try { var j = JSON.parse(raw); if (j && j.message) msg = j.message; } catch (e) {}
-							throw new Error(msg);
-						});
-					}
-					if (res.status === 204) return null;
-					return res.json();
+			setReposStatus("", "idle");
+			var groups = groupByOwner(matches);
+			for (var g = 0; g < groups.length; g++) {
+				var group = groups[g];
+				var groupEl = makeEl("div");
+				var ownerLabel = makeEl("div", "px-2 pb-1 pt-3 font-mono text-[11px] uppercase tracking-wide text-base-content/40");
+				ownerLabel.textContent = group.owner;
+				groupEl.appendChild(ownerLabel);
+				for (var j = 0; j < group.items.length; j++) {
+					groupEl.appendChild(repoRow(group.items[j], group.owner));
+				}
+				list.appendChild(groupEl);
+			}
+
+			updateSelectionUi();
+		}
+
+		function selectedNames() {
+			var out = [];
+			for (var k in selected) {
+				if (Object.prototype.hasOwnProperty.call(selected, k)) out.push(k);
+			}
+			return out;
+		}
+
+		function updateSelectionUi() {
+			var names = selectedNames();
+			var n = names.length;
+			var count = byId("sel-count");
+			if (count) count.textContent = n === 0 ? "No repositories selected" : n + (n === 1 ? " repository selected" : " repositories selected");
+			var generate = byId("generate");
+			if (generate) generate.disabled = n === 0;
+			var clearBtn = byId("clear-all");
+			if (clearBtn) clearBtn.disabled = n === 0;
+
+			var selectAll = byId("select-all");
+			if (selectAll) {
+				var allSelected = state.reposLoaded && state.repos.length > 0 && state.repos.every(function (r) {
+					return Object.prototype.hasOwnProperty.call(selected, r.full_name);
+				});
+				selectAll.textContent = allSelected ? "Clear all" : "Select all";
+			}
+		}
+
+		// ── Keys ─────────────────────────────────────────────────────────
+		function fmtDate(iso) {
+			var d = new Date(iso);
+			if (isNaN(d.getTime())) return iso || "";
+			return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+		}
+
+		function loadKeys() {
+			state.keysLoaded = false;
+			state.keysError = null;
+			var list = byId("keys-list");
+			if (!list) return;
+			clear(list);
+			var li = makeEl("li", "flex items-center gap-2 py-6 text-sm text-base-content/50");
+			li.appendChild(makeEl("span", "loading loading-spinner loading-sm"));
+			var span = makeEl("span");
+			span.textContent = "Loading keys...";
+			li.appendChild(span);
+			list.appendChild(li);
+
+			api("/api/keys").then(function (keys) {
+				state.keys = Array.isArray(keys) ? keys : [];
+				state.keysLoaded = true;
+			}).catch(function (err) {
+				state.keys = [];
+				state.keysLoaded = true;
+				state.keysError = err.message;
+			}).then(function () {
+				renderKeys();
+			});
+		}
+
+		function keysMessage(text, kind) {
+			var li = makeEl("li", "py-6 text-center text-sm " + (kind === "error" ? "text-error" : "text-base-content/50"));
+			li.textContent = text;
+			return li;
+		}
+
+		function renderKeys() {
+			var list = byId("keys-list");
+			if (!list) return;
+			clear(list);
+
+			if (state.keysError) {
+				list.appendChild(keysMessage("Could not load keys. " + state.keysError, "error"));
+				return;
+			}
+			if (!state.keys.length) {
+				list.appendChild(keysMessage("No keys yet. Create one to let an agent read feedback.", "empty"));
+				return;
+			}
+
+			for (var i = 0; i < state.keys.length; i++) {
+				list.appendChild(keyItem(state.keys[i]));
+			}
+		}
+
+		function keyItem(key) {
+			var li = makeEl("li", "flex items-start justify-between gap-4 rounded-xl border border-base-200 p-4" + (key.revoked ? " opacity-60" : ""));
+
+			var main = makeEl("div", "min-w-0 flex-1");
+			var chips = makeEl("div", "flex flex-wrap gap-2");
+			var repos = key.repos || [];
+			for (var r = 0; r < repos.length; r++) {
+				var chip = makeEl("span", "badge badge-sm badge-ghost font-mono" + (key.revoked ? " line-through" : ""));
+				chip.textContent = repos[r];
+				chips.appendChild(chip);
+			}
+			main.appendChild(chips);
+			var meta = makeEl("div", "mt-2 text-xs text-base-content/50");
+			meta.textContent = "Created " + fmtDate(key.created_at) + (key.revoked ? " · revoked" : "");
+			main.appendChild(meta);
+
+			var side = makeEl("div", "flex flex-col items-end gap-2");
+			var id = makeEl("span", "font-mono text-xs text-base-content/40");
+			id.textContent = "#" + key.id;
+			side.appendChild(id);
+			if (key.revoked) {
+				var revoked = makeEl("span", "badge badge-sm badge-error");
+				revoked.textContent = "Revoked";
+				side.appendChild(revoked);
+			} else {
+				var btn = makeEl("button", "btn btn-error btn-outline btn-xs", { "type": "button", "aria-label": "Revoke key " + key.id });
+				btn.textContent = "Revoke";
+				btn.addEventListener("click", function () { revokeKey(key.id, btn); });
+				side.appendChild(btn);
+			}
+
+			li.appendChild(main);
+			li.appendChild(side);
+			return li;
+		}
+
+		function revokeKey(id, btn) {
+			if (!window.confirm("Revoke this key? Any agent using it will lose access immediately.")) return;
+			btn.disabled = true;
+			btn.textContent = "Revoking...";
+			api("/api/keys/" + id, { method: "DELETE" }).then(function () {
+				toast("Key revoked.");
+				loadKeys();
+			}).catch(function (err) {
+				toast("Could not revoke key: " + err.message, "error");
+				btn.disabled = false;
+				btn.textContent = "Revoke";
+			});
+		}
+
+		// ── Reveal + create ──────────────────────────────────────────────
+		function copyText(text, btn) {
+			function done() {
+				var prev = btn.textContent;
+				btn.textContent = "Copied";
+				setTimeout(function () { btn.textContent = prev; }, 1600);
+			}
+			function fallback() {
+				var ta = document.createElement("textarea");
+				ta.value = text;
+				ta.setAttribute("readonly", "");
+				ta.style.position = "fixed";
+				ta.style.left = "-9999px";
+				document.body.appendChild(ta);
+				ta.select();
+				var ok = false;
+				try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+				document.body.removeChild(ta);
+				if (ok) done();
+				else toast("Copy failed. Select the key and copy it manually.", "error");
+			}
+			if (navigator.clipboard && navigator.clipboard.writeText) {
+				navigator.clipboard.writeText(text).then(done).catch(fallback);
+			} else {
+				fallback();
+			}
+		}
+
+		function showReveal(plainKey, repos) {
+			var reveal = byId("reveal");
+			var keyEl = byId("reveal-key");
+			var reposEl = byId("reveal-repos");
+			if (!reveal) return;
+			if (keyEl) keyEl.textContent = plainKey;
+			if (reposEl) {
+				clear(reposEl);
+				var list = repos || [];
+				for (var i = 0; i < list.length; i++) {
+					var chip = makeEl("span", "badge badge-sm badge-ghost font-mono");
+					chip.textContent = list[i];
+					reposEl.appendChild(chip);
+				}
+			}
+			reveal.classList.remove("hidden");
+			if (reveal.scrollIntoView) reveal.scrollIntoView({ behavior: "smooth", block: "center" });
+			var copy = byId("reveal-copy");
+			if (copy) copy.focus();
+		}
+
+		// ── Create-key modal ─────────────────────────────────────────────
+		function openCreateModal() {
+			var modal = byId("create-key-modal");
+			if (!modal) return;
+			selected = {};
+			var filter = byId("repo-filter");
+			if (filter) filter.value = "";
+			if (state.reposLoaded && !state.reposError) {
+				renderRepos();
+			} else {
+				loadRepos();
+			}
+			if (typeof modal.showModal === "function") modal.showModal();
+			else modal.setAttribute("open", "");
+			if (filter) setTimeout(function () { filter.focus(); }, 60);
+		}
+
+		function closeCreateModal() {
+			var modal = byId("create-key-modal");
+			if (!modal) return;
+			if (typeof modal.close === "function") modal.close();
+			else modal.removeAttribute("open");
+		}
+
+		function generate() {
+			var repos = selectedNames();
+			if (!repos.length) return;
+			var btn = byId("generate");
+			var prev = btn ? btn.textContent : "";
+			if (btn) { btn.disabled = true; btn.textContent = "Generating..."; }
+			api("/api/keys", { method: "POST", body: JSON.stringify({ repos: repos }) }).then(function (res) {
+				closeCreateModal();
+				showReveal(res.key, res.repos || repos);
+				toast("Key created. Copy it now - it is shown once.");
+				selected = {};
+				renderRepos();
+				loadKeys();
+			}).catch(function (err) {
+				toast("Could not create key: " + err.message, "error");
+			}).then(function () {
+				if (btn) { btn.textContent = prev; }
+				updateSelectionUi();
+			});
+		}
+
+		// ── Overview ─────────────────────────────────────────────────────
+		function statCard(label, value, icon, href) {
+			var card = makeEl(href ? "a" : "div", "card border border-base-300/60 bg-base-100 p-5 transition hover:border-primary/40 hover:shadow-sm");
+			if (href) card.setAttribute("href", href);
+			var top = makeEl("div", "flex items-center justify-between gap-2");
+			var iconWrap = makeEl("span", "grid size-9 place-items-center rounded-lg bg-primary/10 text-primary");
+			iconWrap.appendChild(makeEl("span", "iconify size-5 " + icon));
+			top.appendChild(iconWrap);
+			if (href) top.appendChild(makeEl("span", "iconify size-4 text-base-content/30 lucide--arrow-up-right"));
+			card.appendChild(top);
+			var v = makeEl("div", "mt-3 text-2xl font-semibold tracking-tight");
+			v.textContent = String(value);
+			card.appendChild(v);
+			var l = makeEl("div", "mt-0.5 text-sm text-base-content/60");
+			l.textContent = label;
+			card.appendChild(l);
+			return card;
+		}
+
+		function renderOverview(data) {
+			var el = byId("overview-stats");
+			if (!el) return;
+			clear(el);
+			var repos = data.repos || [];
+			var keys = data.keys || [];
+			var activeKeys = 0;
+			for (var i = 0; i < keys.length; i++) { if (!keys[i].revoked) activeKeys++; }
+			var reports = data.reports || [];
+			el.appendChild(statCard("Repositories", repos.length, "lucide--git-branch", "/panel/keys"));
+			el.appendChild(statCard("Active API keys", activeKeys, "lucide--key-round", "/panel/keys"));
+			el.appendChild(statCard("Reports", reports.length, "lucide--inbox", "/panel/reports"));
+		}
+
+		function loadOverview() {
+			var el = byId("overview-stats");
+			if (!el) return;
+			Promise.all([
+				api("/api/repos").catch(function () { return []; }),
+				api("/api/keys").catch(function () { return []; }),
+				api("/api/reports").catch(function () { return []; })
+			]).then(function (res) {
+				renderOverview({ repos: res[0] || [], keys: res[1] || [], reports: res[2] || [] });
+			});
+		}
+
+		// ── Reports ──────────────────────────────────────────────────────
+		function snippet(value, max) {
+			var s = value == null ? "" : String(value);
+			s = s.split("\n").join(" ").split("\t").join(" ").trim();
+			if (s.length <= max) return s;
+			return s.slice(0, max - 1) + "...";
+		}
+
+		function isObj(v) {
+			return v !== null && typeof v === "object";
+		}
+
+		function textOf(v) {
+			if (v == null) return "";
+			if (typeof v === "string") return v;
+			try { return JSON.stringify(v); } catch (e) { return String(v); }
+		}
+
+		function safeStringify(v) {
+			try { return JSON.stringify(v, null, 2); } catch (e) { return String(v); }
+		}
+
+		function noticeDiv(text, kind) {
+			var d = makeEl("div", "px-5 py-4 text-sm " + (kind === "error" ? "text-error" : "text-base-content/50"));
+			d.textContent = text;
+			return d;
+		}
+
+		function reportsMessage(text, kind) {
+			var li = makeEl("li", "py-6 text-center text-sm " + (kind === "error" ? "text-error" : "text-base-content/50"));
+			li.textContent = text;
+			return li;
+		}
+
+		function loadReports() {
+			state.reportsLoaded = false;
+			state.reportsError = null;
+			var list = byId("reports-list");
+			if (!list) return;
+			clear(list);
+			var li = makeEl("li", "flex items-center gap-2 py-6 text-sm text-base-content/50");
+			li.appendChild(makeEl("span", "loading loading-spinner loading-sm"));
+			var span = makeEl("span");
+			span.textContent = "Loading reports...";
+			li.appendChild(span);
+			list.appendChild(li);
+
+			api("/api/reports").then(function (reports) {
+				state.reports = Array.isArray(reports) ? reports : [];
+				state.reportsLoaded = true;
+			}).catch(function (err) {
+				state.reports = [];
+				state.reportsLoaded = true;
+				state.reportsError = err.message;
+			}).then(function () {
+				renderReports();
+			});
+		}
+
+		function renderReports() {
+			var list = byId("reports-list");
+			if (!list) return;
+			clear(list);
+
+			if (state.reportsError) {
+				list.appendChild(reportsMessage("Could not load reports. " + state.reportsError, "error"));
+				return;
+			}
+			if (!state.reports.length) {
+				list.appendChild(reportsMessage("No reports yet.", "empty"));
+				return;
+			}
+
+			for (var i = 0; i < state.reports.length; i++) {
+				list.appendChild(reportRow(state.reports[i]));
+			}
+		}
+
+		function reportRow(report) {
+			var li = makeEl("li", "flex items-start justify-between gap-4 rounded-xl border border-base-200 p-4");
+
+			var main = makeEl("div", "min-w-0 flex-1");
+			var head = makeEl("div", "flex flex-wrap items-center gap-2");
+			if (report.repo) {
+				var chip = makeEl("span", "badge badge-sm badge-ghost font-mono");
+				chip.textContent = report.repo;
+				head.appendChild(chip);
+			}
+			if (report.selector) {
+				var sel = makeEl("code", "max-w-full truncate font-mono text-xs text-base-content/70");
+				sel.textContent = report.selector;
+				sel.title = report.selector;
+				head.appendChild(sel);
+			}
+			main.appendChild(head);
+
+			var p = makeEl("p", "mt-2 text-sm text-base-content/80");
+			p.textContent = snippet(report.comment, 160) || "(no comment)";
+			main.appendChild(p);
+
+			var meta = makeEl("div", "mt-2 text-xs text-base-content/50");
+			meta.textContent = "Created " + fmtDate(report.created_at);
+			main.appendChild(meta);
+
+			var side = makeEl("div", "flex flex-col items-end gap-2");
+			var preview = makeEl("button", "btn btn-ghost btn-xs", { "type": "button", "aria-label": "Preview report " + report.id });
+			preview.textContent = "Preview";
+			preview.addEventListener("click", function () { openReport(report.id); });
+			side.appendChild(preview);
+			if (report.issue_url) {
+				var issueLink = makeEl("a", "link link-primary text-xs", { "href": report.issue_url, "target": "_blank", "rel": "noopener noreferrer", "aria-label": "Open GitHub issue for report " + report.id });
+				issueLink.textContent = "Issue";
+				side.appendChild(issueLink);
+			}
+			li.appendChild(main);
+			li.appendChild(side);
+			return li;
+		}
+
+		function openReport(id) {
+			var panel = byId("report-preview");
+			if (!panel) return;
+			clear(panel);
+			var loading = makeEl("div", "flex items-center gap-2 border-b border-base-200 px-5 py-4 text-sm text-base-content/50");
+			loading.appendChild(makeEl("span", "loading loading-spinner loading-sm"));
+			var span = makeEl("span");
+			span.textContent = "Loading report...";
+			loading.appendChild(span);
+			panel.appendChild(loading);
+			panel.classList.remove("hidden");
+			if (panel.scrollIntoView) panel.scrollIntoView({ behavior: "smooth", block: "start" });
+
+			api("/api/reports/" + encodeURIComponent(id)).then(function (data) {
+				renderReportPreview(data);
+			}).catch(function (err) {
+				clear(panel);
+				panel.appendChild(noticeDiv("Could not load report. " + err.message, "error"));
+				toast("Could not load report: " + err.message, "error");
+			});
+		}
+
+		function formatViewport(vp) {
+			if (vp == null) return "";
+			if (typeof vp === "string" || typeof vp === "number") return String(vp);
+			if (isObj(vp) && vp.width != null && vp.height != null) return vp.width + " x " + vp.height;
+			return textOf(vp);
+		}
+
+		function formatHistory(history) {
+			if (history == null) return "";
+			if (Array.isArray(history)) {
+				var out = history.length + (history.length === 1 ? " entry" : " entries");
+				if (history.length) {
+					var last = history[history.length - 1];
+					var lastText = typeof last === "string" ? last : textOf(last);
+					lastText = snippet(lastText, 60);
+					if (lastText) out += " - last: " + lastText;
+				}
+				return out;
+			}
+			return textOf(history);
+		}
+
+		function contextRow(grid, label, value) {
+			var text = value == null ? "" : String(value);
+			if (!text) return;
+			var row = makeEl("div", "min-w-0");
+			var k = makeEl("div", "text-xs text-base-content/40");
+			k.textContent = label;
+			var v = makeEl("div", "truncate text-sm text-base-content/80");
+			v.textContent = text;
+			v.title = text;
+			row.appendChild(k);
+			row.appendChild(v);
+			grid.appendChild(row);
+		}
+
+		function contextSection(ctx) {
+			var section = makeEl("div", "mt-4");
+			var label = makeEl("div", "mb-2 text-xs font-medium uppercase tracking-wide text-base-content/40");
+			label.textContent = "Context";
+			section.appendChild(label);
+
+			if (!isObj(ctx)) {
+				var none = makeEl("p", "text-sm text-base-content/50");
+				none.textContent = "No context captured.";
+				section.appendChild(none);
+				return section;
+			}
+
+			var grid = makeEl("div", "grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2");
+			contextRow(grid, "URL", ctx.url);
+			contextRow(grid, "Viewport", formatViewport(ctx.viewport));
+			contextRow(grid, "CSS framework", ctx.cssFramework);
+			contextRow(grid, "User agent", ctx.userAgent);
+			contextRow(grid, "Data component", ctx.dataComponent);
+			contextRow(grid, "Session history", formatHistory(ctx.sessionHistory));
+			section.appendChild(grid);
+
+			var raw = makeEl("details", "mt-3 text-xs");
+			var sum = makeEl("summary", "cursor-pointer text-base-content/50");
+			sum.textContent = "Raw context JSON";
+			raw.appendChild(sum);
+			var pre = makeEl("pre", "mt-2 max-h-64 overflow-auto rounded-lg bg-base-300/40 p-3 font-mono text-xs text-base-content/80");
+			pre.textContent = safeStringify(ctx);
+			raw.appendChild(pre);
+			section.appendChild(raw);
+			return section;
+		}
+
+		function snapshotSection(snapshotHtml) {
+			var section = makeEl("div", "p-5");
+			var details = makeEl("details", "text-sm");
+			var sum = makeEl("summary", "cursor-pointer text-base-content/60");
+			sum.textContent = "Full-page snapshot";
+			details.appendChild(sum);
+			var note = makeEl("p", "mt-2 text-xs text-base-content/40");
+			note.textContent = "Rendered in a sandboxed frame. Scripts are disabled.";
+			details.appendChild(note);
+			// srcdoc is set via setAttribute so the snapshot HTML is treated as
+			// the frame's document, not interpolated into markup.
+			var frame = makeEl("iframe", "mt-2 h-[400px] w-full rounded-lg border border-base-200 bg-white", { "sandbox": "", "title": "Captured page snapshot", "loading": "lazy" });
+			frame.setAttribute("srcdoc", snapshotHtml);
+			details.appendChild(frame);
+			section.appendChild(details);
+			return section;
+		}
+
+		function renderReportPreview(data) {
+			var panel = byId("report-preview");
+			if (!panel) return;
+			clear(panel);
+
+			var wrap = makeEl("div", "border-b border-base-200 bg-base-200/30 p-5");
+
+			var head = makeEl("div", "flex flex-wrap items-start justify-between gap-3");
+			var titleWrap = makeEl("div", "min-w-0");
+			var title = makeEl("h3", "text-sm font-semibold");
+			title.textContent = "Report #" + data.id;
+			titleWrap.appendChild(title);
+			var sub = makeEl("div", "mt-1 flex flex-wrap items-center gap-2");
+			if (data.repo) {
+				var chip = makeEl("span", "badge badge-sm badge-ghost font-mono");
+				chip.textContent = data.repo;
+				sub.appendChild(chip);
+			}
+			if (data.selector) {
+				var sel = makeEl("code", "truncate font-mono text-xs text-base-content/70");
+				sel.textContent = data.selector;
+				sel.title = data.selector;
+				sub.appendChild(sel);
+			}
+			titleWrap.appendChild(sub);
+			head.appendChild(titleWrap);
+
+			var actions = makeEl("div", "flex items-center gap-2");
+			if (data.issue_url) {
+				var issueLink = makeEl("a", "btn btn-ghost btn-xs", { "href": data.issue_url, "target": "_blank", "rel": "noopener noreferrer" });
+				issueLink.textContent = "View issue on GitHub";
+				actions.appendChild(issueLink);
+			}
+			var dismiss = makeEl("button", "btn btn-ghost btn-xs", { "type": "button", "aria-label": "Dismiss report preview" });
+			dismiss.textContent = "Dismiss";
+			dismiss.addEventListener("click", function () {
+				panel.classList.add("hidden");
+				clear(panel);
+			});
+			actions.appendChild(dismiss);
+			head.appendChild(actions);
+			wrap.appendChild(head);
+
+			if (data.comment) {
+				var comment = makeEl("p", "mt-3 whitespace-pre-wrap text-sm text-base-content/80");
+				comment.textContent = data.comment;
+				wrap.appendChild(comment);
+			}
+
+			var meta = makeEl("div", "mt-2 text-xs text-base-content/50");
+			meta.textContent = "Created " + fmtDate(data.created_at);
+			wrap.appendChild(meta);
+
+			if (data.url) {
+				var urlP = makeEl("p", "mt-3 text-xs text-base-content/60");
+				var urlLabel = makeEl("span", "text-base-content/40");
+				urlLabel.textContent = "Page: ";
+				urlP.appendChild(urlLabel);
+				var pageLink = makeEl("a", "link link-primary break-all", { "href": data.url, "target": "_blank", "rel": "noopener noreferrer" });
+				pageLink.textContent = data.url;
+				urlP.appendChild(pageLink);
+				wrap.appendChild(urlP);
+			}
+
+			wrap.appendChild(contextSection(data.context));
+			panel.appendChild(wrap);
+
+			if (data.has_screenshot && data.screenshot) {
+				var shotWrap = makeEl("div", "border-b border-base-200 p-5");
+				var shotHead = makeEl("div", "mb-2 text-xs font-medium uppercase tracking-wide text-base-content/40");
+				shotHead.textContent = "Screenshot";
+				shotWrap.appendChild(shotHead);
+				var img = makeEl("img", "w-full rounded-lg border border-base-200", { "alt": "Screenshot of the captured page" });
+				img.src = "data:image/png;base64," + data.screenshot;
+				shotWrap.appendChild(img);
+				panel.appendChild(shotWrap);
+			}
+
+			if (data.has_snapshot && data.snapshot) {
+				panel.appendChild(snapshotSection(data.snapshot));
+			}
+		}
+
+		// ── Bootstrap + events ───────────────────────────────────────────
+		function loadPageData() {
+			var page = currentPage();
+			if (page === "overview") { loadOverview(); return; }
+			if (page === "keys") { loadKeys(); return; }
+			if (page === "reports") { loadReports(); return; }
+			// Fallback (unknown page): load everything that has a container.
+			loadRepos();
+			loadKeys();
+			loadReports();
+		}
+
+		function bootstrap() {
+			renderAuth();
+			if (!state.token) return;
+			api("/me").then(function (me) {
+				state.user = { login: me.login, avatar: me.avatar_url };
+				try { localStorage.setItem(USER_KEY, JSON.stringify(state.user)); } catch (e) {}
+				renderAuth();
+				loadPageData();
+			}).catch(function () {});
+		}
+
+		function wire() {
+			var signin = byId("signin");
+			if (signin) signin.addEventListener("click", signIn);
+
+			var signout = byId("signout");
+			if (signout) signout.addEventListener("click", function () { signOut(); toast("Signed out."); });
+
+			var refresh = byId("refresh");
+			if (refresh) refresh.addEventListener("click", loadKeys);
+
+			var reportsRefresh = byId("reports-refresh");
+			if (reportsRefresh) reportsRefresh.addEventListener("click", loadReports);
+
+			var reload = byId("reload-repos");
+			if (reload) reload.addEventListener("click", loadRepos);
+
+			var createKey = byId("create-key");
+			if (createKey) createKey.addEventListener("click", openCreateModal);
+
+			var createClose = byId("create-key-close");
+			if (createClose) createClose.addEventListener("click", closeCreateModal);
+
+			var modal = byId("create-key-modal");
+			if (modal) {
+				modal.addEventListener("click", function (e) {
+					if (e.target === modal) closeCreateModal();
 				});
 			}
 
-			// ── Auth state ───────────────────────────────────────────────────
-			function renderAuth() {
-				var signedIn = !!state.token;
-				var gate = byId("gate");
-				var app = byId("app");
-				if (signedIn) {
-					if (gate) gate.classList.add("hidden");
-					if (app) app.classList.remove("hidden");
-				} else {
-					if (app) app.classList.add("hidden");
-					if (gate) gate.classList.remove("hidden");
+			var generateBtn = byId("generate");
+			if (generateBtn) generateBtn.addEventListener("click", generate);
+
+			var filter = byId("repo-filter");
+			if (filter) filter.addEventListener("input", renderRepos);
+
+			var selectAll = byId("select-all");
+			if (selectAll) selectAll.addEventListener("click", function () {
+				var filterEl = byId("repo-filter");
+				var f = filterEl ? (filterEl.value || "").trim().toLowerCase() : "";
+				var visible = state.repos.filter(function (r) {
+					return (r.full_name || "").toLowerCase().indexOf(f) > -1;
+				});
+				var allSelected = visible.length > 0 && visible.every(function (r) {
+					return Object.prototype.hasOwnProperty.call(selected, r.full_name);
+				});
+				for (var i = 0; i < visible.length; i++) {
+					if (allSelected) delete selected[visible[i].full_name];
+					else selected[visible[i].full_name] = true;
 				}
-				if (!signedIn) return;
-				var login = byId("user-login");
-				if (login) login.textContent = (state.user && state.user.login) || "";
-				setAvatar(state.user);
-			}
+				renderRepos();
+			});
 
-			function setAvatar(user) {
-				var wrap = byId("user-avatar");
-				if (!wrap) return;
-				clear(wrap);
-				var src = user && user.avatar;
-				if (src) {
-					var frame = makeEl("div", "size-8 overflow-hidden rounded-full");
-					var img = makeEl("img", "h-full w-full object-cover", { "src": src, "alt": "" });
-					frame.appendChild(img);
-					wrap.appendChild(frame);
-				} else {
-					var name = (user && user.login) || "?";
-					var badge = makeEl("div", "flex size-8 items-center justify-center rounded-full bg-base-300 text-xs font-semibold");
-					badge.textContent = name.charAt(0).toUpperCase();
-					wrap.appendChild(badge);
-				}
-			}
+			var clearAll = byId("clear-all");
+			if (clearAll) clearAll.addEventListener("click", function () {
+				selected = {};
+				renderRepos();
+			});
 
-			function signIn() {
-				window.open(
-					"/auth/github?origin=" + encodeURIComponent(location.origin),
-					"ef_auth",
-					"width=600,height=700,left=200,top=100"
-				);
-			}
+			var dismiss = byId("reveal-dismiss");
+			if (dismiss) dismiss.addEventListener("click", function () {
+				var reveal = byId("reveal");
+				if (reveal) reveal.classList.add("hidden");
+			});
 
-			function signOut() {
+			var copy = byId("reveal-copy");
+			if (copy) copy.addEventListener("click", function () {
+				var keyEl = byId("reveal-key");
+				if (keyEl) copyText(keyEl.textContent, copy);
+			});
+
+			window.addEventListener("message", function (event) {
+				if (event.origin !== location.origin) return;
+				var data = event.data;
+				if (!data || data.type !== "emergent_feedback_auth" || !data.token) return;
 				try {
-					localStorage.removeItem(TOKEN_KEY);
-					localStorage.removeItem(USER_KEY);
+					localStorage.setItem(TOKEN_KEY, data.token);
+					localStorage.setItem(USER_KEY, JSON.stringify({ login: data.login || "", avatar: data.avatar || "" }));
 				} catch (e) {}
-				state.token = null;
-				state.user = null;
-				state.repos = [];
-				state.keys = [];
-				state.reports = [];
+				state.token = data.token;
+				state.user = { login: data.login || "", avatar: data.avatar || "" };
 				state.reposLoaded = false;
 				state.keysLoaded = false;
 				state.reportsLoaded = false;
-				state.reposError = null;
-				state.keysError = null;
-				state.reportsError = null;
 				selected = {};
-				var reveal = byId("reveal");
-				if (reveal) reveal.classList.add("hidden");
 				var preview = byId("report-preview");
 				if (preview) {
 					preview.classList.add("hidden");
 					clear(preview);
 				}
-				var filter = byId("repo-filter");
-				if (filter) filter.value = "";
-				renderAuth();
-			}
-
-			// ── Repositories ─────────────────────────────────────────────────
-			function setReposStatus(message, kind) {
-				var s = byId("repos-status");
-				if (!s) return;
-				clear(s);
-				s.className = "px-5 py-4 text-sm " + (kind === "error" ? "text-error" : "text-base-content/60");
-				if (kind === "loading") {
-					s.appendChild(makeEl("span", "loading loading-spinner loading-xs mr-2 align-middle"));
-				}
-				var span = makeEl("span");
-				span.textContent = message;
-				s.appendChild(span);
-			}
-
-			function loadRepos() {
-				state.reposLoaded = false;
-				state.reposError = null;
-				setReposStatus("Loading repositories...", "loading");
-				var generate = byId("generate");
-				if (generate) generate.disabled = true;
-				api("/api/repos").then(function (repos) {
-					state.repos = Array.isArray(repos) ? repos : [];
-					state.reposLoaded = true;
-				}).catch(function (err) {
-					state.repos = [];
-					state.reposLoaded = true;
-					state.reposError = err.message;
-				}).then(function () {
-					renderRepos();
-				});
-			}
-
-			function groupByOwner(repos) {
-				var groups = [];
-				var index = {};
-				for (var i = 0; i < repos.length; i++) {
-					var r = repos[i];
-					var full = r.full_name || "";
-					var slash = full.indexOf("/");
-					var owner = slash > -1 ? full.slice(0, slash) : "";
-					var name = slash > -1 ? full.slice(slash + 1) : full;
-					if (!Object.prototype.hasOwnProperty.call(index, owner)) {
-						index[owner] = { owner: owner, items: [] };
-						groups.push(index[owner]);
-					}
-					index[owner].items.push({ full_name: full, name: name, private: !!r.private });
-				}
-				return groups;
-			}
-
-			function repoRow(repo, owner) {
-				var input = makeEl("input", "checkbox checkbox-sm checkbox-primary", { "type": "checkbox", "value": repo.full_name, "aria-label": repo.full_name });
-				input.checked = Object.prototype.hasOwnProperty.call(selected, repo.full_name);
-				input.addEventListener("change", function () {
-					if (input.checked) selected[repo.full_name] = true;
-					else delete selected[repo.full_name];
-					updateSelectionUi();
-				});
-
-				var label = makeEl("label", "flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 hover:bg-base-200");
-				label.appendChild(input);
-
-				var nameEl = makeEl("span", "min-w-0 truncate font-mono text-sm");
-				if (owner) {
-					var ownerEl = makeEl("span", "text-base-content/40");
-					ownerEl.textContent = owner + "/";
-					nameEl.appendChild(ownerEl);
-				}
-				nameEl.appendChild(document.createTextNode(repo.name));
-				label.appendChild(nameEl);
-
-				label.appendChild(makeEl("span", "flex-1"));
-
-				var badge = makeEl("span", "badge badge-sm gap-1 " + (repo.private ? "badge-warning" : "badge-ghost"));
-				badge.textContent = repo.private ? "Private" : "Public";
-				label.appendChild(badge);
-
-				return label;
-			}
-
-			function renderRepos() {
-				var list = byId("repo-list");
-				var tools = byId("repo-tools");
-				var filterEl = byId("repo-filter");
-				if (!list) return;
-				clear(list);
-
-				if (state.reposError) {
-					if (tools) tools.classList.add("hidden");
-					setReposStatus("Could not load repositories. " + state.reposError, "error");
-					updateSelectionUi();
-					return;
-				}
-
-				if (!state.repos.length) {
-					if (tools) tools.classList.add("hidden");
-					setReposStatus("No repositories found. Check that the GitHub App is installed for your account.", "empty");
-					updateSelectionUi();
-					return;
-				}
-
-				if (tools) tools.classList.remove("hidden");
-
-				var filter = filterEl ? (filterEl.value || "").trim().toLowerCase() : "";
-				var matches = state.repos.filter(function (r) {
-					return (r.full_name || "").toLowerCase().indexOf(filter) > -1;
-				});
-
-				if (!matches.length) {
-					setReposStatus("No repositories match the current filter.", "empty");
-					updateSelectionUi();
-					return;
-				}
-
-				setReposStatus("", "idle");
-				var groups = groupByOwner(matches);
-				for (var g = 0; g < groups.length; g++) {
-					var group = groups[g];
-					var groupEl = makeEl("div");
-					var ownerLabel = makeEl("div", "px-2 pb-1 pt-3 font-mono text-[11px] uppercase tracking-wide text-base-content/40");
-					ownerLabel.textContent = group.owner;
-					groupEl.appendChild(ownerLabel);
-					for (var j = 0; j < group.items.length; j++) {
-						groupEl.appendChild(repoRow(group.items[j], group.owner));
-					}
-					list.appendChild(groupEl);
-				}
-
-				updateSelectionUi();
-			}
-
-			function selectedNames() {
-				var out = [];
-				for (var k in selected) {
-					if (Object.prototype.hasOwnProperty.call(selected, k)) out.push(k);
-				}
-				return out;
-			}
-
-			function updateSelectionUi() {
-				var names = selectedNames();
-				var n = names.length;
-				var count = byId("sel-count");
-				if (count) count.textContent = n === 0 ? "No repositories selected" : n + (n === 1 ? " repository selected" : " repositories selected");
-				var generate = byId("generate");
-				if (generate) generate.disabled = n === 0;
-				var clearBtn = byId("clear-all");
-				if (clearBtn) clearBtn.disabled = n === 0;
-
-				var selectAll = byId("select-all");
-				if (selectAll) {
-					var allSelected = state.reposLoaded && state.repos.length > 0 && state.repos.every(function (r) {
-						return Object.prototype.hasOwnProperty.call(selected, r.full_name);
-					});
-					selectAll.textContent = allSelected ? "Clear all" : "Select all";
-				}
-			}
-
-			// ── Keys ─────────────────────────────────────────────────────────
-			function fmtDate(iso) {
-				var d = new Date(iso);
-				if (isNaN(d.getTime())) return iso || "";
-				return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-			}
-
-			function loadKeys() {
-				state.keysLoaded = false;
-				state.keysError = null;
-				var list = byId("keys-list");
-				if (!list) return;
-				clear(list);
-				var li = makeEl("li", "flex items-center gap-2 py-6 text-sm text-base-content/50");
-				li.appendChild(makeEl("span", "loading loading-spinner loading-sm"));
-				var span = makeEl("span");
-				span.textContent = "Loading keys...";
-				li.appendChild(span);
-				list.appendChild(li);
-
-				api("/api/keys").then(function (keys) {
-					state.keys = Array.isArray(keys) ? keys : [];
-					state.keysLoaded = true;
-				}).catch(function (err) {
-					state.keys = [];
-					state.keysLoaded = true;
-					state.keysError = err.message;
-				}).then(function () {
-					renderKeys();
-				});
-			}
-
-			function keysMessage(text, kind) {
-				var li = makeEl("li", "py-6 text-center text-sm " + (kind === "error" ? "text-error" : "text-base-content/50"));
-				li.textContent = text;
-				return li;
-			}
-
-			function renderKeys() {
-				var list = byId("keys-list");
-				if (!list) return;
-				clear(list);
-
-				if (state.keysError) {
-					list.appendChild(keysMessage("Could not load keys. " + state.keysError, "error"));
-					return;
-				}
-				if (!state.keys.length) {
-					list.appendChild(keysMessage("No keys yet. Generate one to let an agent read feedback.", "empty"));
-					return;
-				}
-
-				for (var i = 0; i < state.keys.length; i++) {
-					list.appendChild(keyItem(state.keys[i]));
-				}
-			}
-
-			function keyItem(key) {
-				var li = makeEl("li", "flex items-start justify-between gap-4 rounded-xl border border-base-200 p-4" + (key.revoked ? " opacity-60" : ""));
-
-				var main = makeEl("div", "min-w-0 flex-1");
-				var chips = makeEl("div", "flex flex-wrap gap-2");
-				var repos = key.repos || [];
-				for (var r = 0; r < repos.length; r++) {
-					var chip = makeEl("span", "badge badge-sm badge-ghost font-mono" + (key.revoked ? " line-through" : ""));
-					chip.textContent = repos[r];
-					chips.appendChild(chip);
-				}
-				main.appendChild(chips);
-				var meta = makeEl("div", "mt-2 text-xs text-base-content/50");
-				meta.textContent = "Created " + fmtDate(key.created_at) + (key.revoked ? " · revoked" : "");
-				main.appendChild(meta);
-
-				var side = makeEl("div", "flex flex-col items-end gap-2");
-				var id = makeEl("span", "font-mono text-xs text-base-content/40");
-				id.textContent = "#" + key.id;
-				side.appendChild(id);
-				if (key.revoked) {
-					var revoked = makeEl("span", "badge badge-sm badge-error");
-					revoked.textContent = "Revoked";
-					side.appendChild(revoked);
-				} else {
-					var btn = makeEl("button", "btn btn-error btn-outline btn-xs", { "type": "button", "aria-label": "Revoke key " + key.id });
-					btn.textContent = "Revoke";
-					btn.addEventListener("click", function () { revokeKey(key.id, btn); });
-					side.appendChild(btn);
-				}
-
-				li.appendChild(main);
-				li.appendChild(side);
-				return li;
-			}
-
-			function revokeKey(id, btn) {
-				if (!window.confirm("Revoke this key? Any agent using it will lose access immediately.")) return;
-				btn.disabled = true;
-				btn.textContent = "Revoking...";
-				api("/api/keys/" + id, { method: "DELETE" }).then(function () {
-					toast("Key revoked.");
-					loadKeys();
-				}).catch(function (err) {
-					toast("Could not revoke key: " + err.message, "error");
-					btn.disabled = false;
-					btn.textContent = "Revoke";
-				});
-			}
-
-			// ── Reveal + create ──────────────────────────────────────────────
-			function copyText(text, btn) {
-				function done() {
-					var prev = btn.textContent;
-					btn.textContent = "Copied";
-					setTimeout(function () { btn.textContent = prev; }, 1600);
-				}
-				function fallback() {
-					var ta = document.createElement("textarea");
-					ta.value = text;
-					ta.setAttribute("readonly", "");
-					ta.style.position = "fixed";
-					ta.style.left = "-9999px";
-					document.body.appendChild(ta);
-					ta.select();
-					var ok = false;
-					try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
-					document.body.removeChild(ta);
-					if (ok) done();
-					else toast("Copy failed. Select the key and copy it manually.", "error");
-				}
-				if (navigator.clipboard && navigator.clipboard.writeText) {
-					navigator.clipboard.writeText(text).then(done).catch(fallback);
-				} else {
-					fallback();
-				}
-			}
-
-			function showReveal(plainKey, repos) {
-				var reveal = byId("reveal");
-				var keyEl = byId("reveal-key");
-				var reposEl = byId("reveal-repos");
-				if (!reveal) return;
-				if (keyEl) keyEl.textContent = plainKey;
-				if (reposEl) {
-					clear(reposEl);
-					var list = repos || [];
-					for (var i = 0; i < list.length; i++) {
-						var chip = makeEl("span", "badge badge-sm badge-ghost font-mono");
-						chip.textContent = list[i];
-						reposEl.appendChild(chip);
-					}
-				}
-				reveal.classList.remove("hidden");
-				if (reveal.scrollIntoView) reveal.scrollIntoView({ behavior: "smooth", block: "center" });
-				var copy = byId("reveal-copy");
-				if (copy) copy.focus();
-			}
-
-			function generate() {
-				var repos = selectedNames();
-				if (!repos.length) return;
-				var btn = byId("generate");
-				var prev = btn ? btn.textContent : "";
-				if (btn) { btn.disabled = true; btn.textContent = "Generating..."; }
-				api("/api/keys", { method: "POST", body: JSON.stringify({ repos: repos }) }).then(function (res) {
-					showReveal(res.key, res.repos || repos);
-					toast("Key created. Copy it now - it is shown once.");
-					selected = {};
-					renderRepos();
-					loadKeys();
-				}).catch(function (err) {
-					toast("Could not create key: " + err.message, "error");
-				}).then(function () {
-					if (btn) { btn.textContent = prev; }
-					updateSelectionUi();
-				});
-			}
-
-			// ── Reports ──────────────────────────────────────────────────────
-			function snippet(value, max) {
-				var s = value == null ? "" : String(value);
-				s = s.split("\n").join(" ").split("\t").join(" ").trim();
-				if (s.length <= max) return s;
-				return s.slice(0, max - 1) + "...";
-			}
-
-			function isObj(v) {
-				return v !== null && typeof v === "object";
-			}
-
-			function textOf(v) {
-				if (v == null) return "";
-				if (typeof v === "string") return v;
-				try { return JSON.stringify(v); } catch (e) { return String(v); }
-			}
-
-			function safeStringify(v) {
-				try { return JSON.stringify(v, null, 2); } catch (e) { return String(v); }
-			}
-
-			function noticeDiv(text, kind) {
-				var d = makeEl("div", "px-5 py-4 text-sm " + (kind === "error" ? "text-error" : "text-base-content/50"));
-				d.textContent = text;
-				return d;
-			}
-
-			function reportsMessage(text, kind) {
-				var li = makeEl("li", "py-6 text-center text-sm " + (kind === "error" ? "text-error" : "text-base-content/50"));
-				li.textContent = text;
-				return li;
-			}
-
-			function loadReports() {
-				state.reportsLoaded = false;
-				state.reportsError = null;
-				var list = byId("reports-list");
-				if (!list) return;
-				clear(list);
-				var li = makeEl("li", "flex items-center gap-2 py-6 text-sm text-base-content/50");
-				li.appendChild(makeEl("span", "loading loading-spinner loading-sm"));
-				var span = makeEl("span");
-				span.textContent = "Loading reports...";
-				li.appendChild(span);
-				list.appendChild(li);
-
-				api("/api/reports").then(function (reports) {
-					state.reports = Array.isArray(reports) ? reports : [];
-					state.reportsLoaded = true;
-				}).catch(function (err) {
-					state.reports = [];
-					state.reportsLoaded = true;
-					state.reportsError = err.message;
-				}).then(function () {
-					renderReports();
-				});
-			}
-
-			function renderReports() {
-				var list = byId("reports-list");
-				if (!list) return;
-				clear(list);
-
-				if (state.reportsError) {
-					list.appendChild(reportsMessage("Could not load reports. " + state.reportsError, "error"));
-					return;
-				}
-				if (!state.reports.length) {
-					list.appendChild(reportsMessage("No reports yet.", "empty"));
-					return;
-				}
-
-				for (var i = 0; i < state.reports.length; i++) {
-					list.appendChild(reportRow(state.reports[i]));
-				}
-			}
-
-			function reportRow(report) {
-				var li = makeEl("li", "flex items-start justify-between gap-4 rounded-xl border border-base-200 p-4");
-
-				var main = makeEl("div", "min-w-0 flex-1");
-				var head = makeEl("div", "flex flex-wrap items-center gap-2");
-				if (report.repo) {
-					var chip = makeEl("span", "badge badge-sm badge-ghost font-mono");
-					chip.textContent = report.repo;
-					head.appendChild(chip);
-				}
-				if (report.selector) {
-					var sel = makeEl("code", "max-w-full truncate font-mono text-xs text-base-content/70");
-					sel.textContent = report.selector;
-					sel.title = report.selector;
-					head.appendChild(sel);
-				}
-				main.appendChild(head);
-
-				var p = makeEl("p", "mt-2 text-sm text-base-content/80");
-				p.textContent = snippet(report.comment, 160) || "(no comment)";
-				main.appendChild(p);
-
-				var meta = makeEl("div", "mt-2 text-xs text-base-content/50");
-				meta.textContent = "Created " + fmtDate(report.created_at);
-				main.appendChild(meta);
-
-				var side = makeEl("div", "flex flex-col items-end gap-2");
-				var preview = makeEl("button", "btn btn-ghost btn-xs", { "type": "button", "aria-label": "Preview report " + report.id });
-				preview.textContent = "Preview";
-				preview.addEventListener("click", function () { openReport(report.id); });
-				side.appendChild(preview);
-				if (report.issue_url) {
-					var issueLink = makeEl("a", "link link-primary text-xs", { "href": report.issue_url, "target": "_blank", "rel": "noopener noreferrer", "aria-label": "Open GitHub issue for report " + report.id });
-					issueLink.textContent = "Issue";
-					side.appendChild(issueLink);
-				}
-				li.appendChild(main);
-				li.appendChild(side);
-				return li;
-			}
-
-			function openReport(id) {
-				var panel = byId("report-preview");
-				if (!panel) return;
-				clear(panel);
-				var loading = makeEl("div", "flex items-center gap-2 border-b border-base-200 px-5 py-4 text-sm text-base-content/50");
-				loading.appendChild(makeEl("span", "loading loading-spinner loading-sm"));
-				var span = makeEl("span");
-				span.textContent = "Loading report...";
-				loading.appendChild(span);
-				panel.appendChild(loading);
-				panel.classList.remove("hidden");
-				if (panel.scrollIntoView) panel.scrollIntoView({ behavior: "smooth", block: "start" });
-
-				api("/api/reports/" + encodeURIComponent(id)).then(function (data) {
-					renderReportPreview(data);
-				}).catch(function (err) {
-					clear(panel);
-					panel.appendChild(noticeDiv("Could not load report. " + err.message, "error"));
-					toast("Could not load report: " + err.message, "error");
-				});
-			}
-
-			function formatViewport(vp) {
-				if (vp == null) return "";
-				if (typeof vp === "string" || typeof vp === "number") return String(vp);
-				if (isObj(vp) && vp.width != null && vp.height != null) return vp.width + " x " + vp.height;
-				return textOf(vp);
-			}
-
-			function formatHistory(history) {
-				if (history == null) return "";
-				if (Array.isArray(history)) {
-					var out = history.length + (history.length === 1 ? " entry" : " entries");
-					if (history.length) {
-						var last = history[history.length - 1];
-						var lastText = typeof last === "string" ? last : textOf(last);
-						lastText = snippet(lastText, 60);
-						if (lastText) out += " - last: " + lastText;
-					}
-					return out;
-				}
-				return textOf(history);
-			}
-
-			function contextRow(grid, label, value) {
-				var text = value == null ? "" : String(value);
-				if (!text) return;
-				var row = makeEl("div", "min-w-0");
-				var k = makeEl("div", "text-xs text-base-content/40");
-				k.textContent = label;
-				var v = makeEl("div", "truncate text-sm text-base-content/80");
-				v.textContent = text;
-				v.title = text;
-				row.appendChild(k);
-				row.appendChild(v);
-				grid.appendChild(row);
-			}
-
-			function contextSection(ctx) {
-				var section = makeEl("div", "mt-4");
-				var label = makeEl("div", "mb-2 text-xs font-medium uppercase tracking-wide text-base-content/40");
-				label.textContent = "Context";
-				section.appendChild(label);
-
-				if (!isObj(ctx)) {
-					var none = makeEl("p", "text-sm text-base-content/50");
-					none.textContent = "No context captured.";
-					section.appendChild(none);
-					return section;
-				}
-
-				var grid = makeEl("div", "grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2");
-				contextRow(grid, "URL", ctx.url);
-				contextRow(grid, "Viewport", formatViewport(ctx.viewport));
-				contextRow(grid, "CSS framework", ctx.cssFramework);
-				contextRow(grid, "User agent", ctx.userAgent);
-				contextRow(grid, "Data component", ctx.dataComponent);
-				contextRow(grid, "Session history", formatHistory(ctx.sessionHistory));
-				section.appendChild(grid);
-
-				var raw = makeEl("details", "mt-3 text-xs");
-				var sum = makeEl("summary", "cursor-pointer text-base-content/50");
-				sum.textContent = "Raw context JSON";
-				raw.appendChild(sum);
-				var pre = makeEl("pre", "mt-2 max-h-64 overflow-auto rounded-lg bg-base-300/40 p-3 font-mono text-xs text-base-content/80");
-				pre.textContent = safeStringify(ctx);
-				raw.appendChild(pre);
-				section.appendChild(raw);
-				return section;
-			}
-
-			function snapshotSection(snapshotHtml) {
-				var section = makeEl("div", "p-5");
-				var details = makeEl("details", "text-sm");
-				var sum = makeEl("summary", "cursor-pointer text-base-content/60");
-				sum.textContent = "Full-page snapshot";
-				details.appendChild(sum);
-				var note = makeEl("p", "mt-2 text-xs text-base-content/40");
-				note.textContent = "Rendered in a sandboxed frame. Scripts are disabled.";
-				details.appendChild(note);
-				// srcdoc is set via setAttribute so the snapshot HTML is treated as
-				// the frame's document, not interpolated into markup.
-				var frame = makeEl("iframe", "mt-2 h-[400px] w-full rounded-lg border border-base-200 bg-white", { "sandbox": "", "title": "Captured page snapshot", "loading": "lazy" });
-				frame.setAttribute("srcdoc", snapshotHtml);
-				details.appendChild(frame);
-				section.appendChild(details);
-				return section;
-			}
-
-			function renderReportPreview(data) {
-				var panel = byId("report-preview");
-				if (!panel) return;
-				clear(panel);
-
-				var wrap = makeEl("div", "border-b border-base-200 bg-base-200/30 p-5");
-
-				var head = makeEl("div", "flex flex-wrap items-start justify-between gap-3");
-				var titleWrap = makeEl("div", "min-w-0");
-				var title = makeEl("h3", "text-sm font-semibold");
-				title.textContent = "Report #" + data.id;
-				titleWrap.appendChild(title);
-				var sub = makeEl("div", "mt-1 flex flex-wrap items-center gap-2");
-				if (data.repo) {
-					var chip = makeEl("span", "badge badge-sm badge-ghost font-mono");
-					chip.textContent = data.repo;
-					sub.appendChild(chip);
-				}
-				if (data.selector) {
-					var sel = makeEl("code", "truncate font-mono text-xs text-base-content/70");
-					sel.textContent = data.selector;
-					sel.title = data.selector;
-					sub.appendChild(sel);
-				}
-				titleWrap.appendChild(sub);
-				head.appendChild(titleWrap);
-
-				var actions = makeEl("div", "flex items-center gap-2");
-				if (data.issue_url) {
-					var issueLink = makeEl("a", "btn btn-ghost btn-xs", { "href": data.issue_url, "target": "_blank", "rel": "noopener noreferrer" });
-					issueLink.textContent = "View issue on GitHub";
-					actions.appendChild(issueLink);
-				}
-				var dismiss = makeEl("button", "btn btn-ghost btn-xs", { "type": "button", "aria-label": "Dismiss report preview" });
-				dismiss.textContent = "Dismiss";
-				dismiss.addEventListener("click", function () {
-					panel.classList.add("hidden");
-					clear(panel);
-				});
-				actions.appendChild(dismiss);
-				head.appendChild(actions);
-				wrap.appendChild(head);
-
-				if (data.comment) {
-					var comment = makeEl("p", "mt-3 whitespace-pre-wrap text-sm text-base-content/80");
-					comment.textContent = data.comment;
-					wrap.appendChild(comment);
-				}
-
-				var meta = makeEl("div", "mt-2 text-xs text-base-content/50");
-				meta.textContent = "Created " + fmtDate(data.created_at);
-				wrap.appendChild(meta);
-
-				if (data.url) {
-					var urlP = makeEl("p", "mt-3 text-xs text-base-content/60");
-					var urlLabel = makeEl("span", "text-base-content/40");
-					urlLabel.textContent = "Page: ";
-					urlP.appendChild(urlLabel);
-					var pageLink = makeEl("a", "link link-primary break-all", { "href": data.url, "target": "_blank", "rel": "noopener noreferrer" });
-					pageLink.textContent = data.url;
-					urlP.appendChild(pageLink);
-					wrap.appendChild(urlP);
-				}
-
-				wrap.appendChild(contextSection(data.context));
-				panel.appendChild(wrap);
-
-				if (data.has_screenshot && data.screenshot) {
-					var shotWrap = makeEl("div", "border-b border-base-200 p-5");
-					var shotHead = makeEl("div", "mb-2 text-xs font-medium uppercase tracking-wide text-base-content/40");
-					shotHead.textContent = "Screenshot";
-					shotWrap.appendChild(shotHead);
-					var img = makeEl("img", "w-full rounded-lg border border-base-200", { "alt": "Screenshot of the captured page" });
-					img.src = "data:image/png;base64," + data.screenshot;
-					shotWrap.appendChild(img);
-					panel.appendChild(shotWrap);
-				}
-
-				if (data.has_snapshot && data.snapshot) {
-					panel.appendChild(snapshotSection(data.snapshot));
-				}
-			}
-
-			// ── Bootstrap + events ───────────────────────────────────────────
-			function bootstrap() {
-				renderAuth();
-				if (!state.token) return;
-				api("/me").then(function (me) {
-					state.user = { login: me.login, avatar: me.avatar_url };
-					try { localStorage.setItem(USER_KEY, JSON.stringify(state.user)); } catch (e) {}
-					renderAuth();
-					loadRepos();
-					loadKeys();
-					loadReports();
-				}).catch(function () {});
-			}
-
-			function wire() {
-				var signin = byId("signin");
-				if (signin) signin.addEventListener("click", signIn);
-
-				var signout = byId("signout");
-				if (signout) signout.addEventListener("click", function () { signOut(); toast("Signed out."); });
-
-				var refresh = byId("refresh");
-				if (refresh) refresh.addEventListener("click", loadKeys);
-
-				var reportsRefresh = byId("reports-refresh");
-				if (reportsRefresh) reportsRefresh.addEventListener("click", loadReports);
-
-				var reload = byId("reload-repos");
-				if (reload) reload.addEventListener("click", loadRepos);
-
-				var generateBtn = byId("generate");
-				if (generateBtn) generateBtn.addEventListener("click", generate);
-
-				var filter = byId("repo-filter");
-				if (filter) filter.addEventListener("input", renderRepos);
-
-				var selectAll = byId("select-all");
-				if (selectAll) selectAll.addEventListener("click", function () {
-					var filterEl = byId("repo-filter");
-					var f = filterEl ? (filterEl.value || "").trim().toLowerCase() : "";
-					var visible = state.repos.filter(function (r) {
-						return (r.full_name || "").toLowerCase().indexOf(f) > -1;
-					});
-					var allSelected = visible.length > 0 && visible.every(function (r) {
-						return Object.prototype.hasOwnProperty.call(selected, r.full_name);
-					});
-					for (var i = 0; i < visible.length; i++) {
-						if (allSelected) delete selected[visible[i].full_name];
-						else selected[visible[i].full_name] = true;
-					}
-					renderRepos();
-				});
-
-				var clearAll = byId("clear-all");
-				if (clearAll) clearAll.addEventListener("click", function () {
-					selected = {};
-					renderRepos();
-				});
-
-				var dismiss = byId("reveal-dismiss");
-				if (dismiss) dismiss.addEventListener("click", function () {
-					var reveal = byId("reveal");
-					if (reveal) reveal.classList.add("hidden");
-				});
-
-				var copy = byId("reveal-copy");
-				if (copy) copy.addEventListener("click", function () {
-					var keyEl = byId("reveal-key");
-					if (keyEl) copyText(keyEl.textContent, copy);
-				});
-
-				window.addEventListener("message", function (event) {
-					if (event.origin !== location.origin) return;
-					var data = event.data;
-					if (!data || data.type !== "emergent_feedback_auth" || !data.token) return;
-					try {
-						localStorage.setItem(TOKEN_KEY, data.token);
-						localStorage.setItem(USER_KEY, JSON.stringify({ login: data.login || "", avatar: data.avatar || "" }));
-					} catch (e) {}
-					state.token = data.token;
-					state.user = { login: data.login || "", avatar: data.avatar || "" };
-					state.reposLoaded = false;
-					state.keysLoaded = false;
-					state.reportsLoaded = false;
-					selected = {};
-					var preview = byId("report-preview");
-					if (preview) {
-						preview.classList.add("hidden");
-						clear(preview);
-					}
-					toast("Signed in as " + (data.login || "GitHub user") + ".");
-					bootstrap();
-				});
-			}
-
-			wire();
-
-			// Prefer an existing session token; otherwise adopt the cookie the
-			// OAuth callback may have set on a full-page redirect.
-			if (!state.token) {
-				if (consumeCookieToken()) state.token = getToken();
-			}
-			bootstrap();
-		})();
-		</script>
-		<script src="/static/js/htmx.js"></script>
-	</body>
-	</html>
+				toast("Signed in as " + (data.login || "GitHub user") + ".");
+				bootstrap();
+			});
+		}
+
+		wire();
+
+		// Prefer an existing session token; otherwise adopt the cookie the
+		// OAuth callback may have set on a full-page redirect.
+		if (!state.token) {
+			if (consumeCookieToken()) state.token = getToken();
+		}
+		bootstrap();
+	})();
+	</script>
 }

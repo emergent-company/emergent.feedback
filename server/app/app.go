@@ -113,9 +113,17 @@ func BuildRouter(opts Options) (*echo.Echo, error) {
 	// ── Routes ────────────────────────────────────────────────────────────────
 	h := handler.New(opts.Store, opts.GitHub, opts.JWTSecret)
 
-	// Panel (public; go-daisy Templ page)
+	// Panel (public; go-daisy Templ pages)
 	e.GET("/panel", func(c echo.Context) error {
-		render.RenderPage(c.Response().Writer, c.Request(), panel.PanelPage())
+		render.RenderPage(c.Response().Writer, c.Request(), panel.PanelOverviewPage())
+		return nil
+	})
+	e.GET("/panel/keys", func(c echo.Context) error {
+		render.RenderPage(c.Response().Writer, c.Request(), panel.PanelKeysPage())
+		return nil
+	})
+	e.GET("/panel/reports", func(c echo.Context) error {
+		render.RenderPage(c.Response().Writer, c.Request(), panel.PanelReportsPage())
 		return nil
 	})
 
