@@ -279,6 +279,9 @@ func buildTarget(ctx map[string]any, f store.Feedback) map[string]any {
 	if v := ctx["selection"]; v != nil {
 		t["selection"] = v
 	}
+	if v := ctx["targets"]; v != nil {
+		t["targets"] = redactContextValue(v)
+	}
 	if s := buildSource(ctx); s != nil {
 		t["source"] = s
 	}
@@ -340,6 +343,9 @@ func buildIntent(ctx map[string]any) map[string]any {
 	}
 	if sc, ok := raw["scope"].(map[string]any); ok && len(sc) > 0 {
 		out["scope"] = redactContextValue(sc)
+	}
+	if v, ok := raw["changes"]; ok && v != nil {
+		out["changes"] = redactContextValue(v)
 	}
 	if len(out) == 0 {
 		return nil

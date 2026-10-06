@@ -1293,7 +1293,40 @@ templ panelScript() {
 			contextRow(grid, "User agent", ctx.userAgent);
 			contextRow(grid, "Data component", ctx.dataComponent);
 			contextRow(grid, "Session history", formatHistory(ctx.sessionHistory));
+			if (Array.isArray(ctx.targets) && ctx.targets.length) {
+				var sels = [];
+				for (var ti = 0; ti < ctx.targets.length; ti++) {
+					var t = ctx.targets[ti];
+					if (isObj(t) && t.selector) sels.push(String(t.selector));
+				}
+				contextRow(grid, "Targets (" + ctx.targets.length + ")", sels.join(", "));
+			}
 			section.appendChild(grid);
+
+			// Live style edits recorded on the selected element(s).
+			if (isObj(ctx.intent) && Array.isArray(ctx.intent.changes) && ctx.intent.changes.length) {
+				var chLabel = makeEl("div", "mt-4 mb-2 text-xs font-medium uppercase tracking-wide text-base-content/40");
+				chLabel.textContent = "Requested changes";
+				section.appendChild(chLabel);
+				var chList = makeEl("ul", "space-y-1.5 text-sm text-base-content/80");
+				for (var ci = 0; ci < ctx.intent.changes.length; ci++) {
+					var c = ctx.intent.changes[ci];
+					if (!isObj(c)) continue;
+					var li = makeEl("li", "flex flex-wrap items-baseline gap-x-2 gap-y-1");
+					var tgt = makeEl("code", "font-mono text-xs text-base-content/80");
+					tgt.textContent = textOf(c.target);
+					li.appendChild(tgt);
+					var grp = makeEl("span", "text-xs text-base-content/50");
+					grp.textContent = textOf(c.group);
+					li.appendChild(grp);
+					var delta = makeEl("span", "text-xs text-base-content/70");
+					var before = (typeof c.before === "string" && c.before) ? c.before : "(none)";
+					delta.textContent = before + " \u2192 " + textOf(c.after);
+					li.appendChild(delta);
+					chList.appendChild(li);
+				}
+				section.appendChild(chList);
+			}
 
 			var raw = makeEl("details", "mt-3 text-xs");
 			var sum = makeEl("summary", "cursor-pointer text-base-content/50");

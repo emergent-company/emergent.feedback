@@ -41,6 +41,12 @@ export interface OverlayConfig {
    * `"auto"` (default) detects the host page theme, then the OS preference.
    */
   theme?: "light" | "dark" | "auto";
+  /**
+   * Optional project-hosted theme-token endpoint (`data-theme-url`). Supplies
+   * the live style editor's token groups. When absent/unreachable the client
+   * falls back to daisyUI CSS variables read from the host document.
+   */
+  themeUrl?: string;
 }
 
 function getScriptTag(): HTMLScriptElement | null {
@@ -92,6 +98,8 @@ export function readConfig(): OverlayConfig {
   const theme: OverlayConfig["theme"] =
     rawTheme === "light" || rawTheme === "dark" ? rawTheme : "auto";
 
+  const themeUrl = tag?.dataset.themeUrl?.trim() || undefined;
+
   return {
     apiBase,
     repo,
@@ -106,5 +114,6 @@ export function readConfig(): OverlayConfig {
     ...(replaySrc !== undefined ? { replaySrc } : {}),
     replayMaskText,
     theme,
+    ...(themeUrl !== undefined ? { themeUrl } : {}),
   };
 }

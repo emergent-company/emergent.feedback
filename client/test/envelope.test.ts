@@ -78,6 +78,17 @@ test("computeProvenance: screenshot flag captured/absent", () => {
   );
 });
 
+test("computeProvenance: intent.changes stated only when non-empty", () => {
+  const none = computeProvenance({ intent: intent({ changes: [] }), hasScreenshot: false });
+  assert.equal(none["intent.changes"], "absent");
+
+  const withChanges = computeProvenance({
+    intent: intent({ changes: [{ target: "#a", group: "padding", before: "p-0", after: "p-4" }] }),
+    hasScreenshot: false,
+  });
+  assert.equal(withChanges["intent.changes"], "stated");
+});
+
 test("scoreExplanation: precise when expected+actual present and ≥8 words", () => {
   const out = scoreExplanation("the button should be much larger with a bigger font", {
     expected: "make it bigger",

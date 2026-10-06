@@ -42,6 +42,7 @@ Add the following snippet to your HTML, just before `</body>`:
 | `data-branch` | No | Git branch being tested. Shown in dialog and included in issue body |
 | `data-version` | No | App version being tested. Shown in dialog and included in issue body |
 | `data-theme` | No | Overlay theme: `auto` (default), `light` or `dark`. `auto` detects the host page theme, then falls back to the OS `prefers-color-scheme`. |
+| `data-theme-url` | No | Absolute or same-origin URL of a JSON theme manifest (padding/color tokens) that powers the live style editor. See [Live style editing](#live-style-editing). When omitted, the overlay reads daisyUI color variables from the page and uses a built-in spacing scale. |
 
 The overlay dialog, activation bar, badges and toasts follow the resolved theme. The server-rendered
 landing page and API-key panel share a persisted Light/Dark/System toggle (localStorage key
@@ -98,6 +99,71 @@ No build step, no npm install, no configuration file. The script self-initialise
 3. Select **Bug** or **Enhancement**
 4. **Save** — saves the comment without creating a GitHub issue
 5. **Send to GitHub** — submits the comment (if any) and creates a GitHub issue with full context
+
+### Docked panel
+
+The dialog can dock to the right edge of the viewport instead of rendering as a
+centered modal. Docked mode leaves the page fully visible and undimmed, and keeps
+it interactive: element picking, multi-select and live style editing all continue
+while the panel is open. Toggle dock/undock from the panel header; the choice is
+persisted per browser (localStorage `__ef_dialog_docked__`) and docked is the
+default. On narrow viewports the docked panel takes the full width.
+
+### Live style editing
+
+With the panel open, click additional elements to add them to the selection (a
+click on an already-selected element toggles it off, and **Add element** enters a
+pick mode). The panel shows the selected targets and a token palette for
+**padding** and **colors**. Choosing a token applies it live to every selected
+element as a CSS class (or inline style, per token) and the applied edits are
+recorded in the feedback payload.
+
+Edits are reverted when the panel is cancelled or the editing session ends; they
+are kept and included in the feedback when you Save or Send to GitHub. The GitHub
+issue and the panel preview render a **Requested changes** list
+(`target — group: before → after`).
+
+Tokens come from the project via `data-theme-url` (below). Placeholder choices
+are used when it is absent.
+
+### Project theme tokens (`data-theme-url`)
+
+The host app serves a JSON manifest describing the token groups offered by the
+editor. The overlay fetches it once per session, validates it, and falls back to
+daisyUI color variables read from the live page plus a built-in spacing scale
+when the URL is missing or unreachable.
+
+```json
+{
+  "version": 1,
+  "groups": [
+    { "id": "padding", "label": "Padding", "applyType": "class", "removePattern": "^p[xytrbl]?-",
+      "tokens": [
+        { "id": "none", "label": "None", "className": "p-0" },
+        { "id": "sm", "label": "Small", "className": "p-2" },
+        { "id": "md", "label": "Medium", "className": "p-4" },
+        { "id": "lg", "label": "Large", "apply": { "type": "style", "prop": "padding", "value": "var(--space-lg)" } }
+      ] },
+    { "id": "textColor", "label": "Text color", "applyType": "class", "removePattern": "^text-",
+      "tokens": [
+        { "id": "base", "label": "Default", "className": "text-base-content", "swatch": "var(--color-base-content)" },
+        { "id": "primary", "label": "Primary", "className": "text-primary", "swatch": "var(--color-primary)" }
+      ] },
+    { "id": "backgroundColor", "label": "Background", "applyType": "class", "removePattern": "^bg-",
+      "tokens": [
+        { "id": "base-100", "label": "Base", "className": "bg-base-100", "swatch": "var(--color-base-100)" },
+        { "id": "primary", "label": "Primary", "className": "bg-primary", "swatch": "var(--color-primary)" }
+      ] }
+  ]
+}
+```
+
+Each token is applied as a **class** (default, `applyType: "class"`) or as an
+inline **style** (`"apply": { "type": "style", "prop": "...", "value": "..." }`).
+Only the following style properties are accepted: `padding`, `padding-top`,
+`padding-right`, `padding-bottom`, `padding-left`, `color`, `background-color`,
+`background`, `border-radius`. Class names are validated, and all token text is
+escaped before rendering.
 
 ### Configuring the activation hotkey
 

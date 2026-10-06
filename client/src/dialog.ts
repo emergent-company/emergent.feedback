@@ -1,11 +1,50 @@
 // dialog.ts — element feedback dialog (existing comments + compose) and login dialog.
 
 import type { FeedbackComment } from "./api";
-import type { FeedbackIntent, IntentAction, ScopeBreadth } from "./envelope";
+import type {
+  FeedbackIntent,
+  IntentAction,
+  ScopeBreadth,
+  StyleChange,
+} from "./envelope";
 import { syncThemeTo } from "./theme";
+import { mountStyleEditor } from "./styleEditor";
+import type { ThemeTokens } from "./tokens";
+import {
+  getChanges as getSelectionChanges,
+  getChangeCount as getSelectionChangeCount,
+  getTargets as getSelectionTargets,
+  isPickMode,
+  onSelectionChange,
+  removeTarget as removeSelectionTarget,
+  applyTokenToTargets,
+  revertAll as revertSelectionChanges,
+  setPickMode,
+  type TargetEntry,
+} from "./selection";
 
 const DIALOG_ID = "__ef_dialog__";
 const STYLE_ID = "__ef_styles__";
+const DOCKED_KEY = "__ef_dialog_docked__";
+
+/** Persisted dock preference. Defaults to docked (true). */
+function readDockedPref(): boolean {
+  try {
+    const v = localStorage.getItem(DOCKED_KEY);
+    if (v === null) return true;
+    return v !== "false";
+  } catch {
+    return true;
+  }
+}
+
+function writeDockedPref(docked: boolean): void {
+  try {
+    localStorage.setItem(DOCKED_KEY, docked ? "true" : "false");
+  } catch {
+    // Storage may be unavailable (private mode / sandboxed iframe).
+  }
+}
 
 function injectStyles(): void {
   if (document.getElementById(STYLE_ID)) return;
@@ -52,6 +91,8 @@ function injectStyles(): void {
       --ef-chip-on-bg: #eef3ff;
       --ef-chip-on-text: #2b5fd0;
       --ef-error: #c53030;
+      --ef-accent: #d97706;
+      --ef-accent-soft: rgba(217,119,6,0.12);
       --ef-swatch-checker: #e6e6e6;
       --ef-swatch-border: rgba(0,0,0,0.15);
       --ef-code-bg: #1e1e2e;
@@ -589,6 +630,319 @@ function injectStyles(): void {
       gap: 8px;
     }
 
+    /* ── Docked rail ───────────────────────────────────────────────────────── */
+    #__ef_dialog__.ef-docked {
+      top: 0;
+      right: 0;
+      bottom: 0;
+      left: auto;
+      inset: 0 0 0 auto;
+      width: min(400px, 100vw);
+      background: transparent;
+      pointer-events: none;
+      align-items: stretch;
+      justify-content: flex-end;
+    }
+    #__ef_dialog__.ef-docked .ef-card {
+      pointer-events: auto;
+      width: 100%;
+      max-width: 100%;
+      height: 100%;
+      max-height: 100vh;
+      border-radius: 0;
+      box-shadow: -8px 0 40px rgba(0,0,0,0.22);
+    }
+    @media (max-width: 520px) {
+      #__ef_dialog__.ef-docked { width: 100vw; }
+    }
+    #__ef_dialog__ .ef-dock-btn {
+      background: transparent;
+      border: 1px solid var(--ef-control-border);
+      color: var(--ef-muted-strong);
+      border-radius: 6px;
+      width: 24px;
+      height: 24px;
+      padding: 0;
+      font-size: 12px;
+      line-height: 1;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    #__ef_dialog__ .ef-dock-btn:hover {
+      background: var(--ef-hover-bg);
+      border-color: var(--ef-control-border-hover);
+      color: var(--ef-text-strong);
+    }
+    #__ef_dialog__ .ef-dock-btn:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 3px var(--ef-focus-ring-chip);
+    }
+
+    /* ── Shared section label ──────────────────────────────────────────────── */
+    #__ef_dialog__ .ef-section-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--ef-muted);
+      margin-bottom: 6px;
+    }
+
+    /* ── Targets ───────────────────────────────────────────────────────────── */
+    #__ef_dialog__ .ef-targets {
+      padding: 10px 18px;
+      border-bottom: 1px solid var(--ef-border);
+      flex-shrink: 0;
+    }
+    #__ef_dialog__ .ef-target-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+    #__ef_dialog__ .ef-target-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: var(--ef-surface-alt);
+      border: 1px solid var(--ef-border);
+      border-radius: 6px;
+      padding: 3px 4px 3px 6px;
+      max-width: 100%;
+    }
+    #__ef_dialog__ .ef-target-num {
+      min-width: 16px;
+      height: 16px;
+      line-height: 16px;
+      text-align: center;
+      background: var(--ef-accent);
+      color: #fff;
+      border-radius: 8px;
+      font-size: 10px;
+      font-weight: 700;
+      flex-shrink: 0;
+      padding: 0 3px;
+      box-sizing: border-box;
+    }
+    #__ef_dialog__ .ef-target-name {
+      font-size: 11px;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      color: var(--ef-text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 190px;
+    }
+    #__ef_dialog__ .ef-target-remove {
+      background: transparent;
+      border: none;
+      color: var(--ef-muted);
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      padding: 0 3px;
+      border-radius: 4px;
+      font-family: inherit;
+    }
+    #__ef_dialog__ .ef-target-remove:hover {
+      color: var(--ef-error);
+      background: var(--ef-hover-bg);
+    }
+    #__ef_dialog__ .ef-target-add {
+      background: transparent;
+      border: 1px dashed var(--ef-control-border);
+      color: var(--ef-primary);
+      border-radius: 20px;
+      padding: 3px 11px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    #__ef_dialog__ .ef-target-add:hover {
+      background: var(--ef-hover-bg);
+      border-color: var(--ef-primary);
+    }
+    #__ef_dialog__ .ef-target-add.ef-picking {
+      background: var(--ef-chip-on-bg);
+      border-style: solid;
+      border-color: var(--ef-primary);
+    }
+
+    /* ── Live style editor ─────────────────────────────────────────────────── */
+    #__ef_dialog__ .ef-style-editor {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    #__ef_dialog__ .ef-style-empty {
+      font-size: 12px;
+      color: var(--ef-muted);
+      padding: 2px 0 4px;
+    }
+    #__ef_dialog__ .ef-style-group {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    #__ef_dialog__ .ef-style-group-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    #__ef_dialog__ .ef-style-group-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--ef-text);
+    }
+    #__ef_dialog__ .ef-style-current {
+      font-size: 11px;
+      color: var(--ef-muted);
+      font-style: italic;
+    }
+    #__ef_dialog__ .ef-style-current-mixed {
+      color: var(--ef-accent);
+      font-style: normal;
+      font-weight: 600;
+    }
+    #__ef_dialog__ .ef-token-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+    #__ef_dialog__ .ef-token-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 9px;
+      border-radius: 20px;
+      border: 1.5px solid var(--ef-control-border);
+      background: var(--ef-control-bg);
+      color: var(--ef-muted-strong);
+      font-size: 12px;
+      font-weight: 500;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.1s, border-color 0.1s, color 0.1s;
+    }
+    #__ef_dialog__ .ef-token-chip:hover {
+      border-color: var(--ef-control-border-hover);
+      background: var(--ef-hover-bg);
+    }
+    #__ef_dialog__ .ef-token-chip:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 3px var(--ef-focus-ring-chip);
+    }
+    #__ef_dialog__ .ef-token-chip.ef-token-on {
+      background: var(--ef-chip-on-bg);
+      border-color: var(--ef-primary);
+      color: var(--ef-chip-on-text);
+    }
+    #__ef_dialog__ .ef-token-swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      border: 1px solid var(--ef-swatch-border);
+      flex-shrink: 0;
+      background-image:
+        linear-gradient(45deg, var(--ef-swatch-checker) 25%, transparent 25%, transparent 75%, var(--ef-swatch-checker) 75%),
+        linear-gradient(45deg, var(--ef-swatch-checker) 25%, transparent 25%, transparent 75%, var(--ef-swatch-checker) 75%);
+      background-size: 6px 6px;
+      background-position: 0 0, 3px 3px;
+    }
+    #__ef_dialog__ .ef-style-classes summary {
+      font-size: 11px;
+      color: var(--ef-muted);
+      cursor: pointer;
+      user-select: none;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    #__ef_dialog__ .ef-style-classes summary::-webkit-details-marker { display: none; }
+    #__ef_dialog__ .ef-style-classes summary::before {
+      content: "▶";
+      font-size: 8px;
+      transition: transform 0.15s;
+      display: inline-block;
+    }
+    #__ef_dialog__ .ef-style-classes[open] summary::before { transform: rotate(90deg); }
+    #__ef_dialog__ .ef-style-class-list {
+      margin-top: 5px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      max-height: 120px;
+      overflow-y: auto;
+    }
+    #__ef_dialog__ .ef-style-class-item {
+      display: flex;
+      gap: 6px;
+      align-items: baseline;
+      font-size: 11px;
+    }
+    #__ef_dialog__ .ef-style-class-idx {
+      color: var(--ef-muted);
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      flex-shrink: 0;
+    }
+    #__ef_dialog__ .ef-style-class-item code {
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      color: var(--ef-text-soft);
+      word-break: break-all;
+    }
+    #__ef_dialog__ .ef-style-actions {
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    /* ── Changes summary ───────────────────────────────────────────────────── */
+    #__ef_dialog__ .ef-changes {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    #__ef_dialog__ .ef-changes-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      max-height: 140px;
+      overflow-y: auto;
+    }
+    #__ef_dialog__ .ef-changes-list li {
+      font-size: 11px;
+      color: var(--ef-text-soft);
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      display: flex;
+      gap: 5px;
+      align-items: baseline;
+      flex-wrap: wrap;
+    }
+    #__ef_dialog__ .ef-change-group {
+      color: var(--ef-muted-strong);
+      font-weight: 600;
+    }
+    #__ef_dialog__ .ef-change-before {
+      color: var(--ef-muted);
+      text-decoration: line-through;
+    }
+    #__ef_dialog__ .ef-change-after {
+      color: var(--ef-primary);
+      font-weight: 600;
+    }
+    #__ef_dialog__ .ef-changes-actions {
+      display: flex;
+      justify-content: flex-end;
+    }
+
     /* ── Dark theme ─────────────────────────────────────────────────────────
        Keyed off data-ef-theme, mirrored onto the overlay root by theme.ts.
        Overriding the tokens above keeps every declaration theme-agnostic. */
@@ -631,6 +985,8 @@ function injectStyles(): void {
       --ef-chip-on-bg: #23324f;
       --ef-chip-on-text: #9dc0ff;
       --ef-error: #ff6b6b;
+      --ef-accent: #fbbf24;
+      --ef-accent-soft: rgba(251,191,36,0.16);
       --ef-swatch-checker: #3a424f;
       --ef-swatch-border: rgba(255,255,255,0.18);
       --ef-code-bg: #14161c;
@@ -669,6 +1025,11 @@ const FOCUSABLE_SELECTOR =
 
 let focusReturnEl: HTMLElement | null = null;
 let dialogKeydown: ((e: KeyboardEvent) => void) | null = null;
+// Escape handler owned by the submit dialog; removed on close so a mode-driven
+// teardown (e.g. the activation hotkey) can't be double-handled by onCancel.
+let dialogEscapeKey: ((e: KeyboardEvent) => void) | null = null;
+// Teardown for the live selection subscription owned by the submit dialog.
+let dialogCleanup: (() => void) | null = null;
 
 function getFocusable(card: HTMLElement): HTMLElement[] {
   return Array.from(card.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
@@ -676,13 +1037,21 @@ function getFocusable(card: HTMLElement): HTMLElement[] {
 }
 
 /**
- * Wire focus containment + restoration for a dialog card. Captures the element
- * that currently has focus so closeDialog() can restore it, moves focus to the
- * card itself (a stable, non-keyboard-triggering target), and traps Tab /
- * Shift+Tab inside the card while it is open.
+ * Wire focus restoration for a dialog card. Captures the element that
+ * currently has focus so closeDialog() can restore it and moves focus to the
+ * card itself (a stable, non-keyboard-triggering target).
+ *
+ * Tab containment is only applied in modal mode (`opts.modal !== false`). The
+ * docked rail is non-modal, so Tab must move out of it into the page normally.
  */
-function activateDialog(card: HTMLElement): void {
+function activateDialog(card: HTMLElement, opts?: { modal?: boolean }): void {
   focusReturnEl = (document.activeElement as HTMLElement | null) ?? null;
+
+  const modal = opts?.modal !== false;
+  if (!modal) {
+    card.focus();
+    return;
+  }
 
   dialogKeydown = (e: KeyboardEvent) => {
     if (e.key !== "Tab") return;
@@ -718,6 +1087,15 @@ export interface SubmitFeedbackOptions {
   componentHierarchy?: { name: string; isChild: boolean }[];
   selectedComponentIdx?: number;
   onComponentChange?: (index: number) => void;
+  /** Project theme tokens for the live style editor. */
+  tokens?: ThemeTokens;
+  /**
+   * Live multi-select targets. Defaults to the selection module's current set
+   * so index.ts can pass it explicitly without duplicating state.
+   */
+  getTargets?: () => TargetEntry[];
+  /** Live applied style changes. Defaults to the selection module. */
+  getChanges?: () => StyleChange[];
   /** Submits a comment; resolves with the new feedback ID when known. */
   onSubmit: (comment: string, type: FeedbackType, intent: FeedbackIntent) => Promise<number | void>;
   onExport: (ids: number[], type: FeedbackType, issueTopic: string) => Promise<void>;
@@ -789,6 +1167,21 @@ function pickCurrent(
 export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   injectStyles();
   const dialog = getOrCreateDialog();
+
+  // ── Dock state (default docked; persisted across pages) ────────────────────
+  let docked = readDockedPref();
+  const applyDockState = (card: HTMLElement | null) => {
+    dialog.classList.toggle("ef-docked", docked);
+    if (card) card.setAttribute("aria-modal", docked ? "false" : "true");
+  };
+
+  const tokens: ThemeTokens = opts.tokens ?? { version: 1, groups: [], source: "fallback" };
+
+  // Live accessors — default to the selection module singletons.
+  const currentTargets = (): TargetEntry[] =>
+    opts.getTargets ? opts.getTargets() : getSelectionTargets();
+  const currentChanges = (): StyleChange[] =>
+    opts.getChanges ? opts.getChanges() : getSelectionChanges();
 
   const existing = opts.existingComments;
   const existingIds = existing.map((c) => c.id);
@@ -897,6 +1290,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
             <img src="${escapeHtml(opts.user.avatarUrl)}" alt="">
             <span>${escapeHtml(opts.user.login)}</span>
           </div>
+          <button class="ef-dock-btn" id="__ef_dock__" type="button" title="Dock to the side" aria-label="Dock to the side"></button>
         </div>
         <details class="ef-meta-toggle">
           <summary>Context that will be attached</summary>
@@ -911,8 +1305,11 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
       </div>
       ${componentPickerHTML}
       ${targetStripHTML}
+      <div class="ef-targets" id="__ef_targets__"></div>
       ${commentsHTML}
       <div class="ef-compose">
+        <div id="__ef_style_editor__"></div>
+        <div class="ef-changes" id="__ef_changes__"></div>
         <div class="ef-topic-row">
           <label class="ef-topic-label" for="__ef_topic__">Issue title</label>
           <input class="ef-topic-input" id="__ef_topic__" type="text" value="${escapeHtml(opts.defaultIssueTopic)}">
@@ -953,7 +1350,24 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   `;
 
   const card = dialog.querySelector<HTMLElement>(".ef-card")!;
-  activateDialog(card);
+  applyDockState(card);
+  activateDialog(card, { modal: !docked });
+
+  // ── Dock toggle ─────────────────────────────────────────────────────────────
+  const dockBtn = dialog.querySelector<HTMLButtonElement>("#__ef_dock__")!;
+  const renderDockBtn = () => {
+    dockBtn.textContent = docked ? "⤢" : "▥";
+    const label = docked ? "Undock to center" : "Dock to the side";
+    dockBtn.title = label;
+    dockBtn.setAttribute("aria-label", label);
+  };
+  renderDockBtn();
+  dockBtn.addEventListener("click", () => {
+    docked = !docked;
+    writeDockedPref(docked);
+    applyDockState(card);
+    renderDockBtn();
+  });
 
   const textarea = dialog.querySelector<HTMLTextAreaElement>("#__ef_comment__")!;
   const submitBtn = dialog.querySelector<HTMLButtonElement>("#__ef_submit__")!;
@@ -984,6 +1398,74 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   const scopeWrap = dialog.querySelector<HTMLElement>("#__ef_scope__")!;
   const scopeHint = dialog.querySelector<HTMLElement>("#__ef_scope_hint__")!;
   const actualInput = dialog.querySelector<HTMLInputElement>("#__ef_actual__");
+
+  // ── Targets + live style editor + changes summary ───────────────────────────
+  const targetsHost = dialog.querySelector<HTMLElement>("#__ef_targets__")!;
+  const styleHost = dialog.querySelector<HTMLElement>("#__ef_style_editor__")!;
+  const changesHost = dialog.querySelector<HTMLElement>("#__ef_changes__")!;
+
+  const targetLabel = (t: TargetEntry): string => {
+    if (t.dataComponent) return t.dataComponent;
+    const tail = t.selector.split(">").pop()?.trim();
+    return tail || t.selector;
+  };
+
+  const renderTargets = () => {
+    const targets = currentTargets();
+    const picking = isPickMode();
+    const addBtn = `<button type="button" class="ef-target-add${picking ? " ef-picking" : ""}" id="__ef_add_target__">+ Add element</button>`;
+    if (targets.length === 0) {
+      targetsHost.innerHTML = `<div class="ef-section-label">Targets</div><div class="ef-target-list">${addBtn}</div>`;
+    } else {
+      targetsHost.innerHTML = `
+        <div class="ef-section-label">Targets</div>
+        <div class="ef-target-list">
+          ${targets.map((t, i) => `<span class="ef-target-item"><span class="ef-target-num">${i + 1}</span><span class="ef-target-name" title="${escapeHtml(t.selector)}">${escapeHtml(targetLabel(t))}</span><button type="button" class="ef-target-remove" data-idx="${i}" aria-label="Remove target">×</button></span>`).join("")}
+          ${addBtn}
+        </div>`;
+    }
+    targetsHost.querySelector<HTMLButtonElement>("#__ef_add_target__")?.addEventListener("click", () => {
+      setPickMode(!isPickMode());
+      renderTargets();
+    });
+    targetsHost.querySelectorAll<HTMLButtonElement>(".ef-target-remove").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const idx = parseInt(btn.dataset.idx ?? "-1", 10);
+        const t = currentTargets()[idx];
+        if (t) removeSelectionTarget(t.el);
+      });
+    });
+  };
+
+  const renderStyle = () => {
+    mountStyleEditor(styleHost, tokens, currentTargets(), currentChanges().length, {
+      onApply: (group, token) => applyTokenToTargets(group, token),
+      onRevertAll: () => revertSelectionChanges(),
+    });
+  };
+
+  const renderChanges = () => {
+    const changes = currentChanges();
+    if (changes.length === 0) {
+      changesHost.innerHTML = "";
+      return;
+    }
+    changesHost.innerHTML = `
+      <div class="ef-section-label">Changes (${changes.length})</div>
+      <ul class="ef-changes-list">
+        ${changes.map((c) => `<li><span class="ef-change-group">${escapeHtml(c.group)}</span><span class="ef-change-before">${escapeHtml(c.before || "—")}</span><span>→</span><span class="ef-change-after">${escapeHtml(c.after)}</span></li>`).join("")}
+      </ul>
+      <div class="ef-changes-actions"><button type="button" class="ef-btn-secondary" id="__ef_revert__">Revert all</button></div>`;
+    changesHost.querySelector<HTMLButtonElement>("#__ef_revert__")?.addEventListener("click", () => {
+      revertSelectionChanges();
+    });
+  };
+
+  const renderSelection = () => {
+    renderTargets();
+    renderStyle();
+    renderChanges();
+  };
 
   let action: IntentAction = inferAction(getType());
   let actionTouched = false;
@@ -1032,6 +1514,17 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     }));
   }
 
+  const renderScopeHint = () => {
+    const n = currentTargets().length;
+    if (n > 1) {
+      scopeHint.textContent = `Applies to all ${n} selected targets.`;
+      return;
+    }
+    scopeHint.textContent = breadth === "element"
+      ? ""
+      : "Region selection isn't captured — the selected element is recorded.";
+  };
+
   scopeWrap.addEventListener("click", (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-breadth]");
     if (!btn) return;
@@ -1041,10 +1534,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
       b.classList.toggle("ef-chip-on", on);
       b.setAttribute("aria-pressed", on ? "true" : "false");
     });
-    // Honest: region/multi selection is not wired up in this build.
-    scopeHint.textContent = breadth === "element"
-      ? ""
-      : "Region/multi selection isn't captured yet — this element is recorded.";
+    renderScopeHint();
   });
 
   // Any edit (including clearing the field) marks the actual value as stated.
@@ -1054,14 +1544,25 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   /** Build the structured intent passed to onSubmit as the third argument. */
   const buildIntent = (): FeedbackIntent => {
     const actualVal = actualInput?.value.trim();
-    return {
+    const targets = currentTargets();
+    const changes = currentChanges();
+    const targetSelectors =
+      targets.length > 0 ? targets.map((t) => t.selector) : [opts.selector];
+    const intent: FeedbackIntent = {
       kind: getType(),
       action,
       expected: expected.trim() || undefined,
       actual: actualVal ? `${current ? current.label + ": " : ""}${actualVal}` : undefined,
       actualEdited,
-      scope: { breadth, targets: [opts.selector] },
+      scope: {
+        // Multi-target editing is a genuine multi selection; otherwise honour
+        // the user's own scope chip.
+        breadth: targetSelectors.length > 1 ? "multi" : breadth,
+        targets: targetSelectors,
+      },
     };
+    if (changes.length > 0) intent.changes = changes;
+    return intent;
   };
 
   /**
@@ -1089,8 +1590,12 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
       opts.onCancel();
     }
   };
-  const removeKey = () => document.removeEventListener("keydown", onKey);
+  const removeKey = () => {
+    document.removeEventListener("keydown", onKey);
+    if (dialogEscapeKey === onKey) dialogEscapeKey = null;
+  };
   document.addEventListener("keydown", onKey);
+  dialogEscapeKey = onKey;
 
   cancelBtn.addEventListener("click", () => {
     removeKey();
@@ -1151,9 +1656,19 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     }
   });
 
-  // Backdrop click to cancel.
+  // Initial render + keep selection-driven sections live as the user picks.
+  renderSelection();
+  renderScopeHint();
+  const unsubSelection = onSelectionChange(() => {
+    renderSelection();
+    renderScopeHint();
+  });
+  dialogCleanup = unsubSelection;
+
+  // Backdrop click to cancel — modal only. The docked rail is click-through
+  // (pointer-events: none), so this never fires while docked.
   dialog.addEventListener("click", (e) => {
-    if (e.target === dialog) { removeKey(); closeDialog(); opts.onCancel(); }
+    if (e.target === dialog && !docked) { removeKey(); closeDialog(); opts.onCancel(); }
   });
 }
 
@@ -1211,6 +1726,14 @@ export function closeDialog(): void {
   if (dialogKeydown) {
     document.removeEventListener("keydown", dialogKeydown, true);
     dialogKeydown = null;
+  }
+  if (dialogEscapeKey) {
+    document.removeEventListener("keydown", dialogEscapeKey);
+    dialogEscapeKey = null;
+  }
+  if (dialogCleanup) {
+    dialogCleanup();
+    dialogCleanup = null;
   }
   dialog.remove();
   // Return focus to the control that opened the dialog, if it still exists.

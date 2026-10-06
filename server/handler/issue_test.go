@@ -122,6 +122,58 @@ func TestBuildIssueContentMulti(t *testing.T) {
 	}
 }
 
+func TestBuildIssueContentChanges(t *testing.T) {
+	ctx := map[string]any{
+		"intent": map[string]any{
+			"changes": []any{
+				map[string]any{"target": "main > section > button.cta", "group": "padding", "before": "p-2", "after": "p-4"},
+				map[string]any{"target": "main > section > button.cta", "group": "backgroundColor", "before": "", "after": "bg-primary"},
+			},
+		},
+	}
+	ctxJSON, _ := json.Marshal(ctx)
+	items := []store.Feedback{{
+		ID:          1,
+		URL:         "https://app.example.com/",
+		Selector:    "main > section > button.cta",
+		Comment:     "tune spacing",
+		ContextJSON: string(ctxJSON),
+		GitHubUser:  "alice",
+	}}
+	_, body := buildIssueContent(items, "")
+
+	for _, want := range []string{
+		"## Requested changes",
+		"- `main > section > button.cta` — padding: `p-2` → `p-4`",
+		"- `main > section > button.cta` — backgroundColor: `(none)` → `bg-primary`",
+		"Apply 2 live style change(s) recorded on the selected element(s).",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("body missing %q\n%s", want, body)
+		}
+	}
+}
+
+func TestBuildIssueContentNoChangesSection(t *testing.T) {
+	ctx := map[string]any{
+		"intent": map[string]any{"kind": "bug", "action": "change", "expected": "be blue", "actual": "is red"},
+	}
+	ctxJSON, _ := json.Marshal(ctx)
+	items := []store.Feedback{{
+		ID:          1,
+		URL:         "https://app.example.com/",
+		Selector:    "button",
+		Comment:     "wrong color",
+		ContextJSON: string(ctxJSON),
+		GitHubUser:  "alice",
+	}}
+	_, body := buildIssueContent(items, "")
+
+	if strings.Contains(body, "Requested changes") {
+		t.Fatalf("Requested changes section should be absent when no changes:\n%s", body)
+	}
+}
+
 func TestFormatEventTime(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{"2024-01-02T03:04:05Z", "03:04:05"},
