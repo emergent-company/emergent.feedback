@@ -26,6 +26,18 @@ func SetBaseURLForTesting(base string) { apiBase = base }
 // Timeout prevents a hung upstream from blocking a request forever.
 var httpClient = &http.Client{Timeout: 30 * time.Second}
 
+// APIError is returned when the GitHub API responds with a non-success status.
+// Callers can inspect Status to distinguish auth failures (401) from other
+// upstream errors.
+type APIError struct {
+	Op     string
+	Status int
+}
+
+func (e *APIError) Error() string {
+	return fmt.Sprintf("github: %s: status %d", e.Op, e.Status)
+}
+
 // AppConfig holds GitHub App credentials.
 type AppConfig struct {
 	AppID          string
@@ -268,7 +280,7 @@ func ListUserRepos(ctx context.Context, accessToken string) ([]Repo, error) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("github: list user repos: status %d", resp.StatusCode)
+		return nil, &APIError{Op: "list user repos", Status: resp.StatusCode}
 	}
 	var repos []Repo
 	if err := json.NewDecoder(resp.Body).Decode(&repos); err != nil {
