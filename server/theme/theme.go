@@ -4,8 +4,8 @@
 // The contract is deliberately small:
 //
 //   - Config maps the app's abstract "light"/"dark" modes onto concrete
-//     daisyUI theme names per surface (landing: scalo-light/scalo,
-//     panel: nord/dracula).
+//     daisyUI theme names per surface (both landing and panel use the shared
+//     Memory brand: memory-light/memory).
 //   - Head emits a FOUC-safe inline script plus a color-scheme meta. The
 //     script must be placed BEFORE the stylesheets so it resolves and applies
 //     the persisted/system theme before first paint.

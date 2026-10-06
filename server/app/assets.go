@@ -11,8 +11,8 @@ var staticFiles embed.FS
 //go:embed schema/envelope.v1.json
 var envelopeSchemaJSON []byte
 
-//go:embed static/css/scalo.css
-var scaloCSS []byte
+//go:embed static/css/theme.css
+var themeCSS []byte
 
 // DefaultStaticFS returns the embedded client bundles.
 func DefaultStaticFS() fs.FS {
@@ -30,9 +30,10 @@ func DefaultEnvelopeSchema() []byte {
 	return out
 }
 
-// DefaultCSS returns a copy of the embedded Scalo landing stylesheet.
+// DefaultCSS returns a copy of the embedded Memory brand stylesheet (the
+// compiled theme.css shared by the landing page and the panel).
 func DefaultCSS() []byte {
-	out := make([]byte, len(scaloCSS))
-	copy(out, scaloCSS)
+	out := make([]byte, len(themeCSS))
+	copy(out, themeCSS)
 	return out
 }

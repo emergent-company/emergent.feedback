@@ -171,13 +171,14 @@ templ panelNavbar() {
 // script. Pages pass their content as children.
 templ panelShell(title string, active string) {
 	<!DOCTYPE html>
-	<html lang="en">
+	<html lang="en" data-theme="memory">
 	<head>
 		<meta charset="UTF-8"/>
 		<meta name="viewport" content="width=device-width, initial-scale=1"/>
-		@theme.Head(theme.Config{Light: "nord", Dark: "dracula"})
+		@theme.Head(theme.Config{Light: "memory-light", Dark: "memory"})
 		<title>{ title }</title>
 		<link rel="stylesheet" href="/static/css/app.css"/>
+		<link rel="stylesheet" href="/static/css/theme.css"/>
 	</head>
 	<body class="min-h-screen bg-base-200" data-panel-page={ active }>
 		<div id="modal-container"></div>

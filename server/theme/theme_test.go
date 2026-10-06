@@ -9,15 +9,15 @@ import (
 
 func TestHeadContainsResolverAndThemes(t *testing.T) {
 	var buf bytes.Buffer
-	if err := Head(Config{Light: "scalo-light", Dark: "scalo"}).Render(context.Background(), &buf); err != nil {
+	if err := Head(Config{Light: "memory-light", Dark: "memory"}).Render(context.Background(), &buf); err != nil {
 		t.Fatalf("render Head: %v", err)
 	}
 	out := buf.String()
 
 	for _, want := range []string{
 		"emergent-feedback-theme", // shared storage key
-		"scalo-light",             // light theme name
-		"scalo",                   // dark theme name
+		"memory-light",            // light theme name
+		"memory",                  // dark theme name
 		"prefers-color-scheme",    // OS detection
 		"data-theme",              // stamped attribute
 		"localStorage",            // persistence

@@ -26,9 +26,12 @@ Porting rules:
 - Translate markup to **Go + templ**; prefer `go-daisy` (`components/ui`) components where
   they match; keep daisyUI class names intact.
 - Prefer re-implementing markup into `.templ` over copying raw template files.
-- The landing theme is built into `server/app/static/css/scalo.css` (Tailwind 4 +
-  daisyUI 5, theme name `scalo`). Use `data-theme="scalo"` on pages that consume it.
-  Do not override go-daisy's `/static/css/app.css`; layer `scalo.css` after it.
+- The compiled brand theme is built into `server/app/static/css/theme.css`
+  (Tailwind 4 + daisyUI 5). It defines two daisyUI themes: `memory` (dark,
+  exact emergent.memory values) and `memory-light` (derived light counterpart).
+  The Light/Dark/System toggle in `server/theme` switches between them, so
+  landing and panel both use `data-theme="memory"` / `"memory-light"`.
+  Do not override go-daisy's `/static/css/app.css`; layer `theme.css` after it.
 
 Design workflow skills (vendored in `.opencode/skills/`): `frontend-design`,
 `ui-ux-pro-max`, `web-design-guidelines`, `emil-design-eng`, `impeccable`. Load the
@@ -47,7 +50,7 @@ commercial use are allowed; **redistribution and sharing the template files are 
 
 ## Landing page / UI verification
 
-- CSS build: `cd landing && npm run build` (or `task build:css`) → `server/app/static/css/scalo.css`.
+- CSS build: `cd landing && npm run build` (or `task build:css`) → `server/app/static/css/theme.css`.
 - templ: `/root/go/bin/templ generate` after any `.templ` change.
 - Build: `task build` (or `go build ./...`). Lint: `task lint`. Tests: `task test`.
 - For UI changes, verify in a browser at desktop + mobile widths using the Chrome DevTools

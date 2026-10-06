@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tailwindcss -i ./styles/app.css -o ../server/app/static/css/scalo.css --minify"
+    "build": "tailwindcss -i ./styles/app.css -o ../server/app/static/css/theme.css --minify"
   },
   "devDependencies": {
     "@iconify-json/lucide": "^1.2.35",

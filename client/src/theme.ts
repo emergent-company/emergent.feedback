@@ -51,7 +51,7 @@ function systemTheme(): ResolvedTheme {
 function themeName(value: string | null | undefined): ResolvedTheme | null {
   const v = (value ?? "").trim().toLowerCase();
   if (!v) return null;
-  if (v.includes("dark") || v === "night" || v === "dim" || v === "dracula" || v === "black") {
+  if (v.includes("dark") || v === "night" || v === "dim" || v === "dracula" || v === "black" || v === "memory") {
     return "dark";
   }
   if (v.includes("light") || v === "nord" || v === "corporate" || v === "emerald" || v === "wireframe") {

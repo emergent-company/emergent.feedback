@@ -1,16 +1,16 @@
 /* ──────────────────────────────────────────────────────────────────────────
-   Scalo landing stylesheet — layered AFTER go-daisy's app.css.
-   Entry: `tailwindcss -i ./styles/app.css -o ../server/app/static/css/scalo.css`
+   Memory brand theme — shared by the server-rendered landing page and panel.
+   Entry: `tailwindcss -i ./styles/app.css -o ../server/app/static/css/theme.css`
+   Defines the two daisyUI themes the Light/Dark/System toggle switches
+   between: `memory` (dark, exact emergent.memory values) and `memory-light`
+   (its derived light counterpart). Layered AFTER go-daisy's app.css.
    ────────────────────────────────────────────────────────────────────────── */
-
-/* Google Fonts (must precede all other rules) */
-@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;1000&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400;1,500&display=swap");
 
 /* Tailwind 4 entry */
 @import "tailwindcss";
 
-/* Class sources: scan templ + generated Go so utilities used there are emitted. */
+/* Class sources: scan templ + generated Go so utilities used there are emitted.
+   Covers both surfaces: the landing page and the panel both emit utilities. */
 @source "../../server/**/*.templ";
 @source "../../server/**/*.go";
 
@@ -19,87 +19,82 @@
     exclude: rootscrollgutter;
 }
 
-/* Scalo theme — exact dark-theme color/radius values from Scalo's daisyui.css. */
+/* Memory theme — ink-navy surfaces, brass primary (the butler's tray), steel
+   secondary, mint accent. Exact values mirrored from the emergent.memory UI. */
 @plugin "daisyui/theme" {
-    name: "scalo";
+    name: "memory";
     color-scheme: dark;
     prefersdark: true;
-    --root-bg: #0f1011;
-    --color-primary: #167bff;
-    --color-primary-content: #ffffff;
-    --color-secondary: #9c5de8;
-    --color-secondary-content: #ffffff;
-    --color-accent: #00d3bb;
-    --color-accent-content: #f3fbf6;
-    --color-neutral: #dce1e6;
-    --color-neutral-content: #1e2832;
-    --color-info: #14b4ff;
-    --color-info-content: #ffffff;
-    --color-success: #17c964;
-    --color-success-content: #ffffff;
-    --color-warning: #f5a524;
-    --color-warning-content: #150a00;
-    --color-error: #f31260;
-    --color-error-content: #ffffff;
 
-    --color-base-100: #16181a;
-    --color-base-200: #24282c;
-    --color-base-300: #303438;
-    --color-base-content: #f0f4f8;
+    --color-base-100: oklch(0.215 0.016 274);
+    --color-base-200: oklch(0.175 0.014 274);
+    --color-base-300: oklch(0.135 0.012 274);
+    --color-base-content: oklch(0.93 0.008 265);
 
+    --color-primary: oklch(0.74 0.135 78);
+    --color-primary-content: oklch(0.2 0.04 78);
+    --color-secondary: oklch(0.64 0.105 240);
+    --color-secondary-content: oklch(0.96 0.01 240);
+    --color-accent: oklch(0.76 0.15 162);
+    --color-accent-content: oklch(0.17 0.04 162);
+    --color-neutral: oklch(0.265 0.02 274);
+    --color-neutral-content: oklch(0.9 0.01 265);
+
+    --color-info: oklch(0.69 0.115 240);
+    --color-info-content: oklch(0.97 0.01 240);
+    --color-success: oklch(0.71 0.15 152);
+    --color-success-content: oklch(0.97 0.01 152);
+    --color-warning: oklch(0.81 0.155 82);
+    --color-warning-content: oklch(0.2 0.04 82);
+    --color-error: oklch(0.63 0.2 26);
+    --color-error-content: oklch(0.2 0.04 26);
+
+    --radius-selector: 1rem;
     --radius-field: 0.25rem;
-    --radius-box: 0.25rem;
-    --rounded-box: 0.25rem;
-    --radius-selector: 0.25rem;
+    --radius-box: 0.5rem;
     --size-selector: 0.25rem;
     --size-field: 0.25rem;
     --border: 1px;
-    --card-p: 20px;
-    --card-fs: var(--text-base);
-
-    --depth: 0;
+    --depth: 1;
     --noise: 0;
 }
 
-/* Scalo light theme — same brand hues, light surfaces. Selected by the shared
-   theme resolver (`server/theme`) when mode resolves to light. */
+/* Memory light — same brand hues on light surfaces. Selected by the shared
+   theme resolver (`server/theme`) when the mode resolves to light. */
 @plugin "daisyui/theme" {
-    name: "scalo-light";
+    name: "memory-light";
     color-scheme: light;
-    --root-bg: #f7f8fa;
-    --color-primary: #167bff;
-    --color-primary-content: #ffffff;
-    --color-secondary: #9c5de8;
-    --color-secondary-content: #ffffff;
-    --color-accent: #00b8a3;
-    --color-accent-content: #ffffff;
-    --color-neutral: #1e2832;
-    --color-neutral-content: #f0f4f8;
-    --color-info: #0284c7;
-    --color-info-content: #ffffff;
-    --color-success: #16a34a;
-    --color-success-content: #ffffff;
-    --color-warning: #d97706;
-    --color-warning-content: #ffffff;
-    --color-error: #dc2626;
-    --color-error-content: #ffffff;
 
-    --color-base-100: #ffffff;
-    --color-base-200: #f5f6f8;
-    --color-base-300: #e7e9ee;
-    --color-base-content: #1a1d21;
+    --color-base-100: oklch(1 0 0);
+    --color-base-200: oklch(0.975 0.004 274);
+    --color-base-300: oklch(0.93 0.006 274);
+    --color-base-content: oklch(0.30 0.018 274);
 
+    --color-primary: oklch(0.60 0.12 78);
+    --color-primary-content: oklch(0.99 0.01 78);
+    --color-secondary: oklch(0.52 0.11 240);
+    --color-secondary-content: oklch(0.99 0.005 240);
+    --color-accent: oklch(0.58 0.13 162);
+    --color-accent-content: oklch(0.99 0.01 162);
+    --color-neutral: oklch(0.30 0.018 274);
+    --color-neutral-content: oklch(0.96 0.004 274);
+
+    --color-info: oklch(0.52 0.12 240);
+    --color-info-content: oklch(1 0 0);
+    --color-success: oklch(0.52 0.14 152);
+    --color-success-content: oklch(1 0 0);
+    --color-warning: oklch(0.65 0.14 82);
+    --color-warning-content: oklch(0.99 0.01 82);
+    --color-error: oklch(0.55 0.19 26);
+    --color-error-content: oklch(1 0 0);
+
+    --radius-selector: 1rem;
     --radius-field: 0.25rem;
-    --radius-box: 0.25rem;
-    --rounded-box: 0.25rem;
-    --radius-selector: 0.25rem;
+    --radius-box: 0.5rem;
     --size-selector: 0.25rem;
     --size-field: 0.25rem;
     --border: 1px;
-    --card-p: 20px;
-    --card-fs: var(--text-base);
-
-    --depth: 0;
+    --depth: 1;
     --noise: 0;
 }
 
@@ -109,11 +104,11 @@
 }
 
 /* Dark variant — keyed on the resolved theme name. The shared theme resolver
-   (`server/theme`) maps system preference to either `scalo` (dark) or
-   `scalo-light` (light) before first paint, so no `prefers-color-scheme`
+   (`server/theme`) maps system preference to either `memory` (dark) or
+   `memory-light` (light) before first paint, so no `prefers-color-scheme`
    fallback is needed here. */
 @variant dark {
-    &:where([data-theme="scalo"] *) {
+    &:where([data-theme="memory"] *) {
         @slot;
     }
 }
@@ -126,8 +121,10 @@
 
 /* ── Typography ──────────────────────────────────────────────────────────── */
 @theme {
-    --font-sans: "DM Sans", sans-serif;
-    --font-mono: "DM Mono", monospace;
+    --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+        Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+        "Liberation Mono", monospace;
 
     --text-xs: 12px;
     --text-sm: 14px;
@@ -136,8 +133,28 @@
     --text-xl: 20px;
 }
 
+/* Radius bridge — Tailwind's radius scale is a separate namespace from
+   daisyUI's semantic radius tokens (--radius-box / --radius-field /
+   --radius-selector), so a literal `rounded-lg` compiles to var(--radius-lg)
+   and ignores the theme. go-daisy's component markup still uses that literal
+   scale, so alias the Tailwind namespace onto the semantic tokens (copied
+   value-preserving from the Memory web UI). Every step keeps its Tailwind
+   default; steps with no dedicated token derive from the three levers. */
+@theme inline {
+    --radius-sm: var(--radius-field);
+    --radius: var(--radius-field);
+    --radius-md: calc((var(--radius-field) + var(--radius-box)) / 2);
+    --radius-lg: var(--radius-box);
+    --radius-xl: calc((var(--radius-box) + var(--radius-selector)) / 2);
+    --radius-2xl: var(--radius-selector);
+    --radius-3xl: calc(var(--radius-selector) + var(--radius-box));
+}
+
 @layer base {
     html {
+        /* Memory root scale: 1rem = 15px, so rem-based utilities scale down
+           from the browser's 16px default. daisyUI 5 has no root-size token. */
+        font-size: 15px;
         scroll-behavior: smooth;
     }
 
@@ -242,21 +259,24 @@
 }
 
 /* ── Hero atmosphere (code-drawn, no image assets) ───────────────────────── */
+/* Opacities tuned down from the Scalo values: on the near-black ink-navy base a
+   brass primary reads much brighter than the old blue, so 45/38/28% washed the
+   top of the hero in gold. */
 @utility hero-glow {
     background-image:
         radial-gradient(
             60% 55% at 50% -10%,
-            color-mix(in oklab, var(--color-primary) 45%, transparent) 0%,
+            color-mix(in oklab, var(--color-primary) 38%, transparent) 0%,
             transparent 70%
         ),
         radial-gradient(
             45% 45% at 84% 4%,
-            color-mix(in oklab, var(--color-secondary) 38%, transparent) 0%,
+            color-mix(in oklab, var(--color-secondary) 30%, transparent) 0%,
             transparent 72%
         ),
         radial-gradient(
             42% 42% at 10% 12%,
-            color-mix(in oklab, var(--color-accent) 28%, transparent) 0%,
+            color-mix(in oklab, var(--color-accent) 22%, transparent) 0%,
             transparent 72%
         );
     filter: blur(48px);
@@ -384,4 +404,46 @@ input:-webkit-autofill:active {
             }
         }
     }
+}
+
+/* ── Atmosphere ──────────────────────────────────────────────────────────── */
+/* Fixed radial glows: soft brass top-right, faint steel bottom-left. Plain CSS
+   on purpose — unlayered so it wins over daisyUI's layered defaults. Mirrors
+   the emergent.memory web UI's body atmosphere. */
+body {
+    background-image:
+        radial-gradient(1100px 520px at 88% -12%, oklch(0.74 0.135 78 / 0.07), transparent 62%),
+        radial-gradient(900px 600px at -10% 110%, oklch(0.64 0.105 240 / 0.05), transparent 60%);
+    background-attachment: fixed;
+}
+
+/* Panel shell glows, scoped to the go-daisy app-shell ids. `main#main-content`
+   matches Memory's shell; `main#main` matches this repo's panel markup, which
+   names the main region `id="main"`. */
+#_layout-sidebar {
+    background-image:
+        radial-gradient(480px 320px at 0% 0%, oklch(0.74 0.135 78 / 0.06), transparent 60%);
+}
+
+main#main-content,
+main#main {
+    background-image:
+        radial-gradient(800px 400px at 50% 0%, oklch(0.74 0.135 78 / 0.035), transparent 60%);
+}
+
+/* Light surfaces need a much lighter touch — the same glows read heavy on
+   white, so drop every stop to roughly two-thirds intensity. */
+[data-theme="memory-light"] body {
+    background-image:
+        radial-gradient(1100px 520px at 88% -12%, oklch(0.60 0.12 78 / 0.05), transparent 62%),
+        radial-gradient(900px 600px at -10% 110%, oklch(0.52 0.11 240 / 0.035), transparent 60%);
+}
+[data-theme="memory-light"] #_layout-sidebar {
+    background-image:
+        radial-gradient(480px 320px at 0% 0%, oklch(0.60 0.12 78 / 0.045), transparent 60%);
+}
+[data-theme="memory-light"] main#main-content,
+[data-theme="memory-light"] main#main {
+    background-image:
+        radial-gradient(800px 400px at 50% 0%, oklch(0.60 0.12 78 / 0.025), transparent 60%);
 }
