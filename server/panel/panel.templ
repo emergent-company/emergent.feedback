@@ -1174,7 +1174,7 @@ templ panelScript() {
 		// API requires a bearer token, so we reuse the panel api() helper.
 		function renderSpotlightReports(group, reports) {
 			if (!reports || !reports.length) {
-				var empty = makeEl("p", "text-sm text-base-content/40 text-center py-4");
+				var empty = makeEl("p", "text-sm text-base-content/40 text-center py-4", { "data-label": "__no_reports__", "data-group": "Reports" });
 				empty.textContent = "No reports found.";
 				group.appendChild(empty);
 				return;
@@ -1212,16 +1212,19 @@ templ panelScript() {
 			if (!toggle || !input || !group) return;
 
 			var loaded = false;
+			function finish(reports) {
+				renderSpotlightReports(group, Array.isArray(reports) ? reports : []);
+				if (window.filterPaletteItems) window.filterPaletteItems(input);
+			}
 			function ensure() {
 				if (loaded) return;
 				if (!state.token) return;
 				loaded = true;
+				if (state.reportsLoaded) { finish(state.reports); return; }
 				api("/api/reports").then(function (reports) {
-					renderSpotlightReports(group, Array.isArray(reports) ? reports : []);
+					finish(reports);
 				}).catch(function () {
-					renderSpotlightReports(group, []);
-				}).then(function () {
-					if (window.filterPaletteItems) window.filterPaletteItems(input);
+					finish([]);
 				});
 			}
 

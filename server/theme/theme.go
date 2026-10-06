@@ -115,7 +115,9 @@ func headScript(cfg Config) string {
 }
 
 // toggleScript wires the dropdown: one delegated click listener, persistence,
-// and icon/check painting. It is emitted once per page via a templ.OnceHandle.
+// and icon/check painting. It is emitted on every Toggle() render via
+// @templ.Raw(toggleScript()) and is guarded by window.__efThemeUIInit so it
+// only initializes once.
 func toggleScript() string {
 	return `<script>
 (function () {
