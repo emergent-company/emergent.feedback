@@ -185,10 +185,6 @@ html[data-ef-theme="dark"] [id^="${Se}"] {
       min-height: 0;
       overflow-y: auto;
     }
-    @media (max-width: 420px) {
-      #__ef_dialog__ .ef-intent-label { min-width: 0; }
-      #__ef_dialog__ .ef-hint { padding-left: 0; }
-    }
 
     #__ef_dialog__ textarea {
       width: 100%;
@@ -470,9 +466,9 @@ html[data-ef-theme="dark"] [id^="${Se}"] {
     }
     #__ef_dialog__ .ef-intent-row {
       display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
     }
     #__ef_dialog__ .ef-intent-label {
       font-size: 10px;
@@ -480,14 +476,13 @@ html[data-ef-theme="dark"] [id^="${Se}"] {
       color: var(--ef-muted);
       text-transform: uppercase;
       letter-spacing: 0.05em;
-      min-width: 54px;
       flex-shrink: 0;
     }
     #__ef_dialog__ .ef-chips {
       display: flex;
       flex-wrap: wrap;
       gap: 5px;
-      flex: 1;
+      width: 100%;
       min-width: 0;
     }
     #__ef_dialog__ .ef-chip {
@@ -524,7 +519,7 @@ html[data-ef-theme="dark"] [id^="${Se}"] {
       font-size: 11px;
       color: var(--ef-muted);
       flex-basis: 100%;
-      padding-left: 62px;
+      padding-left: 0;
       line-height: 1.4;
     }
 
@@ -537,7 +532,7 @@ html[data-ef-theme="dark"] [id^="${Se}"] {
       border: 1px solid var(--ef-control-border);
       border-radius: 6px;
       background: var(--ef-surface);
-      flex: 1;
+      width: 100%;
       min-width: 0;
     }
     #__ef_dialog__ .ef-swatch {
