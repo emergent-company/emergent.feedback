@@ -2,6 +2,7 @@
 
 import type { FeedbackComment } from "./api";
 import type { FeedbackIntent, IntentAction, ScopeBreadth } from "./envelope";
+import { syncThemeTo } from "./theme";
 
 const DIALOG_ID = "__ef_dialog__";
 const STYLE_ID = "__ef_styles__";
@@ -12,25 +13,73 @@ function injectStyles(): void {
   style.id = STYLE_ID;
   style.textContent = `
     #__ef_dialog__ {
+      /* Theme tokens — light defaults; overridden under [data-ef-theme="dark"].
+         Scoped to the overlay root so nothing leaks into the host page. */
+      --ef-backdrop: rgba(0,0,0,0.55);
+      --ef-card-bg: #ffffff;
+      --ef-card-shadow: 0 12px 48px rgba(0,0,0,0.28);
+      --ef-border: #e8e8e8;
+      --ef-border-subtle: #f2f2f2;
+      --ef-control-border: #dddddd;
+      --ef-input-border: #cccccc;
+      --ef-heading: #0f0f0f;
+      --ef-text: #222222;
+      --ef-text-soft: #333333;
+      --ef-text-strong: #111111;
+      --ef-muted: #767676;
+      --ef-muted-strong: #555555;
+      --ef-muted-soft: #666666;
+      --ef-chip-fg: #444444;
+      --ef-surface: #fafafa;
+      --ef-surface-alt: #f2f2f2;
+      --ef-surface-select: #f7f7f7;
+      --ef-control-bg: #ffffff;
+      --ef-hover-bg: #fafafa;
+      --ef-control-border-hover: #bbbbbb;
+      --ef-btn-secondary-bg: #efefef;
+      --ef-btn-secondary-hover-bg: #e0e0e0;
+      --ef-btn-secondary-text: #222222;
+      --ef-btn-export-bg: #1a1a1a;
+      --ef-btn-export-hover-bg: #333333;
+      --ef-btn-export-text: #ffffff;
+      --ef-btn-export-disabled-bg: #888888;
+      --ef-primary: #4f86f7;
+      --ef-primary-hover: #3a6fd8;
+      --ef-primary-disabled: #a0baf7;
+      --ef-focus-ring: rgba(79,134,247,0.15);
+      --ef-focus-ring-input: rgba(79,134,247,0.12);
+      --ef-focus-ring-chip: rgba(79,134,247,0.2);
+      --ef-chip-on-bg: #eef3ff;
+      --ef-chip-on-text: #2b5fd0;
+      --ef-error: #c53030;
+      --ef-swatch-checker: #e6e6e6;
+      --ef-swatch-border: rgba(0,0,0,0.15);
+      --ef-code-bg: #1e1e2e;
+      --ef-code-border: #313149;
+      --ef-code-text: #cdd6f4;
+      --ef-bug-bg: #fff0f0;
+      --ef-bug: #d73a4a;
+      --ef-enh-bg: #f0fbff;
+      --ef-enh: #0969da;
       position: fixed;
       inset: 0;
       z-index: 2147483647;
       display: flex;
       align-items: center;
       justify-content: center;
-      background: rgba(0,0,0,0.55);
+      background: var(--ef-backdrop);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
     #__ef_dialog__ * { box-sizing: border-box; }
 
     /* ── Main card ─────────────────────────────────────────────────────────── */
     #__ef_dialog__ .ef-card {
-      background: #fff;
+      background: var(--ef-card-bg);
       border-radius: 10px;
       width: 520px;
       max-width: calc(100vw - 32px);
       max-height: 85vh;
-      box-shadow: 0 12px 48px rgba(0,0,0,0.28);
+      box-shadow: var(--ef-card-shadow);
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -40,7 +89,7 @@ function injectStyles(): void {
     #__ef_dialog__ .ef-login-card:focus { outline: none; }
     #__ef_dialog__ .ef-header {
       padding: 14px 18px 10px;
-      border-bottom: 1px solid #e8e8e8;
+      border-bottom: 1px solid var(--ef-border);
       flex-shrink: 0;
     }
     #__ef_dialog__ .ef-header-top {
@@ -53,7 +102,7 @@ function injectStyles(): void {
       margin: 0;
       font-size: 14px;
       font-weight: 700;
-      color: #0f0f0f;
+      color: var(--ef-heading);
       flex: 1;
     }
     #__ef_dialog__ .ef-user-pill {
@@ -61,7 +110,7 @@ function injectStyles(): void {
       align-items: center;
       gap: 5px;
       font-size: 11px;
-      color: #666;
+      color: var(--ef-muted-soft);
       font-weight: 500;
       flex-shrink: 0;
     }
@@ -69,11 +118,11 @@ function injectStyles(): void {
       width: 18px;
       height: 18px;
       border-radius: 50%;
-      border: 1px solid #ddd;
+      border: 1px solid var(--ef-control-border);
     }
     #__ef_dialog__ .ef-selector {
       font-size: 11px;
-      color: #555;
+      color: var(--ef-muted-strong);
       font-family: ui-monospace, "SF Mono", Menlo, monospace;
       word-break: break-all;
     }
@@ -83,11 +132,11 @@ function injectStyles(): void {
       flex-shrink: 0;
       max-height: 240px;
       overflow-y: auto;
-      border-bottom: 1px solid #e8e8e8;
+      border-bottom: 1px solid var(--ef-border);
     }
     #__ef_dialog__ .ef-comment-item {
       padding: 10px 18px;
-      border-bottom: 1px solid #f2f2f2;
+      border-bottom: 1px solid var(--ef-border-subtle);
     }
     #__ef_dialog__ .ef-comment-item:last-child { border-bottom: none; }
     #__ef_dialog__ .ef-comment-meta {
@@ -99,15 +148,15 @@ function injectStyles(): void {
     #__ef_dialog__ .ef-comment-author {
       font-size: 12px;
       font-weight: 600;
-      color: #0f0f0f;
+      color: var(--ef-heading);
     }
     #__ef_dialog__ .ef-comment-date {
       font-size: 11px;
-      color: #767676;
+      color: var(--ef-muted);
     }
     #__ef_dialog__ .ef-comment-text {
       font-size: 13px;
-      color: #222;
+      color: var(--ef-text);
       line-height: 1.5;
     }
 
@@ -128,12 +177,12 @@ function injectStyles(): void {
 
     #__ef_dialog__ textarea {
       width: 100%;
-      border: 1px solid #ccc;
+      border: 1px solid var(--ef-input-border);
       border-radius: 6px;
       padding: 8px 10px;
       font-size: 13px;
       font-family: inherit;
-      color: #111;
+      color: var(--ef-text-strong);
       resize: vertical;
       min-height: 80px;
       outline: none;
@@ -141,12 +190,12 @@ function injectStyles(): void {
       flex: 1;
     }
     #__ef_dialog__ textarea:focus {
-      border-color: #4f86f7;
-      box-shadow: 0 0 0 3px rgba(79,134,247,0.15);
+      border-color: var(--ef-primary);
+      box-shadow: 0 0 0 3px var(--ef-focus-ring);
     }
-    #__ef_dialog__ textarea::placeholder { color: #767676; }
+    #__ef_dialog__ textarea::placeholder { color: var(--ef-muted); }
     #__ef_dialog__ .ef-error {
-      color: #c53030;
+      color: var(--ef-error);
       font-size: 12px;
     }
 
@@ -163,34 +212,34 @@ function injectStyles(): void {
       gap: 4px;
       padding: 3px 10px;
       border-radius: 20px;
-      border: 1.5px solid #ddd;
+      border: 1.5px solid var(--ef-control-border);
       font-size: 12px;
       font-weight: 500;
       cursor: pointer;
-      color: #555;
-      background: #fff;
+      color: var(--ef-muted-strong);
+      background: var(--ef-control-bg);
       transition: all 0.1s;
       user-select: none;
     }
     #__ef_dialog__ .ef-type-toggle input[value="bug"]:checked + label {
-      background: #fff0f0;
-      border-color: #d73a4a;
-      color: #d73a4a;
+      background: var(--ef-bug-bg);
+      border-color: var(--ef-bug);
+      color: var(--ef-bug);
     }
     #__ef_dialog__ .ef-type-toggle input[value="enhancement"]:checked + label {
-      background: #f0fbff;
-      border-color: #0969da;
-      color: #0969da;
+      background: var(--ef-enh-bg);
+      border-color: var(--ef-enh);
+      color: var(--ef-enh);
     }
 
     /* ── Footer ────────────────────────────────────────────────────────────── */
     #__ef_dialog__ .ef-footer {
       padding: 10px 18px;
-      border-top: 1px solid #e8e8e8;
+      border-top: 1px solid var(--ef-border);
       display: flex;
       align-items: center;
       gap: 8px;
-      background: #fafafa;
+      background: var(--ef-surface);
       flex-shrink: 0;
     }
     #__ef_dialog__ .ef-footer-spacer { flex: 1; }
@@ -204,14 +253,14 @@ function injectStyles(): void {
       font-family: inherit;
       transition: background 0.12s;
     }
-    #__ef_dialog__ .ef-btn-primary { background: #4f86f7; color: #fff; }
-    #__ef_dialog__ .ef-btn-primary:hover { background: #3a6fd8; }
-    #__ef_dialog__ .ef-btn-primary:disabled { background: #a0baf7; cursor: default; }
-    #__ef_dialog__ .ef-btn-secondary { background: #efefef; color: #222; }
-    #__ef_dialog__ .ef-btn-secondary:hover { background: #e0e0e0; }
-    #__ef_dialog__ .ef-btn-export { background: #1a1a1a; color: #fff; }
-    #__ef_dialog__ .ef-btn-export:hover { background: #333; }
-    #__ef_dialog__ .ef-btn-export:disabled { background: #888; cursor: default; }
+    #__ef_dialog__ .ef-btn-primary { background: var(--ef-primary); color: #fff; }
+    #__ef_dialog__ .ef-btn-primary:hover { background: var(--ef-primary-hover); }
+    #__ef_dialog__ .ef-btn-primary:disabled { background: var(--ef-primary-disabled); cursor: default; }
+    #__ef_dialog__ .ef-btn-secondary { background: var(--ef-btn-secondary-bg); color: var(--ef-btn-secondary-text); }
+    #__ef_dialog__ .ef-btn-secondary:hover { background: var(--ef-btn-secondary-hover-bg); }
+    #__ef_dialog__ .ef-btn-export { background: var(--ef-btn-export-bg); color: var(--ef-btn-export-text); }
+    #__ef_dialog__ .ef-btn-export:hover { background: var(--ef-btn-export-hover-bg); }
+    #__ef_dialog__ .ef-btn-export:disabled { background: var(--ef-btn-export-disabled-bg); cursor: default; }
 
     /* ── Metadata collapsible ──────────────────────────────────────────────── */
     #__ef_dialog__ .ef-meta-toggle {
@@ -219,7 +268,7 @@ function injectStyles(): void {
     }
     #__ef_dialog__ .ef-meta-toggle summary {
       font-size: 11px;
-      color: #767676;
+      color: var(--ef-muted);
       cursor: pointer;
       user-select: none;
       list-style: none;
@@ -244,11 +293,11 @@ function injectStyles(): void {
       line-height: 1.6;
     }
     #__ef_dialog__ .ef-meta-key {
-      color: #767676;
+      color: var(--ef-muted);
       white-space: nowrap;
     }
     #__ef_dialog__ .ef-meta-val {
-      color: #222;
+      color: var(--ef-text);
       font-family: ui-monospace, "SF Mono", Menlo, monospace;
       word-break: break-all;
       white-space: pre-wrap;
@@ -256,7 +305,7 @@ function injectStyles(): void {
     #__ef_dialog__ .ef-meta-section-title {
       grid-column: 1 / -1;
       font-weight: 600;
-      color: #555;
+      color: var(--ef-muted-strong);
       font-family: inherit;
       margin-top: 6px;
       font-size: 11px;
@@ -274,7 +323,7 @@ function injectStyles(): void {
       font-size: 11px;
       font-family: ui-monospace, "SF Mono", Menlo, monospace;
       line-height: 1.7;
-      color: #333;
+      color: var(--ef-text-soft);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -283,7 +332,7 @@ function injectStyles(): void {
       display: inline-block;
       width: 36px;
       font-weight: 600;
-      color: #767676;
+      color: var(--ef-muted);
       text-transform: uppercase;
       flex-shrink: 0;
     }
@@ -298,10 +347,10 @@ function injectStyles(): void {
       max-height: 160px;
       margin: 6px 0 0;
       padding: 8px 10px;
-      background: #1e1e2e;
+      background: var(--ef-code-bg);
       border-radius: 5px;
-      border: 1px solid #313149;
-      color: #cdd6f4;
+      border: 1px solid var(--ef-code-border);
+      color: var(--ef-code-text);
     }
     /* syntax token colours (Catppuccin-ish dark) */
     #__ef_dialog__ .ef-ht  { color: #89b4fa; }   /* tag name */
@@ -319,23 +368,23 @@ function injectStyles(): void {
     }
     #__ef_dialog__ .ef-topic-label {
       font-size: 11px;
-      color: #767676;
+      color: var(--ef-muted);
     }
     #__ef_dialog__ .ef-topic-input {
       width: 100%;
-      border: 1px solid #ddd;
+      border: 1px solid var(--ef-control-border);
       border-radius: 6px;
       padding: 5px 8px;
       font-size: 12px;
       font-family: inherit;
-      color: #111;
+      color: var(--ef-text-strong);
       outline: none;
-      background: #fafafa;
+      background: var(--ef-surface);
     }
     #__ef_dialog__ .ef-topic-input:focus {
-      border-color: #4f86f7;
-      background: #fff;
-      box-shadow: 0 0 0 3px rgba(79,134,247,0.12);
+      border-color: var(--ef-primary);
+      background: var(--ef-control-bg);
+      box-shadow: 0 0 0 3px var(--ef-focus-ring-input);
     }
 
     /* ── Component picker ──────────────────────────────────────────────────── */
@@ -344,12 +393,12 @@ function injectStyles(): void {
       align-items: center;
       gap: 8px;
       padding: 8px 18px;
-      border-bottom: 1px solid #e8e8e8;
+      border-bottom: 1px solid var(--ef-border);
       flex-shrink: 0;
     }
     #__ef_dialog__ .ef-component-label {
       font-size: 11px;
-      color: #767676;
+      color: var(--ef-muted);
       white-space: nowrap;
       flex-shrink: 0;
     }
@@ -357,17 +406,17 @@ function injectStyles(): void {
       flex: 1;
       font-size: 12px;
       font-family: ui-monospace, "SF Mono", Menlo, monospace;
-      color: #111;
-      background: #f7f7f7;
-      border: 1px solid #ddd;
+      color: var(--ef-text-strong);
+      background: var(--ef-surface-select);
+      border: 1px solid var(--ef-control-border);
       border-radius: 5px;
       padding: 3px 6px;
       outline: none;
       cursor: pointer;
     }
     #__ef_dialog__ .ef-component-select:focus {
-      border-color: #4f86f7;
-      background: #fff;
+      border-color: var(--ef-primary);
+      background: var(--ef-control-bg);
     }
 
     /* ── Target info strip ─────────────────────────────────────────────────── */
@@ -376,7 +425,7 @@ function injectStyles(): void {
       flex-wrap: wrap;
       gap: 6px;
       padding: 6px 18px 10px;
-      border-bottom: 1px solid #e8e8e8;
+      border-bottom: 1px solid var(--ef-border);
       flex-shrink: 0;
     }
     #__ef_dialog__ .ef-target-chip {
@@ -385,15 +434,15 @@ function injectStyles(): void {
       gap: 4px;
       font-size: 11px;
       font-weight: 500;
-      color: #444;
-      background: #f2f2f2;
+      color: var(--ef-chip-fg);
+      background: var(--ef-surface-alt);
       border-radius: 4px;
       padding: 2px 7px;
       font-family: ui-monospace, "SF Mono", Menlo, monospace;
     }
     #__ef_dialog__ .ef-target-chip-label {
       /* on #f2f2f2 chip — #767676 only clears 4.0:1 there */
-      color: #666666;
+      color: var(--ef-muted-soft);
       font-family: inherit;
     }
 
@@ -413,7 +462,7 @@ function injectStyles(): void {
     #__ef_dialog__ .ef-intent-label {
       font-size: 10px;
       font-weight: 700;
-      color: #767676;
+      color: var(--ef-muted);
       text-transform: uppercase;
       letter-spacing: 0.05em;
       min-width: 54px;
@@ -429,9 +478,9 @@ function injectStyles(): void {
     #__ef_dialog__ .ef-chip {
       padding: 3px 11px;
       border-radius: 20px;
-      border: 1.5px solid #ddd;
-      background: #fff;
-      color: #555;
+      border: 1.5px solid var(--ef-control-border);
+      background: var(--ef-control-bg);
+      color: var(--ef-muted-strong);
       font-size: 12px;
       font-weight: 500;
       line-height: 1.4;
@@ -440,25 +489,25 @@ function injectStyles(): void {
       user-select: none;
       transition: background 0.1s, border-color 0.1s, color 0.1s;
     }
-    #__ef_dialog__ .ef-chip:hover { border-color: #bbb; background: #fafafa; }
+    #__ef_dialog__ .ef-chip:hover { border-color: var(--ef-control-border-hover); background: var(--ef-hover-bg); }
     #__ef_dialog__ .ef-chip:focus-visible {
       outline: none;
-      box-shadow: 0 0 0 3px rgba(79,134,247,0.2);
+      box-shadow: 0 0 0 3px var(--ef-focus-ring-chip);
     }
     #__ef_dialog__ .ef-chip.ef-chip-on {
-      background: #eef3ff;
-      border-color: #4f86f7;
-      color: #2b5fd0;
+      background: var(--ef-chip-on-bg);
+      border-color: var(--ef-primary);
+      color: var(--ef-chip-on-text);
     }
     #__ef_dialog__ .ef-chip.ef-chip-muted {
       /* chip hover background is #fafafa */
-      color: #666666;
+      color: var(--ef-muted-soft);
       border-style: dashed;
       font-weight: 400;
     }
     #__ef_dialog__ .ef-hint {
       font-size: 11px;
-      color: #767676;
+      color: var(--ef-muted);
       flex-basis: 100%;
       padding-left: 62px;
       line-height: 1.4;
@@ -470,9 +519,9 @@ function injectStyles(): void {
       align-items: center;
       gap: 8px;
       padding: 4px 9px;
-      border: 1px solid #ddd;
+      border: 1px solid var(--ef-control-border);
       border-radius: 6px;
-      background: #fafafa;
+      background: var(--ef-surface);
       flex: 1;
       min-width: 0;
     }
@@ -480,13 +529,13 @@ function injectStyles(): void {
       width: 20px;
       height: 20px;
       border-radius: 4px;
-      border: 1px solid rgba(0,0,0,0.15);
+      border: 1px solid var(--ef-swatch-border);
       flex-shrink: 0;
       overflow: hidden;
       /* checkerboard shows through translucent colours */
       background-image:
-        linear-gradient(45deg, #e6e6e6 25%, transparent 25%, transparent 75%, #e6e6e6 75%),
-        linear-gradient(45deg, #e6e6e6 25%, transparent 25%, transparent 75%, #e6e6e6 75%);
+        linear-gradient(45deg, var(--ef-swatch-checker) 25%, transparent 25%, transparent 75%, var(--ef-swatch-checker) 75%),
+        linear-gradient(45deg, var(--ef-swatch-checker) 25%, transparent 25%, transparent 75%, var(--ef-swatch-checker) 75%);
       background-size: 8px 8px;
       background-position: 0 0, 4px 4px;
     }
@@ -498,7 +547,7 @@ function injectStyles(): void {
     #__ef_dialog__ .ef-current-prop {
       font-size: 11px;
       /* on #fafafa read-out background */
-      color: #666666;
+      color: var(--ef-muted-soft);
       flex-shrink: 0;
       white-space: nowrap;
     }
@@ -510,34 +559,87 @@ function injectStyles(): void {
       padding: 2px 0;
       font-size: 12px;
       font-family: ui-monospace, "SF Mono", Menlo, monospace;
-      color: #111;
+      color: var(--ef-text-strong);
       outline: none;
     }
 
     /* ── Login card ────────────────────────────────────────────────────────── */
     #__ef_dialog__ .ef-login-card {
-      background: #fff;
+      background: var(--ef-card-bg);
       border-radius: 10px;
       padding: 28px 24px 20px;
       width: 340px;
       max-width: calc(100vw - 32px);
-      box-shadow: 0 12px 48px rgba(0,0,0,0.28);
+      box-shadow: var(--ef-card-shadow);
     }
     #__ef_dialog__ .ef-login-card h2 {
       margin: 0 0 6px;
       font-size: 15px;
       font-weight: 700;
-      color: #0f0f0f;
+      color: var(--ef-heading);
     }
     #__ef_dialog__ .ef-login-card p {
       margin: 0 0 18px;
       font-size: 13px;
-      color: #555;
+      color: var(--ef-muted-strong);
     }
     #__ef_dialog__ .ef-login-actions {
       display: flex;
       justify-content: flex-end;
       gap: 8px;
+    }
+
+    /* ── Dark theme ─────────────────────────────────────────────────────────
+       Keyed off data-ef-theme, mirrored onto the overlay root by theme.ts.
+       Overriding the tokens above keeps every declaration theme-agnostic. */
+    html[data-ef-theme="dark"] #__ef_dialog__,
+    #__ef_dialog__[data-ef-theme="dark"] {
+      --ef-backdrop: rgba(0,0,0,0.68);
+      --ef-card-bg: #1c1f26;
+      --ef-card-shadow: 0 12px 48px rgba(0,0,0,0.6);
+      --ef-border: #333944;
+      --ef-border-subtle: #2a2f38;
+      --ef-control-border: #3a424f;
+      --ef-input-border: #3a424f;
+      --ef-heading: #f2f4f7;
+      --ef-text: #dde1e7;
+      --ef-text-soft: #c3c8d0;
+      --ef-text-strong: #f2f4f7;
+      --ef-muted: #9aa3b0;
+      --ef-muted-strong: #b6bdc8;
+      --ef-muted-soft: #9aa3b0;
+      --ef-chip-fg: #c3c8d0;
+      --ef-surface: #22262e;
+      --ef-surface-alt: #282d36;
+      --ef-surface-select: #22262e;
+      --ef-control-bg: #24272d;
+      --ef-hover-bg: #2b303a;
+      --ef-control-border-hover: #4a5361;
+      --ef-btn-secondary-bg: #2a2f38;
+      --ef-btn-secondary-hover-bg: #333a45;
+      --ef-btn-secondary-text: #e6e9ee;
+      --ef-btn-export-bg: #eef1f5;
+      --ef-btn-export-hover-bg: #ffffff;
+      --ef-btn-export-text: #16181d;
+      --ef-btn-export-disabled-bg: #4a505b;
+      --ef-primary: #5b8def;
+      --ef-primary-hover: #6f9cf2;
+      --ef-primary-disabled: #33415c;
+      --ef-focus-ring: rgba(91,141,239,0.25);
+      --ef-focus-ring-input: rgba(91,141,239,0.2);
+      --ef-focus-ring-chip: rgba(91,141,239,0.3);
+      --ef-chip-on-bg: #23324f;
+      --ef-chip-on-text: #9dc0ff;
+      --ef-error: #ff6b6b;
+      --ef-swatch-checker: #3a424f;
+      --ef-swatch-border: rgba(255,255,255,0.18);
+      --ef-code-bg: #14161c;
+      --ef-code-border: #3b4152;
+      --ef-code-text: #cdd6f4;
+      --ef-bug-bg: #3a2226;
+      --ef-bug: #ff8a94;
+      --ef-enh-bg: #12293d;
+      --ef-enh: #6cb6ff;
     }
   `;
   document.head.appendChild(style);
@@ -550,6 +652,8 @@ function getOrCreateDialog(): HTMLElement {
     el.id = DIALOG_ID;
     document.body.appendChild(el);
   }
+  // Late-created root: mirror the current theme so CSS dark overrides apply.
+  syncThemeTo(el);
   return el;
 }
 
@@ -1125,18 +1229,22 @@ function injectToastStyles(): void {
   style.id = TOAST_ID + "_styles";
   style.textContent = `
     #${TOAST_ID} {
+      /* Theme tokens — light defaults; overridden under [data-ef-theme="dark"]. */
+      --ef-toast-bg: #1a1a1a;
+      --ef-toast-text: #ffffff;
+      --ef-toast-shadow: 0 4px 20px rgba(0,0,0,0.3);
       position: fixed;
       bottom: 24px;
       right: 24px;
       z-index: 2147483647;
-      background: #1a1a1a;
-      color: #fff;
+      background: var(--ef-toast-bg);
+      color: var(--ef-toast-text);
       padding: 12px 20px;
       border-radius: 8px;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       font-size: 13px;
       font-weight: 500;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      box-shadow: var(--ef-toast-shadow);
       opacity: 0;
       transition: opacity 0.2s ease;
       pointer-events: none;
@@ -1144,6 +1252,12 @@ function injectToastStyles(): void {
     }
     #${TOAST_ID}.ef-visible {
       opacity: 1;
+    }
+    html[data-ef-theme="dark"] #${TOAST_ID},
+    #${TOAST_ID}[data-ef-theme="dark"] {
+      --ef-toast-bg: #2a2f38;
+      --ef-toast-text: #f2f4f7;
+      --ef-toast-shadow: 0 4px 24px rgba(0,0,0,0.55);
     }
   `;
   document.head.appendChild(style);
@@ -1157,6 +1271,7 @@ export function showToast(message: string): void {
     el.id = TOAST_ID;
     document.body.appendChild(el);
   }
+  syncThemeTo(el);
   el.textContent = message;
   el.classList.add("ef-visible");
   clearTimeout((el as any).__ef_toast_timer);

@@ -3,6 +3,7 @@ package panel
 import (
 	"github.com/emergent-company/go-daisy/components/layout"
 	"github.com/emergent-company/go-daisy/components/ui"
+	"github.com/emergent-company/emergent.feedback/server/theme"
 )
 
 // panelBrand is the shared brand mark: a primary monogram tile plus the product
@@ -117,6 +118,7 @@ templ panelGate() {
 templ panelNavbar() {
 	<div class="bg-base-100 border-base-content/5 z-10 h-14 shrink-0 border-b">
 		@layout.Navbar("emergent.feedback", panelBrand(false)) {
+		@theme.Toggle()
 		<span id="user-login" class="hidden max-w-[10rem] truncate text-sm font-medium sm:block"></span>
 		@ui.Dropdown(ui.DropdownEnd, templ.Attributes{"data-testid": "account-menu"}) {
 		<div tabindex="0" role="button" class="cursor-pointer rounded-full p-px outline-none transition hover:ring-1 hover:ring-base-content/25 focus-visible:ring-1 focus-visible:ring-base-content/45 active:ring-1 active:ring-base-content/30" aria-label="Account menu" aria-haspopup="menu">
@@ -148,11 +150,11 @@ templ panelNavbar() {
 // script. Pages pass their content as children.
 templ panelShell(title string, active string) {
 	<!DOCTYPE html>
-	<html lang="en" data-theme="dark">
+	<html lang="en">
 	<head>
 		<meta charset="UTF-8"/>
 		<meta name="viewport" content="width=device-width, initial-scale=1"/>
-		<meta name="color-scheme" content="dark"/>
+		@theme.Head(theme.Config{Light: "nord", Dark: "dracula"})
 		<title>{ title }</title>
 		<link rel="stylesheet" href="/static/css/app.css"/>
 	</head>

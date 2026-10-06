@@ -1,0 +1,93 @@
+package theme
+
+// Head renders the color-scheme meta plus the FOUC-safe theme resolver.
+//
+// Place it inside <head> BEFORE any stylesheet so the persisted (or system)
+// theme is stamped on <html> before first paint. The script itself lives in
+// theme.go (headScript) so the resolver stays plain, dependency-free JS.
+templ Head(cfg Config) {
+	<meta name="color-scheme" content="light dark"/>
+	@templ.Raw(headScript(cfg))
+}
+
+// Toggle renders the three-way Light/Dark/System theme dropdown. State,
+// persistence and icon painting are wired once by toggleScript() (theme.go).
+templ Toggle() {
+	<div class="dropdown dropdown-end">
+		<label id="ef-theme-toggle" tabindex="0" role="button" class="btn btn-sm btn-circle btn-ghost" data-testid="theme-toggle" aria-label="Theme: System">
+			<span id="ef-theme-icon-light" class="flex items-center justify-center" aria-hidden="true">
+				<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-4">
+					<circle cx="12" cy="12" r="4"></circle>
+					<path d="M12 2v2"></path>
+					<path d="M12 20v2"></path>
+					<path d="m4.93 4.93 1.41 1.41"></path>
+					<path d="m17.66 17.66 1.41 1.41"></path>
+					<path d="M2 12h2"></path>
+					<path d="M20 12h2"></path>
+					<path d="m6.34 17.66-1.41 1.41"></path>
+					<path d="m19.07 4.93-1.41 1.41"></path>
+				</svg>
+			</span>
+			<span id="ef-theme-icon-dark" class="items-center justify-center" style="display:none" aria-hidden="true">
+				<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-4">
+					<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path>
+				</svg>
+			</span>
+			<span id="ef-theme-icon-system" class="items-center justify-center" style="display:none" aria-hidden="true">
+				<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-4">
+					<rect width="20" height="14" x="2" y="3" rx="2"></rect>
+					<path d="M8 21h8"></path>
+					<path d="M12 17v4"></path>
+					<circle cx="12" cy="10" r="1.5" fill="currentColor" stroke="none"></circle>
+				</svg>
+			</span>
+		</label>
+		<ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-50 w-36 p-2 shadow-sm" data-testid="theme-dropdown">
+			<li>
+				<button type="button" data-ef-theme-option="light" class="flex w-full items-center gap-2 text-left">
+					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-4">
+						<circle cx="12" cy="12" r="4"></circle>
+						<path d="M12 2v2"></path>
+						<path d="M12 20v2"></path>
+						<path d="m4.93 4.93 1.41 1.41"></path>
+						<path d="m17.66 17.66 1.41 1.41"></path>
+						<path d="M2 12h2"></path>
+						<path d="M20 12h2"></path>
+						<path d="m6.34 17.66-1.41 1.41"></path>
+						<path d="m19.07 4.93-1.41 1.41"></path>
+					</svg>
+					<span>Light</span>
+					<span id="ef-theme-check-light" class="ml-auto" style="display:none">
+						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="size-4"><path d="M20 6 9 17l-5-5"></path></svg>
+					</span>
+				</button>
+			</li>
+			<li>
+				<button type="button" data-ef-theme-option="dark" class="flex w-full items-center gap-2 text-left">
+					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-4">
+						<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path>
+					</svg>
+					<span>Dark</span>
+					<span id="ef-theme-check-dark" class="ml-auto" style="display:none">
+						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="size-4"><path d="M20 6 9 17l-5-5"></path></svg>
+					</span>
+				</button>
+			</li>
+			<li>
+				<button type="button" data-ef-theme-option="system" class="flex w-full items-center gap-2 text-left">
+					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-4">
+						<rect width="20" height="14" x="2" y="3" rx="2"></rect>
+						<path d="M8 21h8"></path>
+						<path d="M12 17v4"></path>
+						<circle cx="12" cy="10" r="1.5" fill="currentColor" stroke="none"></circle>
+					</svg>
+					<span>System</span>
+					<span id="ef-theme-check-system" class="ml-auto" style="display:none">
+						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="size-4"><path d="M20 6 9 17l-5-5"></path></svg>
+					</span>
+				</button>
+			</li>
+		</ul>
+	</div>
+	@templ.Raw(toggleScript())
+}

@@ -36,6 +36,11 @@ export interface OverlayConfig {
    * Defaults to false — by default page text IS captured so replays stay useful.
    */
   replayMaskText: boolean;
+  /**
+   * Theme for the injected overlay UI. Set via data-theme on the <script> tag.
+   * `"auto"` (default) detects the host page theme, then the OS preference.
+   */
+  theme?: "light" | "dark" | "auto";
 }
 
 function getScriptTag(): HTMLScriptElement | null {
@@ -83,6 +88,10 @@ export function readConfig(): OverlayConfig {
   const replayMaskText =
     tag?.dataset.replayMaskText !== undefined && tag?.dataset.replayMaskText !== "false";
 
+  const rawTheme = tag?.dataset.theme?.toLowerCase() ?? "";
+  const theme: OverlayConfig["theme"] =
+    rawTheme === "light" || rawTheme === "dark" ? rawTheme : "auto";
+
   return {
     apiBase,
     repo,
@@ -96,5 +105,6 @@ export function readConfig(): OverlayConfig {
     ...(replayBufferMs !== undefined ? { replayBufferMs } : {}),
     ...(replaySrc !== undefined ? { replaySrc } : {}),
     replayMaskText,
+    theme,
   };
 }
