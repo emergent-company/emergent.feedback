@@ -84,18 +84,38 @@ test("toggleTarget: adds then removes, and exposes membership", () => {
   assert.equal(getTargetCount(), 0);
 });
 
-test("removeTarget: drops the element and its applied changes", () => {
+test("removeTarget: reverts the removed element's edits and drops its records", () => {
   const a = el(["p-0"]);
   const b = el(["p-0"]);
   addTarget(a, "#a");
   addTarget(b, "#b");
   applyTokenToTargets(paddingGroup, paddingGroup.tokens[1]);
   assert.equal(getChangeCount(), 2);
+  assert.ok(a.classList.contains("p-4"));
+  assert.ok(b.classList.contains("p-4"));
 
   removeTarget(a);
   assert.equal(getTargetCount(), 1);
   assert.equal(getChangeCount(), 1);
   assert.equal(getChanges()[0].target, "#b");
+  // The removed target's host element is restored, not left edited.
+  assert.ok(!a.classList.contains("p-4"));
+  assert.ok(a.classList.contains("p-0"));
+  // The remaining target keeps its edit.
+  assert.ok(b.classList.contains("p-4"));
+});
+
+test("toggleTarget: toggling off reverts the applied edit", () => {
+  const a = el(["p-0"]);
+  toggleTarget(a, "#a");
+  applyTokenToTargets(paddingGroup, paddingGroup.tokens[1]);
+  assert.ok(a.classList.contains("p-4"));
+
+  toggleTarget(a, "#a"); // off
+  assert.equal(hasTarget(a), false);
+  assert.equal(getChangeCount(), 0);
+  assert.ok(!a.classList.contains("p-4"));
+  assert.ok(a.classList.contains("p-0"));
 });
 
 test("applyTokenToTargets: applies to all targets and records selector/group/before→after", () => {

@@ -21,6 +21,7 @@ var trustOrder = []string{
 	"target.element.fingerprint",
 	"intent.expected",
 	"intent.actual",
+	"intent.changes",
 	"target.element.selector",
 	"visual.screenshot_ref",
 	"target.element.computed_styles",
@@ -558,6 +559,12 @@ func provenanceBadge(ctx map[string]any, key string, hasScreenshot bool) string 
 	case "intent.actual":
 		if i, ok := ctx["intent"].(map[string]any); ok && asString(i["actual"]) != "" {
 			return "stated"
+		}
+	case "intent.changes":
+		if i, ok := ctx["intent"].(map[string]any); ok {
+			if arr, ok := i["changes"].([]any); ok && len(arr) > 0 {
+				return "stated"
+			}
 		}
 	case "target.element.selector":
 		return "captured"

@@ -102,7 +102,41 @@ test("normalizeTheme: rejects style tokens with a bad prop or value", () => {
   assert.equal(bad("color", "red;}"), null, "semicolon value");
   assert.equal(bad("color", "javascript:alert(1)"), null, "javascript: value");
   assert.equal(bad("color", "expression(alert(1))"), null, "expression value");
+  assert.equal(bad("color", "image-set('x.png' 1x)"), null, "image-set() value");
+  assert.equal(bad("color", "-webkit-image-set('x.png' 1x)"), null, "webkit image-set() value");
+  assert.equal(bad("color", "element(#foo)"), null, "element() value");
   assert.equal(bad("color", "a".repeat(121)), null, "over-long value");
+});
+
+test("normalizeTheme: validates swatches, keeping the token when one is bad", () => {
+  const out = normalizeTheme(payload([
+    {
+      id: "textColor", label: "Text color", applyType: "class", removePattern: "^text-",
+      tokens: [
+        { id: "base", label: "Base", className: "text-base-content", swatch: "var(--color-base-content)" },
+        { id: "primary", label: "Primary", className: "text-primary", swatch: "red;background:url(x)" },
+        { id: "accent", label: "Accent", className: "text-accent", swatch: "a".repeat(121) },
+      ],
+    },
+  ]));
+  assert.ok(out);
+  const tokens = out!.groups[0].tokens;
+  assert.equal(tokens.length, 3, "tokens are kept even when the swatch is dropped");
+  assert.equal(tokens.find((t) => t.id === "base")!.swatch, "var(--color-base-content)");
+  assert.equal(tokens.find((t) => t.id === "primary")!.swatch, undefined);
+  assert.equal(tokens.find((t) => t.id === "accent")!.swatch, undefined);
+});
+
+test("normalizeTheme: an empty removePattern means 'no pattern' (group kept)", () => {
+  const out = normalizeTheme(payload([
+    {
+      id: "g", label: "G", applyType: "class", removePattern: "",
+      tokens: [{ id: "a", label: "A", className: "x" }],
+    },
+  ]));
+  assert.ok(out);
+  assert.equal(out!.groups.length, 1);
+  assert.equal(out!.groups[0].removePattern, undefined);
 });
 
 test("normalizeTheme: keeps a valid payload and tags its source", () => {
@@ -216,4 +250,18 @@ test("revertToken: restores the previous class after a style apply", () => {
   assert.equal((el as unknown as FakeEl).style.getPropertyValue("padding"), "");
   assert.ok(el.classList.contains("p-2"));
   assert.ok(!el.classList.contains("p-4"));
+});
+
+test("applyToken/revertToken: a pre-existing inline style is captured and restored", () => {
+  const el = new FakeEl(["btn"]);
+  (el as unknown as FakeEl).style.setProperty("padding", "12px");
+
+  const lg = classGroup.tokens.find((t) => t.id === "lg")!;
+  const change = applyToken(el as unknown as Element, classGroup, lg);
+  assert.equal(change.before, "12px", "prior inline value is recorded");
+  assert.equal(change.after, "var(--space-lg)");
+  assert.equal((el as unknown as FakeEl).style.getPropertyValue("padding"), "var(--space-lg)");
+
+  revertToken(el as unknown as Element, classGroup, change);
+  assert.equal((el as unknown as FakeEl).style.getPropertyValue("padding"), "12px");
 });

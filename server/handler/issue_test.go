@@ -174,6 +174,70 @@ func TestBuildIssueContentNoChangesSection(t *testing.T) {
 	}
 }
 
+func TestMdTickSafeNeutralizesInjection(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"padding", "padding"},
+		{"p`ad", "pad"},
+		{"p\nad", "p ad"},
+		{"p\rad", "p ad"},
+		{"", ""},
+	}
+	for _, c := range cases {
+		if got := mdTickSafe(c.in); got != c.want {
+			t.Fatalf("mdTickSafe(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestWriteChangesNeutralizesMarkdownInjection(t *testing.T) {
+	ctx := map[string]any{
+		"intent": map[string]any{
+			"changes": []any{
+				map[string]any{
+					"target": "main > button",
+					"group":  "padding`\n\nlinebreak",
+					"before": "p-2`",
+					"after":  "p-4`\nbad",
+				},
+			},
+		},
+	}
+	ctxJSON, _ := json.Marshal(ctx)
+	items := []store.Feedback{{
+		ID:          1,
+		URL:         "https://app.example.com/",
+		Selector:    "button",
+		Comment:     "x",
+		ContextJSON: string(ctxJSON),
+		GitHubUser:  "alice",
+	}}
+	_, body := buildIssueContent(items, "")
+
+	// The single change must render as one sanitized line: backticks stripped,
+	// CR/LF collapsed to spaces, no injected line breaks.
+	want := "- `main > button` — padding  linebreak: `p-2` → `p-4 bad`"
+	if !strings.Contains(body, want) {
+		t.Fatalf("expected sanitized change line %q not found:\n%s", want, body)
+	}
+	if strings.Contains(body, "\nlinebreak") {
+		t.Fatalf("injected newline created a new line:\n%s", body)
+	}
+}
+
+func TestChangeCountSkipsMalformedEntries(t *testing.T) {
+	intent := map[string]any{
+		"changes": []any{
+			map[string]any{"target": "a", "group": "padding", "after": "p-2"},
+			"not-a-map",
+			map[string]any{"target": "b", "group": "backgroundColor", "after": "bg-primary"},
+			nil,
+		},
+	}
+	if got := changeCount(intent); got != 2 {
+		t.Fatalf("changeCount = %d, want 2", got)
+	}
+}
+
 func TestFormatEventTime(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{"2024-01-02T03:04:05Z", "03:04:05"},

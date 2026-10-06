@@ -72,9 +72,24 @@ const STYLE_PROPS = new Set([
 ]);
 
 const MAX_STYLE_VALUE = 120;
+const MAX_SWATCH = 120;
 
-/** Values containing any of these are rejected outright. */
-const UNSAFE_VALUE = /url\s*\(|;|expression|javascript:/i;
+/** Style values containing any of these are rejected outright. */
+const UNSAFE_VALUE =
+  /url\s*\(|;|expression|javascript:|image-set\s*\(|-webkit-image-set\s*\(|element\s*\(|-moz-element\s*\(/i;
+
+/**
+ * A swatch is only ever used as a CSS `background` value, so it is held to the
+ * same bar as a style value: reject function/exfiltration-ish payloads and
+ * anything that could break out of the declaration.
+ */
+function safeSwatch(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const v = raw.trim();
+  if (!v || v.length > MAX_SWATCH) return undefined;
+  if (/[;\n\r]|url\s*\(|image-set\s*\(|element\s*\(/i.test(v)) return undefined;
+  return v;
+}
 
 /**
  * Compile a `removePattern` from a deliberately small, linear subset. Groups,
@@ -135,7 +150,7 @@ function normalizeToken(raw: unknown, groupApplyType: "class" | "style"): Token 
   if (effectiveType === "class" && !className) return null;
   if (!apply && !className) return null;
 
-  const swatch = typeof t.swatch === "string" && t.swatch ? t.swatch : undefined;
+  const swatch = safeSwatch(t.swatch);
 
   return {
     id,
@@ -174,7 +189,9 @@ export function normalizeTheme(raw: unknown): ThemeTokens | null {
     }
 
     let removePattern: string | undefined;
-    if (gg.removePattern !== undefined) {
+    // An empty string means "no pattern" — keep the group; only an explicitly
+    // invalid (non-empty) pattern rejects it.
+    if (gg.removePattern !== undefined && gg.removePattern !== "") {
       const compiled = safeRemovePattern(gg.removePattern);
       if (!compiled) continue; // explicit but invalid pattern → reject the group
       removePattern = gg.removePattern as string;
@@ -424,8 +441,18 @@ export function applyToken(
   token: Token
 ): { before: string; after: string } {
   const prev = matchToken(el, group);
-  const before = currentState(el, group, prev);
+  let before = currentState(el, group, prev);
   const next = resolveApply(group, token);
+
+  // For a style apply, capture the element's ACTUAL prior inline value of the
+  // prop so a pre-existing inline style isn't lost (and so revert is exact).
+  // A prior token's value already equals the inline value, so this is a no-op
+  // in that case; when nothing was set we keep the class-based `before`.
+  if (next.type === "style") {
+    const style = styleOf(el);
+    const priorInline = style ? style.getPropertyValue(next.prop).trim() : "";
+    if (priorInline) before = priorInline;
+  }
 
   // Clear whichever prior representation the group used, then commit the new one.
   removeGroupClasses(el, group);
@@ -443,8 +470,10 @@ export function applyToken(
 
 /**
  * Restore an element to the state recorded in `change`. Any style props owned
- * by the group are cleared, then `before` is reapplied: as an inline value if
- * it matches a style token's value, otherwise as a class name (or list).
+ * by the group are cleared, then `before` is reapplied:
+ *   - as a class when it names a class token (or is otherwise class-shaped),
+ *   - as an inline value when it names a style token or is an arbitrary inline
+ *     value the applied style token overwrote.
  */
 export function revertToken(
   el: Element,
@@ -456,15 +485,31 @@ export function revertToken(
 
   if (!change.before) return;
 
-  const beforeToken = group.tokens.find((t) => {
-    const a = resolveApply(group, t);
-    return a.type === "style" ? a.value === change.before : a.className === change.before;
-  });
-  const beforeApply = beforeToken ? resolveApply(group, beforeToken) : null;
+  const lookup = (v: string): Token | undefined =>
+    group.tokens.find((t) => {
+      const a = resolveApply(group, t);
+      return a.type === "style" ? a.value === v : a.className === v;
+    });
 
-  if (beforeApply && beforeApply.type === "style") {
-    const style = styleOf(el);
-    if (style) style.setProperty(beforeApply.prop, change.before);
+  const beforeToken = lookup(change.before);
+  const beforeApply = beforeToken ? resolveApply(group, beforeToken) : null;
+  if (beforeApply?.type === "style") {
+    styleOf(el)?.setProperty(beforeApply.prop, change.before);
+    return;
+  }
+  if (beforeApply?.type === "class") {
+    for (const cls of change.before.split(/\s+/)) {
+      if (cls && CLASS_RE.test(cls)) el.classList.add(cls);
+    }
+    return;
+  }
+
+  // `before` is not a known token — e.g. a pre-existing inline value that the
+  // applied style token overwrote. Restore it on the applied token's prop.
+  const afterToken = lookup(change.after);
+  const afterApply = afterToken ? resolveApply(group, afterToken) : null;
+  if (afterApply?.type === "style") {
+    styleOf(el)?.setProperty(afterApply.prop, change.before);
     return;
   }
   // Default: `before` is a class name (or whitespace-separated list).

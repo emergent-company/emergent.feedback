@@ -91,9 +91,19 @@ export function addTarget(el: Element, selector: string, dataComponent?: string)
   return true;
 }
 
-/** Remove an element from the target set (also drops its applied changes). */
+/** Remove an element from the target set, reverting its applied live edits. */
 export function removeTarget(el: Element): boolean {
   const before = targets.length;
+  // Revert edits made to this element BEFORE dropping its records — otherwise
+  // the class/style stays on the host page but is untracked, so Cancel / idle
+  // teardown could never undo it.
+  for (const r of applied.filter((rec) => rec.el === el)) {
+    try {
+      revertToken(r.el, r.group, { before: r.before, after: r.after });
+    } catch {
+      // Element may have left the DOM — nothing to restore.
+    }
+  }
   targets = targets.filter((t) => t.el !== el);
   applied = applied.filter((r) => r.el !== el);
   if (targets.length === 0) dropListeners();

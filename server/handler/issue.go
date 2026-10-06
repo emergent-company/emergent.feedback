@@ -495,10 +495,10 @@ func writeChanges(sb *strings.Builder, ctx map[string]any, heading string) {
 			before = "(none)"
 		}
 		lines = append(lines, fmt.Sprintf("- `%s` — %s: `%s` → `%s`",
-			redactSecrets(strVal(c["target"])),
-			redactSecrets(strVal(c["group"])),
-			redactSecrets(before),
-			redactSecrets(strVal(c["after"])),
+			mdTickSafe(redactSecrets(strVal(c["target"]))),
+			mdTickSafe(redactSecrets(strVal(c["group"]))),
+			mdTickSafe(redactSecrets(before)),
+			mdTickSafe(redactSecrets(strVal(c["after"]))),
 		))
 	}
 	if len(lines) == 0 {
@@ -513,13 +513,33 @@ func writeChanges(sb *strings.Builder, ctx map[string]any, heading string) {
 	sb.WriteString("\n")
 }
 
-// changeCount returns the number of live style changes recorded on the intent.
+// changeCount returns the number of renderable live style changes recorded on
+// the intent — only entries that are maps, matching what writeChanges renders.
 func changeCount(intent map[string]any) int {
 	arr, ok := intent["changes"].([]any)
 	if !ok {
 		return 0
 	}
-	return len(arr)
+	n := 0
+	for _, v := range arr {
+		if _, ok := v.(map[string]any); ok {
+			n++
+		}
+	}
+	return n
+}
+
+// mdTickSafe neutralizes markdown injection in values interpolated inside an
+// inline-code span: it strips backticks and replaces CR/LF with a space so a
+// hostile value cannot break out of the span or inject lines.
+func mdTickSafe(s string) string {
+	if s == "" {
+		return s
+	}
+	s = strings.ReplaceAll(s, "`", "")
+	s = strings.ReplaceAll(s, "\r", " ")
+	s = strings.ReplaceAll(s, "\n", " ")
+	return s
 }
 
 // targetSelectors returns the selector strings from ctx.targets (the list of

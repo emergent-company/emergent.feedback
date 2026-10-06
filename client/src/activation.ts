@@ -56,7 +56,10 @@ export function startActivationListener(config: Pick<OverlayConfig, "hotkey">): 
 }
 
 function handleKeyDown(e: KeyboardEvent): void {
-  if (e.key === "Escape" && (mode === "active" || mode === "capturing" || mode === "editing")) {
+  // Escape while "editing" is owned by the dialog's own Escape handler, which
+  // runs the same cancel path as the Cancel button. Only the pre-dialog modes
+  // are handled here.
+  if (e.key === "Escape" && (mode === "active" || mode === "capturing")) {
     setMode("idle");
     return;
   }

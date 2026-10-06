@@ -1025,9 +1025,10 @@ const FOCUSABLE_SELECTOR =
 
 let focusReturnEl: HTMLElement | null = null;
 let dialogKeydown: ((e: KeyboardEvent) => void) | null = null;
-// Escape handler owned by the submit dialog; removed on close so a mode-driven
-// teardown (e.g. the activation hotkey) can't be double-handled by onCancel.
-let dialogEscapeKey: ((e: KeyboardEvent) => void) | null = null;
+// Key handler owned by the submit dialog. closeDialog() detaches it so a
+// mode-driven teardown (e.g. the activation hotkey → idle) doesn't leave a
+// stray Escape listener that would re-invoke onCancel on a closed dialog.
+let dialogKeyHandler: ((e: KeyboardEvent) => void) | null = null;
 // Teardown for the live selection subscription owned by the submit dialog.
 let dialogCleanup: (() => void) | null = null;
 
@@ -1462,9 +1463,30 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   };
 
   const renderSelection = () => {
+    // Re-rendering replaces innerHTML, which would collapse the "Current
+    // classes" disclosure and jump scroll positions. Capture + restore them so
+    // live edits don't yank the panel around.
+    const compose = dialog.querySelector<HTMLElement>(".ef-compose");
+    const composeScroll = compose?.scrollTop ?? 0;
+    const detailsOpen = !!styleHost.querySelector<HTMLDetailsElement>(".ef-style-classes")?.open;
+    const classListScroll =
+      styleHost.querySelector<HTMLElement>(".ef-style-class-list")?.scrollTop ?? 0;
+    const changesScroll =
+      changesHost.querySelector<HTMLElement>(".ef-changes-list")?.scrollTop ?? 0;
+
     renderTargets();
     renderStyle();
     renderChanges();
+
+    if (detailsOpen) {
+      const d = styleHost.querySelector<HTMLDetailsElement>(".ef-style-classes");
+      if (d) d.open = true;
+    }
+    const newClassList = styleHost.querySelector<HTMLElement>(".ef-style-class-list");
+    if (newClassList) newClassList.scrollTop = classListScroll;
+    const newChanges = changesHost.querySelector<HTMLElement>(".ef-changes-list");
+    if (newChanges) newChanges.scrollTop = changesScroll;
+    if (compose) compose.scrollTop = composeScroll;
   };
 
   let action: IntentAction = inferAction(getType());
@@ -1572,11 +1594,20 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
    */
   const collectComment = (): string => {
     const raw = textarea.value.trim();
-    if (raw) return raw;
+    if (raw) return raw; // a typed note always wins
     const parts: string[] = [];
     if (expected.trim()) parts.push(expected.trim());
     const actualVal = actualInput?.value.trim();
     if (actualEdited && actualVal && current) parts.push(`currently ${current.label}: ${actualVal}`);
+    // A changes-only report is valid: summarise the applied live edits so Save
+    // and Export both accept it (the server supports this case).
+    const changes = currentChanges();
+    if (changes.length > 0) {
+      const desc = changes
+        .map((c) => `${c.group} ${c.before || "—"} → ${c.after}`)
+        .join("; ");
+      parts.push(`Applied live changes: ${desc}`);
+    }
     return parts.join(" — ");
   };
 
@@ -1592,10 +1623,10 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   };
   const removeKey = () => {
     document.removeEventListener("keydown", onKey);
-    if (dialogEscapeKey === onKey) dialogEscapeKey = null;
+    if (dialogKeyHandler === onKey) dialogKeyHandler = null;
   };
   document.addEventListener("keydown", onKey);
-  dialogEscapeKey = onKey;
+  dialogKeyHandler = onKey;
 
   cancelBtn.addEventListener("click", () => {
     removeKey();
@@ -1727,9 +1758,9 @@ export function closeDialog(): void {
     document.removeEventListener("keydown", dialogKeydown, true);
     dialogKeydown = null;
   }
-  if (dialogEscapeKey) {
-    document.removeEventListener("keydown", dialogEscapeKey);
-    dialogEscapeKey = null;
+  if (dialogKeyHandler) {
+    document.removeEventListener("keydown", dialogKeyHandler);
+    dialogKeyHandler = null;
   }
   if (dialogCleanup) {
     dialogCleanup();

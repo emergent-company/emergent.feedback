@@ -258,6 +258,40 @@ func TestBuildEnvelopeSurfacesChangesAndTargets(t *testing.T) {
 	}
 }
 
+func TestTrustOrderIncludesIntentChanges(t *testing.T) {
+	var idxActual, idxChanges, idxSelector = -1, -1, -1
+	for i, k := range trustOrder {
+		switch k {
+		case "intent.actual":
+			idxActual = i
+		case "intent.changes":
+			idxChanges = i
+		case "target.element.selector":
+			idxSelector = i
+		}
+	}
+	if idxChanges < 0 {
+		t.Fatalf("trustOrder missing intent.changes: %v", trustOrder)
+	}
+	// Must sit after intent.actual and before target.element.selector,
+	// matching the client TRUST_ORDER.
+	if idxActual >= idxChanges || idxChanges >= idxSelector {
+		t.Fatalf("intent.changes mispositioned in trustOrder: %v", trustOrder)
+	}
+}
+
+func TestProvenanceBadgeIntentChanges(t *testing.T) {
+	ctx := map[string]any{
+		"intent": map[string]any{"changes": []any{map[string]any{"after": "p-4"}}},
+	}
+	if got := provenanceBadge(ctx, "intent.changes", false); got != "stated" {
+		t.Fatalf("provenanceBadge(intent.changes) = %q, want stated", got)
+	}
+	if got := provenanceBadge(map[string]any{"intent": map[string]any{"changes": []any{}}}, "intent.changes", false); got != "absent" {
+		t.Fatalf("provenanceBadge(intent.changes empty) = %q, want absent", got)
+	}
+}
+
 func TestBuildEnvelopeReproTopLevelFallback(t *testing.T) {
 	ctx := map[string]any{
 		"steps":   []any{"Legacy step"},
