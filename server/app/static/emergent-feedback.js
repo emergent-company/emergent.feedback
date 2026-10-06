@@ -21,7 +21,7 @@
   min-width: 16px;
   text-align: center;
 }
-[id^="${$e}"].ef-badge-feedback { background: oklch(0.65 0.14 82); }
+[id^="${$e}"].ef-badge-feedback { background: oklch(0.65 0.14 82); color: oklch(0.2 0.04 82); }
 [id^="${$e}"].ef-badge-issue { background: oklch(0.55 0.19 26); }
 html[data-ef-theme="dark"] [id^="${$e}"] {
   --ef-badge-shadow: 0 1px 4px rgba(0,0,0,0.6);
@@ -80,7 +80,7 @@ html[data-ef-theme="dark"] [id^="${$e}"] {
       --ef-primary: oklch(0.60 0.12 78);
       --ef-primary-hover: oklch(0.56 0.115 78);
       --ef-primary-disabled: color-mix(in oklab, oklch(0.60 0.12 78) 45%, oklch(1 0 0) 55%);
-      --ef-primary-content: oklch(0.99 0.01 78);
+      --ef-primary-content: oklch(0.2 0.04 78);
       --ef-focus-ring: oklch(0.60 0.12 78 / 0.15);
       --ef-focus-ring-input: oklch(0.60 0.12 78 / 0.12);
       --ef-focus-ring-chip: oklch(0.60 0.12 78 / 0.2);
@@ -88,7 +88,7 @@ html[data-ef-theme="dark"] [id^="${$e}"] {
       --ef-chip-on-text: oklch(0.50 0.115 78);
       --ef-error: oklch(0.55 0.19 26);
       --ef-accent: oklch(0.58 0.13 162);
-      --ef-accent-content: #ffffff;
+      --ef-accent-content: oklch(0.17 0.04 162);
       --ef-accent-soft: oklch(0.58 0.13 162 / 0.12);
       --ef-swatch-checker: oklch(0.93 0.006 274);
       --ef-swatch-border: oklch(0.30 0.018 274 / 0.15);

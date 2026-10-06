@@ -27,7 +27,7 @@ const STYLES = `
   min-width: 16px;
   text-align: center;
 }
-[id^="${BADGE_PREFIX}"].ef-badge-feedback { background: oklch(0.65 0.14 82); }
+[id^="${BADGE_PREFIX}"].ef-badge-feedback { background: oklch(0.65 0.14 82); color: oklch(0.2 0.04 82); }
 [id^="${BADGE_PREFIX}"].ef-badge-issue { background: oklch(0.55 0.19 26); }
 html[data-ef-theme="dark"] [id^="${BADGE_PREFIX}"] {
   --ef-badge-shadow: 0 1px 4px rgba(0,0,0,0.6);
