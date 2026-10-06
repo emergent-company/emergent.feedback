@@ -1,11 +1,18 @@
 // indicator.ts — top bar shown while comment mode is active.
 
 import type { OverlayConfig } from "./config";
+import { syncThemeTo } from "./theme";
 
 const BAR_ID = "__ef_indicator__";
 
 const STYLES = `
 #${BAR_ID} {
+  /* Theme tokens — the activation bar is intentionally dark in both themes. */
+  --ef-bar-bg: rgba(17, 24, 39, 0.92);
+  --ef-bar-accent: #22c55e;
+  --ef-bar-text: #f9fafb;
+  --ef-bar-key-bg: rgba(255,255,255,0.12);
+  --ef-bar-key-border: rgba(255,255,255,0.22);
   all: initial;
   position: fixed;
   top: 0;
@@ -16,13 +23,13 @@ const STYLES = `
   align-items: center;
   justify-content: center;
   height: 32px;
-  background: rgba(17, 24, 39, 0.92);
+  background: var(--ef-bar-bg);
   backdrop-filter: blur(4px);
-  border-bottom: 2px solid #22c55e;
+  border-bottom: 2px solid var(--ef-bar-accent);
   font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
   font-size: 12px;
   font-weight: 500;
-  color: #f9fafb;
+  color: var(--ef-bar-text);
   letter-spacing: 0.01em;
   pointer-events: none;
   box-sizing: border-box;
@@ -33,21 +40,25 @@ const STYLES = `
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #22c55e;
+  background: var(--ef-bar-accent);
   margin-right: 8px;
   flex-shrink: 0;
   animation: ef-pulse 2s ease-in-out infinite;
 }
 #${BAR_ID} .ef-bar-key {
   display: inline-block;
-  background: rgba(255,255,255,0.12);
-  border: 1px solid rgba(255,255,255,0.22);
+  background: var(--ef-bar-key-bg);
+  border: 1px solid var(--ef-bar-key-border);
   border-radius: 4px;
   padding: 0 5px;
   margin: 0 2px;
   font-family: ui-monospace, 'SF Mono', Menlo, monospace;
   font-size: 11px;
   line-height: 18px;
+}
+html[data-ef-theme="dark"] #${BAR_ID},
+#${BAR_ID}[data-ef-theme="dark"] {
+  --ef-bar-bg: rgba(10, 13, 20, 0.94);
 }
 @keyframes ef-pulse {
   0%, 100% { opacity: 1; }
@@ -81,6 +92,8 @@ export function showIndicator(hotkey: OverlayConfig["hotkey"]): void {
     barEl.id = BAR_ID;
     document.body.appendChild(barEl);
   }
+  // Late-created root: mirror the current theme so CSS dark overrides apply.
+  syncThemeTo(barEl);
 
   const label = hotkeyLabel(hotkey);
   barEl.innerHTML =

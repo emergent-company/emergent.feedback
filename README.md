@@ -41,6 +41,12 @@ Add the following snippet to your HTML, just before `</body>`:
 | `data-hotkey` | No | Activation key combo. Defaults to `alt+shift`. Options: `alt+shift`, `ctrl+shift`, `meta+shift` |
 | `data-branch` | No | Git branch being tested. Shown in dialog and included in issue body |
 | `data-version` | No | App version being tested. Shown in dialog and included in issue body |
+| `data-theme` | No | Overlay theme: `auto` (default), `light` or `dark`. `auto` detects the host page theme, then falls back to the OS `prefers-color-scheme`. |
+
+The overlay dialog, activation bar, badges and toasts follow the resolved theme. The server-rendered
+landing page and API-key panel share a persisted Light/Dark/System toggle (localStorage key
+`emergent-feedback-theme`); the overlay's `auto` mode follows the page/OS independently and does not
+read that key.
 
 ### Host metadata via `<meta name="ef:*">` (planned)
 

@@ -29,6 +29,7 @@ import { startConsoleCapture, getConsoleErrors } from "./console";
 import { startVerifyLoop, stopVerifyLoop } from "./verify";
 import { startReplay, getReplayPayloadAsync } from "./replay";
 import { startReporterNotify, stopReporterNotify } from "./notify";
+import { initTheme, onThemeChange, applyTheme } from "./theme";
 
 (function bootstrap() {
   if ((window as any).__feedbackOverlayLoaded) return;
@@ -38,6 +39,12 @@ import { startReporterNotify, stopReporterNotify } from "./notify";
   startConsoleCapture();
 
   const config = readConfig();
+
+  // Resolve + apply the overlay theme before any UI is shown, and keep it in
+  // sync when the OS preference or the host page theme flips.
+  initTheme(config);
+  onThemeChange(() => applyTheme());
+
   const api = new APIClient(config);
   const auth = new AuthManager(config, api);
 

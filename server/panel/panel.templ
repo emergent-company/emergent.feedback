@@ -3,6 +3,7 @@ package panel
 import (
 	"github.com/emergent-company/go-daisy/components/layout"
 	"github.com/emergent-company/go-daisy/components/ui"
+	"github.com/emergent-company/emergent.feedback/server/theme"
 )
 
 // panelBrand is the shared brand mark: a primary monogram tile plus the product
@@ -113,10 +114,32 @@ templ panelGate() {
 	</div>
 }
 
-// panelNavbar is the shared top bar: brand, signed-in login and account menu.
+// panelSpotlightTrigger is the topbar search control. It mirrors go-daisy's
+// ui.CommandPaletteButton (added after the pinned v0.12.0, so hand-rolled here):
+// a ghost/outline search button whose click checks the palette toggle and
+// focuses its input. Icon-only below md, a search-looking field above.
+templ panelSpotlightTrigger() {
+	@ui.Button(ui.ButtonProps{
+		Type:       ui.ButtonTypeButton,
+		Variant:    ui.ButtonOutline,
+		Icon:       "lucide--search",
+		AriaLabel:  "Search",
+		ExtraClass: "btn-ghost border-base-content/15 text-base-content/60 h-9 w-9 justify-center gap-2 rounded-box px-0 text-sm font-normal hover:bg-base-200 hover:text-base-content md:w-56 md:justify-start md:px-3",
+		Attrs: templ.Attributes{
+			"onclick": "var cb=document.getElementById('spotlight-toggle'); if(cb) cb.checked=true; var i=document.getElementById('spotlight-input'); if(i) i.focus();",
+		},
+	}) {
+		<span class="hidden grow text-left md:inline">Search…</span>
+		<kbd class="kbd kbd-xs hidden md:inline">⌘K</kbd>
+	}
+}
+
+// panelNavbar is the shared top bar: spotlight search, signed-in login and
+// account menu.
 templ panelNavbar() {
 	<div class="bg-base-100 border-base-content/5 z-10 h-14 shrink-0 border-b">
-		@layout.Navbar("emergent.feedback", panelBrand(false)) {
+		@layout.Navbar("emergent.feedback", panelSpotlightTrigger()) {
+		@theme.Toggle()
 		<span id="user-login" class="hidden max-w-[10rem] truncate text-sm font-medium sm:block"></span>
 		@ui.Dropdown(ui.DropdownEnd, templ.Attributes{"data-testid": "account-menu"}) {
 		<div tabindex="0" role="button" class="cursor-pointer rounded-full p-px outline-none transition hover:ring-1 hover:ring-base-content/25 focus-visible:ring-1 focus-visible:ring-base-content/45 active:ring-1 active:ring-base-content/30" aria-label="Account menu" aria-haspopup="menu">
@@ -148,11 +171,11 @@ templ panelNavbar() {
 // script. Pages pass their content as children.
 templ panelShell(title string, active string) {
 	<!DOCTYPE html>
-	<html lang="en" data-theme="dark">
+	<html lang="en">
 	<head>
 		<meta charset="UTF-8"/>
 		<meta name="viewport" content="width=device-width, initial-scale=1"/>
-		<meta name="color-scheme" content="dark"/>
+		@theme.Head(theme.Config{Light: "nord", Dark: "dracula"})
 		<title>{ title }</title>
 		<link rel="stylesheet" href="/static/css/app.css"/>
 	</head>
@@ -173,6 +196,19 @@ templ panelShell(title string, active string) {
 				</main>
 			</div>
 			}
+			@ui.CommandPalette(ui.CommandPaletteProps{
+				ID:          "spotlight",
+				Placeholder: "Search reports and pages…",
+				Groups:      []string{"Navigate", "Reports"},
+				Items: []ui.CommandPaletteItem{
+					{Label: "Overview", Href: "/panel", Icon: "lucide--layout-dashboard", Group: "Navigate"},
+					{Label: "API keys", Href: "/panel/keys", Icon: "lucide--key-round", Group: "Navigate"},
+					{Label: "Reports", Href: "/panel/reports", Icon: "lucide--inbox", Group: "Navigate"},
+					{Label: "Landing page", Href: "/", Icon: "lucide--globe", Group: "Navigate"},
+					{Label: "GitHub", Href: "https://github.com/emergent-company/emergent.feedback", Icon: "lucide--github", Group: "Navigate"},
+					{Label: "Docs", Href: "https://github.com/emergent-company/emergent.feedback/tree/main/docs", Icon: "lucide--book-open", Group: "Navigate"},
+				},
+			})
 		</div>
 
 		<div id="toast-container" class="toast toast-end toast-bottom z-50"></div>
@@ -441,6 +477,7 @@ templ panelScript() {
 			reportsError: null
 		};
 		var selected = {};
+		var deepLinkOpened = false;
 
 		// ── Cookie fallback: the OAuth callback may redirect to /panel when
 		// the popup opener is lost, setting ef_panel_token instead.
@@ -1034,6 +1071,7 @@ templ panelScript() {
 				state.reportsError = err.message;
 			}).then(function () {
 				renderReports();
+				openReportFromQuery();
 			});
 		}
 
@@ -1117,6 +1155,86 @@ templ panelScript() {
 				panel.appendChild(noticeDiv("Could not load report. " + err.message, "error"));
 				toast("Could not load report: " + err.message, "error");
 			});
+		}
+
+		// openReportFromQuery deep-links a palette report result: when the
+		// reports page loads with ?report=<id>, open that preview once (after
+		// the list has rendered).
+		function openReportFromQuery() {
+			if (deepLinkOpened) return;
+			deepLinkOpened = true;
+			var id = "";
+			try { id = new URLSearchParams(location.search).get("report") || ""; } catch (e) {}
+			if (id) openReport(id);
+		}
+
+		// ── Spotlight: report results ────────────────────────────────────
+		// The palette's Reports group is filled client-side with authed
+		// results. go-daisy's ItemsURL fetch is unauthenticated and the panel
+		// API requires a bearer token, so we reuse the panel api() helper.
+		function renderSpotlightReports(group, reports) {
+			if (!reports || !reports.length) {
+				var empty = makeEl("p", "text-sm text-base-content/40 text-center py-4", { "data-label": "__no_reports__", "data-group": "Reports" });
+				empty.textContent = "No reports found.";
+				group.appendChild(empty);
+				return;
+			}
+			var max = Math.min(reports.length, 50);
+			for (var i = 0; i < max; i++) {
+				var report = reports[i];
+				var a = makeEl("a", "flex items-center gap-3 px-3 py-2.5 rounded-box hover:bg-base-200 cursor-pointer transition-colors", {
+					"data-label": (report.repo || "") + " " + (report.selector || "") + " " + (report.comment || "") + " #" + report.id,
+					"data-group": "Reports",
+					"href": "/panel/reports?report=" + encodeURIComponent(report.id)
+				});
+				a.appendChild(makeEl("span", "iconify size-4 shrink-0 text-base-content/50 lucide--inbox"));
+
+				var body = makeEl("div", "flex-1 min-w-0");
+				var title = makeEl("p", "text-sm font-medium text-base-content truncate");
+				title.textContent = snippet(report.comment, 60) || "(no comment)";
+				body.appendChild(title);
+				var desc = makeEl("p", "text-xs text-base-content/40 truncate");
+				desc.textContent = (report.repo || "") + " · #" + report.id;
+				body.appendChild(desc);
+
+				a.appendChild(body);
+				group.appendChild(a);
+			}
+		}
+
+		function spotlightReports() {
+			if (window._spotlightReportsInit) return;
+			window._spotlightReportsInit = true;
+
+			var toggle = byId("spotlight-toggle");
+			var input = byId("spotlight-input");
+			var group = document.querySelector('[data-palette-group="Reports"]');
+			if (!toggle || !input || !group) return;
+
+			var loaded = false;
+			function finish(reports) {
+				renderSpotlightReports(group, Array.isArray(reports) ? reports : []);
+				if (window.filterPaletteItems) window.filterPaletteItems(input);
+			}
+			function ensure() {
+				if (loaded) return;
+				if (!state.token) return;
+				loaded = true;
+				if (state.reportsLoaded) { finish(state.reports); return; }
+				api("/api/reports").then(function (reports) {
+					finish(reports);
+				}).catch(function () {
+					finish([]);
+				});
+			}
+
+			toggle.addEventListener("change", function () {
+				if (!toggle.checked) return;
+				ensure();
+				if (window.filterPaletteItems) window.filterPaletteItems(input);
+			});
+			input.addEventListener("focus", ensure);
+			input.addEventListener("input", ensure);
 		}
 
 		function formatViewport(vp) {
@@ -1381,6 +1499,8 @@ templ panelScript() {
 				var keyEl = byId("reveal-key");
 				if (keyEl) copyText(keyEl.textContent, copy);
 			});
+
+			spotlightReports();
 
 			window.addEventListener("message", function (event) {
 				if (event.origin !== location.origin) return;
