@@ -81,6 +81,25 @@ func (h *Handler) userTokenFor(ctx context.Context, login string) (string, error
 	return decryptToken(enc, h.JWTSecret)
 }
 
+// gitHubAuthExpired reports whether err is a GitHub auth failure (HTTP 401),
+// meaning the stored OAuth token is no longer accepted and the user must
+// re-authenticate. It deliberately ignores 403 so a rate limit or a permissions
+// gap does not sign the user out in a loop.
+func gitHubAuthExpired(err error) bool {
+	var apiErr *github.APIError
+	return errors.As(err, &apiErr) && apiErr.Status == http.StatusUnauthorized
+}
+
+// repoListError maps a GitHub repo-listing failure to an HTTP error. An auth
+// failure becomes 401 so the panel signs the user out and prompts a fresh
+// GitHub login; anything else is a 502 upstream error.
+func repoListError(err error) error {
+	if gitHubAuthExpired(err) {
+		return echo.NewHTTPError(http.StatusUnauthorized, "GitHub authorization expired. Sign in again to continue.")
+	}
+	return echo.NewHTTPError(http.StatusBadGateway, "failed to list repos")
+}
+
 // userRepos returns the authenticated user's GitHub repos (full_name list).
 func (h *Handler) userRepos(c echo.Context) ([]string, error) {
 	token, err := h.userToken(c)
@@ -89,7 +108,7 @@ func (h *Handler) userRepos(c echo.Context) ([]string, error) {
 	}
 	repos, err := github.ListUserRepos(c.Request().Context(), token)
 	if err != nil {
-		return nil, echo.NewHTTPError(http.StatusBadGateway, "failed to list repos")
+		return nil, repoListError(err)
 	}
 	names := make([]string, 0, len(repos))
 	for _, r := range repos {
@@ -106,7 +125,7 @@ func (h *Handler) HandleListRepos(c echo.Context) error {
 	}
 	repos, err := github.ListUserRepos(c.Request().Context(), token)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadGateway, "failed to list repos")
+		return repoListError(err)
 	}
 	return c.JSON(http.StatusOK, repos)
 }

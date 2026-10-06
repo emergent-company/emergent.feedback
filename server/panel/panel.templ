@@ -388,6 +388,12 @@ templ panelScript() {
 	(function () {
 		"use strict";
 
+		// Back-compat: the old single-page panel used #keys / #reports anchors.
+		// Send stale links to the dedicated routes.
+		if (location.hash === "#keys") { location.replace("/panel/keys"); return; }
+		if (location.hash === "#reports") { location.replace("/panel/reports"); return; }
+		if (location.hash === "#overview") { location.replace("/panel"); return; }
+
 		var TOKEN_KEY = "__ef_token__";
 		var USER_KEY = "__ef_user__";
 
@@ -476,8 +482,12 @@ templ panelScript() {
 			if (state.token) headers["Authorization"] = "Bearer " + state.token;
 			return fetch(path, { method: opts.method || "GET", headers: headers, body: opts.body }).then(function (res) {
 				if (res.status === 401) {
-					signOut();
-					throw new Error("Your session expired. Sign in again.");
+					return res.text().then(function (raw) {
+						var msg = "Your session expired. Sign in again.";
+						try { var j = JSON.parse(raw); if (j && j.message) msg = j.message; } catch (e) {}
+						signOut();
+						throw new Error(msg);
+					});
 				}
 				if (!res.ok) {
 					return res.text().then(function (raw) {

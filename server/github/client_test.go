@@ -2,6 +2,7 @@ package github
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -42,6 +43,26 @@ func TestGetIssueNon200(t *testing.T) {
 
 	if _, err := getIssue(context.Background(), srv.URL, "tok", "org/repo", 1); err == nil {
 		t.Fatal("expected error for non-200")
+	}
+}
+
+func TestListUserReposAuthError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+
+	prev := apiBase
+	SetBaseURLForTesting(srv.URL)
+	defer SetBaseURLForTesting(prev)
+
+	_, err := ListUserRepos(context.Background(), "tok")
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("err = %v, want *APIError", err)
+	}
+	if apiErr.Status != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", apiErr.Status)
 	}
 }
 
