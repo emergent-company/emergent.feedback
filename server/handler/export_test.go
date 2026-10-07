@@ -253,3 +253,124 @@ func TestExportIssueProbeUpstreamError(t *testing.T) {
 		t.Fatalf("status = %d, want 502: %s", rec.Code, rec.Body.String())
 	}
 }
+
+// doExportWithLabels POSTs an export request with an explicit label set.
+func doExportWithLabels(e *echo.Echo, id int64, repo, login string, labels []string) *httptest.ResponseRecorder {
+	body, _ := json.Marshal(map[string]any{"ids": []int64{id}, "repo": repo, "labels": labels})
+	req := httptest.NewRequest(http.MethodPost, "/issue/export", strings.NewReader(string(body)))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	req.Header.Set("X-Test-Login", login)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	return rec
+}
+
+// TestExportIssue422RetriesWithoutLabels verifies a 422 from the label set is
+// retried once without labels, so the report still lands.
+func TestExportIssue422RetriesWithoutLabels(t *testing.T) {
+	h, s, e := newExportHandler(t)
+
+	var posts int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/repos/owner/repo":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/repos/owner/repo/issues":
+			posts++
+			var p struct {
+				Labels []string `json:"labels"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&p)
+			if len(p.Labels) > 0 {
+				w.WriteHeader(http.StatusUnprocessableEntity)
+				_, _ = w.Write([]byte(`{"message":"Validation Failed"}`))
+				return
+			}
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"html_url":"https://github.com/owner/repo/issues/9","number":9}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	github.SetBaseURLForTesting(srv.URL)
+	defer github.SetBaseURLForTesting("https://api.github.com")
+
+	seedUserToken(t, s, h, "alice", "tok")
+	id := newExportFeedback(t, s)
+
+	rec := doExportWithLabels(e, id, "owner/repo", "alice", []string{"feedback", "bug"})
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	if posts != 2 {
+		t.Fatalf("issue POST count = %d, want 2 (labeled, then unlabeled retry)", posts)
+	}
+}
+
+// TestExportIssueForbiddenSurfacesGitHubMessage verifies a GitHub 403 from
+// issue creation is surfaced (not masked as 502) with GitHub's message.
+func TestExportIssueForbiddenSurfacesGitHubMessage(t *testing.T) {
+	h, s, e := newExportHandler(t)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/repos/owner/repo":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/repos/owner/repo/issues":
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"message":"Resource not accessible by integration"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	github.SetBaseURLForTesting(srv.URL)
+	defer github.SetBaseURLForTesting("https://api.github.com")
+
+	seedUserToken(t, s, h, "alice", "tok")
+	id := newExportFeedback(t, s)
+
+	rec := doExportWithLabels(e, id, "owner/repo", "alice", []string{"feedback"})
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "Resource not accessible by integration") {
+		t.Fatalf("body = %q, want GitHub message included", rec.Body.String())
+	}
+}
+
+// TestExportIssueCreateUpstreamErrorMapsTo502 verifies a GitHub 5xx from issue
+// creation still maps to 502.
+func TestExportIssueCreateUpstreamErrorMapsTo502(t *testing.T) {
+	h, s, e := newExportHandler(t)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/repos/owner/repo":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/repos/owner/repo/issues":
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"message":"Server Error"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	github.SetBaseURLForTesting(srv.URL)
+	defer github.SetBaseURLForTesting("https://api.github.com")
+
+	seedUserToken(t, s, h, "alice", "tok")
+	id := newExportFeedback(t, s)
+
+	rec := doExportWithLabels(e, id, "owner/repo", "alice", nil)
+
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want 502: %s", rec.Code, rec.Body.String())
+	}
+}

@@ -31,11 +31,15 @@ var httpClient = &http.Client{Timeout: 30 * time.Second}
 // Callers can inspect Status to distinguish auth failures (401) from other
 // upstream errors.
 type APIError struct {
-	Op     string
-	Status int
+	Op      string
+	Status  int
+	Message string // optional upstream message (GitHub's "message" field)
 }
 
 func (e *APIError) Error() string {
+	if e.Message != "" {
+		return fmt.Sprintf("github: %s: status %d: %s", e.Op, e.Status, e.Message)
+	}
 	return fmt.Sprintf("github: %s: status %d", e.Op, e.Status)
 }
 
@@ -496,7 +500,7 @@ func CreateIssue(ctx context.Context, accessToken string, p CreateIssueParams) (
 			Message string `json:"message"`
 		}
 		_ = json.NewDecoder(resp.Body).Decode(&gh)
-		return CreateIssueResponse{}, fmt.Errorf("github: create issue: status %d: %s", resp.StatusCode, gh.Message)
+		return CreateIssueResponse{}, &APIError{Op: "create issue", Status: resp.StatusCode, Message: gh.Message}
 	}
 	var result CreateIssueResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {

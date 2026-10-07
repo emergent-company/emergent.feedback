@@ -154,6 +154,10 @@ func (h *Handler) repoAccessError(err error) error {
 	if gitHubAuthExpired(err) {
 		return echo.NewHTTPError(http.StatusUnauthorized, "GitHub authorization expired. Sign in again to continue.")
 	}
+	var apiErr *github.APIError
+	if errors.As(err, &apiErr) {
+		return echo.NewHTTPError(http.StatusBadGateway, fmt.Sprintf("failed to verify repository access (GitHub %d)", apiErr.Status))
+	}
 	return echo.NewHTTPError(http.StatusBadGateway, "failed to verify repository access")
 }
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -110,9 +111,22 @@ func (h *Handler) HandleExportIssue(c echo.Context) error {
 		Body:   body,
 		Labels: labels,
 	})
+	// A 422 usually means GitHub rejected the label set (e.g. a label the App
+	// cannot apply). Retry once without labels so the report still lands.
+	if err != nil && len(labels) > 0 {
+		var apiErr *github.APIError
+		if errors.As(err, &apiErr) && apiErr.Status == http.StatusUnprocessableEntity {
+			c.Logger().Warnf("create github issue with labels failed (%v); retrying without labels", err)
+			result, err = github.CreateIssue(ctx, authorToken, github.CreateIssueParams{
+				Repo:  req.Repo,
+				Title: title,
+				Body:  body,
+			})
+		}
+	}
 	if err != nil {
 		c.Logger().Errorf("create github issue: %v", err)
-		return echo.NewHTTPError(http.StatusBadGateway, "failed to create GitHub issue")
+		return githubCreateIssueError(err)
 	}
 
 	// Mark items as exported.
@@ -138,6 +152,28 @@ func (h *Handler) HandleExportIssue(c echo.Context) error {
 		"issue_url":    result.HTMLURL,
 		"issue_number": result.Number,
 	})
+}
+
+// githubCreateIssueError maps a GitHub issue-creation failure to an HTTP error
+// that preserves the upstream status and message instead of masking every
+// failure as an opaque 502. 401 prompts re-auth; 403/404/422/429 are surfaced
+// with GitHub's message so the client can act on them; anything else (network
+// error, 5xx) stays a 502 upstream error.
+func githubCreateIssueError(err error) error {
+	var apiErr *github.APIError
+	if errors.As(err, &apiErr) {
+		msg := "failed to create GitHub issue"
+		if apiErr.Message != "" {
+			msg += ": " + apiErr.Message
+		}
+		switch apiErr.Status {
+		case http.StatusUnauthorized:
+			return echo.NewHTTPError(http.StatusUnauthorized, "GitHub authorization expired. Sign in again to continue.")
+		case http.StatusForbidden, http.StatusNotFound, http.StatusUnprocessableEntity, http.StatusTooManyRequests:
+			return echo.NewHTTPError(apiErr.Status, msg)
+		}
+	}
+	return echo.NewHTTPError(http.StatusBadGateway, "failed to create GitHub issue")
 }
 
 // behavioralPreamble is prepended to every issue body so the agent reads the
@@ -475,7 +511,7 @@ func writeIntent(sb *strings.Builder, ctx map[string]any, intent map[string]any)
 // writeChanges renders the live style edits recorded under intent.changes as a
 // bulleted list. Each change is one line:
 //
-//	- `target` — group: `before` → `after`
+//   - `target` — group: `before` → `after`
 //
 // where an empty before is rendered as "(none)". Emits nothing when there are
 // no changes (or when the changes array is absent/malformed).

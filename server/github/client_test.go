@@ -227,3 +227,33 @@ func TestAuthCodeURL(t *testing.T) {
 		t.Errorf("state = %q, want state-abc", got)
 	}
 }
+
+func TestCreateIssueNon201ReturnsAPIError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_, _ = io.WriteString(w, `{"message":"Validation Failed","errors":[{"resource":"Issue","field":"labels"}]}`)
+	}))
+	defer srv.Close()
+
+	prev := apiBase
+	SetBaseURLForTesting(srv.URL)
+	defer SetBaseURLForTesting(prev)
+
+	_, err := CreateIssue(context.Background(), "tok", CreateIssueParams{
+		Repo:   "owner/repo",
+		Title:  "t",
+		Body:   "b",
+		Labels: []string{"feedback"},
+	})
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("err = %v, want *APIError", err)
+	}
+	if apiErr.Status != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422", apiErr.Status)
+	}
+	if apiErr.Message != "Validation Failed" {
+		t.Fatalf("message = %q, want Validation Failed", apiErr.Message)
+	}
+}
