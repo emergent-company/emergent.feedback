@@ -1,11 +1,27 @@
 import { test, expect } from "@playwright/test";
-import { ALLOW_WRITES, HOST_URL } from "../../support/env";
+import { existsSync } from "node:fs";
+import path from "node:path";
+import {
+  ALLOW_WRITES,
+  E2E_DIR,
+  HOST_PASS,
+  HOST_STORAGE_STATE,
+  HOST_URL,
+  HOST_USER,
+} from "../../support/env";
 
 // Env-gated specs for a deployed page ("other page") that already embeds the
 // overlay. Skips unless E2E_HOST_URL is set. Read-only by default; submitting
 // feedback requires E2E_ALLOW_WRITES=1.
 
+const statePath = HOST_STORAGE_STATE || path.join(E2E_DIR, ".auth", "host.json");
+const haveCreds = Boolean(HOST_USER && HOST_PASS);
+
 test.skip(!HOST_URL, "E2E_HOST_URL not set — skipping remote host specs.");
+test.skip(
+  Boolean(HOST_URL) && !haveCreds && !existsSync(statePath),
+  "no E2E_STORAGE_STATE file and no E2E_HOST_USER/E2E_HOST_PASS — skipping remote host specs.",
+);
 
 test.describe("remote host app", () => {
   test("overlay bundle boots and activates", async ({ page }) => {

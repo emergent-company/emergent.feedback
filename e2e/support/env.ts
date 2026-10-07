@@ -49,5 +49,10 @@ export const TEST_USER = {
 
 /** Remote host app under test (empty disables the `remote` project). */
 export const HOST_URL = process.env.E2E_HOST_URL || "";
-export const HOST_STORAGE_STATE = process.env.E2E_STORAGE_STATE || "";
+/** Absolute path to a Playwright storageState file (relative values resolve against e2e/). */
+export const HOST_STORAGE_STATE = process.env.E2E_STORAGE_STATE
+  ? path.resolve(E2E_DIR, process.env.E2E_STORAGE_STATE)
+  : "";
 export const ALLOW_WRITES = process.env.E2E_ALLOW_WRITES === "1" || process.env.E2E_ALLOW_WRITES === "true";
+export const HOST_USER = process.env.E2E_HOST_USER || "";
+export const HOST_PASS = process.env.E2E_HOST_PASS || "";

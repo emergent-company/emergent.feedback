@@ -13,6 +13,8 @@ import {
   ROOT,
 } from "./support/env";
 
+// Absolute path the remote project reads its host-app session from. The
+// remote-auth setup project writes this exact path when creds are supplied.
 const REMOTE_STORAGE_STATE = HOST_STORAGE_STATE || path.join(E2E_DIR, ".auth", "host.json");
 
 const DB_PATH = path.join(E2E_DIR, ".tmp", "e2e.db");
@@ -82,13 +84,27 @@ export default defineConfig({
       url: `${API_URL}/health`,
       timeout: 180_000,
       reuseExistingServer: !process.env.CI,
+      // Inherit the shell env for toolchain vars (PATH, HOME, GOCACHE, ...) but
+      // explicitly neutralise anything that could point the test server at real
+      // infrastructure: a live DATABASE_URL would override the throwaway SQLite
+      // DB, and real GitHub/LLM creds would arm it against production.
       env: {
         ...env,
         PORT: String(API_PORT),
         JWT_SECRET,
+        DATABASE_URL: "",
         GH_APP_CLIENT_ID: "e2e-client-id",
         GH_APP_CLIENT_SECRET: "e2e-client-secret",
         GH_REDIRECT_URI: `${API_URL}/auth/callback`,
+        GH_APP_ID: "",
+        GH_INSTALLATION_ID: "",
+        GH_APP_PRIVATE_KEY: "",
+        GH_APP_PRIVATE_KEY_PATH: "",
+        GH_BOT_TOKEN: "",
+        GH_APP_SLUG: "",
+        FEEDBACK_LLM_BASE_URL: "",
+        FEEDBACK_LLM_API_KEY: "",
+        FEEDBACK_NOTIFY_WEBHOOK: "",
         DB_PATH,
         MCP_API_KEY,
         ALLOWED_ORIGINS: "*",

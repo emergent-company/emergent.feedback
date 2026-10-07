@@ -26,9 +26,19 @@ const CONTENT_TYPES = {
 http
   .createServer((req, res) => {
     const url = new URL(req.url || "/", "http://localhost");
-    const rel = url.pathname === "/" ? "/host.html" : url.pathname;
-    const file = path.join(dir, path.normalize(decodeURIComponent(rel)));
-    if (!file.startsWith(dir) || !existsSync(file)) {
+    let decoded;
+    try {
+      decoded = decodeURIComponent(url.pathname);
+    } catch {
+      // Malformed percent-encoding — treat as a miss rather than crashing.
+      res.writeHead(404, { "Content-Type": "text/plain" });
+      res.end("not found");
+      return;
+    }
+    const rel = decoded === "/" ? "/host.html" : decoded;
+    const file = path.join(dir, path.normalize(rel));
+    const inside = path.relative(dir, file);
+    if (inside.startsWith("..") || path.isAbsolute(inside) || !existsSync(file)) {
       res.writeHead(404, { "Content-Type": "text/plain" });
       res.end("not found");
       return;

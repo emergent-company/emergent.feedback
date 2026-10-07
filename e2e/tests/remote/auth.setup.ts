@@ -1,7 +1,7 @@
 import { test as setup, expect } from "@playwright/test";
 import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
-import { E2E_DIR, HOST_STORAGE_STATE, HOST_URL } from "../../support/env";
+import { E2E_DIR, HOST_PASS, HOST_STORAGE_STATE, HOST_URL, HOST_USER } from "../../support/env";
 
 // Optional one-time login for the remote host app, producing a Playwright
 // storageState file the `remote` project reuses.
@@ -12,8 +12,8 @@ import { E2E_DIR, HOST_STORAGE_STATE, HOST_URL } from "../../support/env";
 // Override the selectors with E2E_HOST_USER_SELECTOR / E2E_HOST_PASS_SELECTOR /
 // E2E_HOST_SUBMIT_SELECTOR when the defaults do not match.
 
-const USER = process.env.E2E_HOST_USER || "";
-const PASS = process.env.E2E_HOST_PASS || "";
+const USER = HOST_USER;
+const PASS = HOST_PASS;
 const STATE_PATH = HOST_STORAGE_STATE || path.join(E2E_DIR, ".auth", "host.json");
 
 setup.skip(!HOST_URL, "E2E_HOST_URL not set.");
@@ -27,10 +27,10 @@ setup("authenticate against the host app", async ({ page }) => {
   await page.goto(HOST_URL);
   await page.fill(userSel, USER);
   await page.fill(passSel, PASS);
-  await Promise.all([
-    page.waitForLoadState("networkidle").catch(() => undefined),
-    page.click(submitSel),
-  ]);
+  await page.click(submitSel);
+  // Avoid waitForLoadState("networkidle") — hosts with long-polling/websockets
+  // never go idle. Assert the post-login destination instead.
+  await page.waitForLoadState("load");
   await expect(page).not.toHaveURL(/login|signin|sign-in/i);
 
   const dir = path.dirname(STATE_PATH);

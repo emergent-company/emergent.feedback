@@ -61,8 +61,7 @@ test.describe("embedded overlay on a host page", () => {
       ),
       page.click("#__ef_submit__"),
     ]);
-    const body = await response.text();
-    expect(response.status(), body).toBe(201);
+    expect(response.status()).toBe(201);
 
     const payload = response.request().postDataJSON() as { selector: string };
     expect(payload.selector).toContain("pricing-upgrade");
