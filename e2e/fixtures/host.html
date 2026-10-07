@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Host app fixture — emergent.feedback E2E</title>
+    <style>
+      :root { --space-lg: 24px; }
+      body { font-family: system-ui, sans-serif; margin: 0; padding: 32px; background: #f8fafc; color: #0f172a; }
+      h1 { font-size: 28px; margin: 0 0 8px; }
+      .card { border: 1px solid #e2e8f0; border-radius: 12px; padding: var(--space-lg); background: #fff; max-width: 420px; }
+      .btn { padding: 8px 16px; border-radius: 8px; border: none; background: #4f46e5; color: #fff; cursor: pointer; font-size: 14px; }
+      .surface { margin-top: 24px; }
+    </style>
+  </head>
+  <body data-testid="host-root">
+    <h1 id="host-heading">Host application fixture</h1>
+    <p id="host-subtitle">A stand-in for a customer app that embeds emergent.feedback.</p>
+
+    <button id="target-btn" type="button" class="btn">Primary action</button>
+
+    <section class="surface" data-component="PricingCard">
+      <div class="card">
+        <h2 id="pricing-title">Pro plan</h2>
+        <p id="pricing-copy">Everything you need to ship feedback to GitHub.</p>
+        <button id="upgrade-btn" type="button" class="btn" data-testid="pricing-upgrade">Upgrade</button>
+      </div>
+    </section>
+
+    <!--
+      The overlay. data-api is rewritten by serve-fixtures.mjs to the running
+      API server; data-repo/label/branch/version exercise the payload fields.
+    -->
+    <script
+      src="__API_URL__/emergent-feedback.js"
+      data-api="__API_URL__"
+      data-repo="e2e/host-fixture"
+      data-label="feedback"
+      data-branch="e2e"
+      data-version="0.0.0-test"
+      data-theme-url="/theme.json"
+      async
+    ></script>
+  </body>
+</html>

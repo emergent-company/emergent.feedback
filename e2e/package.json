@@ -1,0 +1,22 @@
+{
+  "name": "emergent-feedback-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Playwright end-to-end suite for emergent.feedback (own pages + embedded host pages).",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:own": "playwright test --project=own",
+    "test:host": "playwright test --project=host",
+    "test:remote": "playwright test --project=remote",
+    "report": "playwright show-report",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "install:browsers": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  }
+}
