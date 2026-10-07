@@ -994,12 +994,21 @@ templ panelScript() {
 			var el = byId("overview-stats");
 			if (!el) return;
 			clear(el);
-			var repos = data.repos || [];
 			var keys = data.keys || [];
 			var activeKeys = 0;
-			for (var i = 0; i < keys.length; i++) { if (!keys[i].revoked) activeKeys++; }
+			// "Repositories" is the set the workspace is actually scoped to: the
+			// union of repos across active (non-revoked) API keys. Not the far
+			// larger set of every repo the GitHub token can access.
+			var scoped = {};
+			for (var i = 0; i < keys.length; i++) {
+				if (keys[i].revoked) continue;
+				activeKeys++;
+				var kr = keys[i].repos || [];
+				for (var j = 0; j < kr.length; j++) { scoped[kr[j]] = true; }
+			}
+			var scopedCount = Object.keys(scoped).length;
 			var reports = data.reports || [];
-			el.appendChild(statCard("Repositories", repos.length, "lucide--git-branch", "/panel/keys"));
+			el.appendChild(statCard("Repositories", scopedCount, "lucide--git-branch", "/panel/keys"));
 			el.appendChild(statCard("Active API keys", activeKeys, "lucide--key-round", "/panel/keys"));
 			el.appendChild(statCard("Reports", reports.length, "lucide--inbox", "/panel/reports"));
 		}
@@ -1008,11 +1017,10 @@ templ panelScript() {
 			var el = byId("overview-stats");
 			if (!el) return;
 			Promise.all([
-				api("/api/repos").catch(function () { return []; }),
 				api("/api/keys").catch(function () { return []; }),
 				api("/api/reports").catch(function () { return []; })
 			]).then(function (res) {
-				renderOverview({ repos: res[0] || [], keys: res[1] || [], reports: res[2] || [] });
+				renderOverview({ keys: res[0] || [], reports: res[1] || [] });
 			});
 		}
 
