@@ -38,6 +38,10 @@ export interface TokenGroup {
    */
   removePattern?: string;
   tokens: Token[];
+  /** Preferred editor rendering. Defaults to "chips". */
+  render?: "chips" | "dropdown";
+  /** Editor section heading. Defaults to "Style" when unset. */
+  section?: string;
 }
 
 /** Normalized theme-token set. */
@@ -197,6 +201,12 @@ export function normalizeTheme(raw: unknown): ThemeTokens | null {
       removePattern = gg.removePattern as string;
     }
 
+    const render: "chips" | "dropdown" | undefined =
+      gg.render === "chips" || gg.render === "dropdown" ? gg.render : undefined;
+
+    const section: string | undefined =
+      typeof gg.section === "string" && gg.section ? gg.section : undefined;
+
     const tokens: Token[] = [];
     if (Array.isArray(gg.tokens)) {
       for (const t of gg.tokens) {
@@ -211,6 +221,8 @@ export function normalizeTheme(raw: unknown): ThemeTokens | null {
       label,
       applyType,
       ...(removePattern !== undefined ? { removePattern } : {}),
+      ...(render !== undefined ? { render } : {}),
+      ...(section !== undefined ? { section } : {}),
       tokens,
     });
   }
@@ -272,6 +284,7 @@ export function buildFallbackTokens(): ThemeTokens {
       {
         id: "padding",
         label: "Padding",
+        section: "Spacing",
         applyType: "class",
         removePattern: "^p[xytrbl]?-",
         tokens: [
@@ -283,10 +296,337 @@ export function buildFallbackTokens(): ThemeTokens {
           { id: "xl", label: "X-Large", className: "p-8" },
         ],
       },
-      { id: "textColor", label: "Text color", applyType: "class", removePattern: "^text-", tokens: textTokens },
-      { id: "backgroundColor", label: "Background", applyType: "class", removePattern: "^bg-", tokens: bgTokens },
+      {
+        id: "margin",
+        label: "Margin",
+        section: "Spacing",
+        applyType: "class",
+        removePattern: "^m[xytrbl]?-",
+        tokens: [
+          { id: "none", label: "None", className: "m-0" },
+          { id: "xs", label: "X-Small", className: "m-1" },
+          { id: "sm", label: "Small", className: "m-2" },
+          { id: "md", label: "Medium", className: "m-4" },
+          { id: "lg", label: "Large", className: "m-6" },
+          { id: "xl", label: "X-Large", className: "m-8" },
+        ],
+      },
+      {
+        id: "gap",
+        label: "Gap",
+        section: "Spacing",
+        applyType: "class",
+        removePattern: "^gap-",
+        tokens: [
+          { id: "none", label: "None", className: "gap-0" },
+          { id: "xs", label: "X-Small", className: "gap-1" },
+          { id: "sm", label: "Small", className: "gap-2" },
+          { id: "md", label: "Medium", className: "gap-3" },
+          { id: "lg", label: "Large", className: "gap-4" },
+          { id: "xl", label: "X-Large", className: "gap-6" },
+          { id: "2xl", label: "2X-Large", className: "gap-8" },
+        ],
+      },
+      {
+        id: "maxWidth",
+        label: "Max width",
+        section: "Layout",
+        applyType: "class",
+        removePattern: "^max-w-",
+        tokens: [
+          { id: "none", label: "None", className: "max-w-none" },
+          { id: "xs", label: "X-Small", className: "max-w-xs" },
+          { id: "sm", label: "Small", className: "max-w-sm" },
+          { id: "md", label: "Medium", className: "max-w-md" },
+          { id: "lg", label: "Large", className: "max-w-lg" },
+          { id: "xl", label: "X-Large", className: "max-w-xl" },
+          { id: "2xl", label: "2X-Large", className: "max-w-2xl" },
+          { id: "3xl", label: "3X-Large", className: "max-w-3xl" },
+          { id: "4xl", label: "4X-Large", className: "max-w-4xl" },
+          { id: "5xl", label: "5X-Large", className: "max-w-5xl" },
+          { id: "6xl", label: "6X-Large", className: "max-w-6xl" },
+          { id: "7xl", label: "7X-Large", className: "max-w-7xl" },
+          { id: "prose", label: "Prose", className: "max-w-prose" },
+          { id: "full", label: "Full", className: "max-w-full" },
+        ],
+      },
+      {
+        id: "width",
+        label: "Width",
+        section: "Layout",
+        applyType: "class",
+        removePattern: "^w-",
+        tokens: [
+          { id: "auto", label: "Auto", className: "w-auto" },
+          { id: "full", label: "Full", className: "w-full" },
+          { id: "screen", label: "Screen", className: "w-screen" },
+          { id: "fit", label: "Fit", className: "w-fit" },
+          { id: "min", label: "Min", className: "w-min" },
+          { id: "max", label: "Max", className: "w-max" },
+        ],
+      },
+      {
+        id: "height",
+        label: "Height",
+        section: "Layout",
+        applyType: "class",
+        removePattern: "^h-",
+        tokens: [
+          { id: "auto", label: "Auto", className: "h-auto" },
+          { id: "full", label: "Full", className: "h-full" },
+          { id: "screen", label: "Screen", className: "h-screen" },
+          { id: "fit", label: "Fit", className: "h-fit" },
+        ],
+      },
+      {
+        id: "display",
+        label: "Display",
+        section: "Layout",
+        applyType: "class",
+        tokens: [
+          { id: "block", label: "Block", className: "block" },
+          { id: "inline", label: "Inline", className: "inline" },
+          { id: "inline-block", label: "Inline block", className: "inline-block" },
+          { id: "flex", label: "Flex", className: "flex" },
+          { id: "inline-flex", label: "Inline flex", className: "inline-flex" },
+          { id: "grid", label: "Grid", className: "grid" },
+          { id: "hidden", label: "Hidden", className: "hidden" },
+        ],
+      },
+      {
+        id: "align",
+        label: "Align items",
+        section: "Layout",
+        applyType: "class",
+        removePattern: "^items-",
+        tokens: [
+          { id: "start", label: "Start", className: "items-start" },
+          { id: "center", label: "Center", className: "items-center" },
+          { id: "end", label: "End", className: "items-end" },
+          { id: "stretch", label: "Stretch", className: "items-stretch" },
+          { id: "baseline", label: "Baseline", className: "items-baseline" },
+        ],
+      },
+      {
+        id: "justify",
+        label: "Justify",
+        section: "Layout",
+        applyType: "class",
+        tokens: [
+          { id: "start", label: "Start", className: "justify-start" },
+          { id: "center", label: "Center", className: "justify-center" },
+          { id: "end", label: "End", className: "justify-end" },
+          { id: "between", label: "Between", className: "justify-between" },
+          { id: "around", label: "Around", className: "justify-around" },
+          { id: "evenly", label: "Evenly", className: "justify-evenly" },
+        ],
+      },
+      {
+        id: "flexDir",
+        label: "Flex direction",
+        section: "Layout",
+        applyType: "class",
+        tokens: [
+          { id: "row", label: "Row", className: "flex-row" },
+          { id: "row-reverse", label: "Row reverse", className: "flex-row-reverse" },
+          { id: "col", label: "Col", className: "flex-col" },
+          { id: "col-reverse", label: "Col reverse", className: "flex-col-reverse" },
+        ],
+      },
+      {
+        id: "textSize",
+        label: "Text size",
+        section: "Typography",
+        applyType: "class",
+        tokens: [
+          { id: "xs", label: "X-Small", className: "text-xs" },
+          { id: "sm", label: "Small", className: "text-sm" },
+          { id: "base", label: "Base", className: "text-base" },
+          { id: "lg", label: "Large", className: "text-lg" },
+          { id: "xl", label: "X-Large", className: "text-xl" },
+          { id: "2xl", label: "2X-Large", className: "text-2xl" },
+          { id: "3xl", label: "3X-Large", className: "text-3xl" },
+          { id: "4xl", label: "4X-Large", className: "text-4xl" },
+        ],
+      },
+      {
+        id: "fontWeight",
+        label: "Font weight",
+        section: "Typography",
+        applyType: "class",
+        tokens: [
+          { id: "thin", label: "Thin", className: "font-thin" },
+          { id: "extralight", label: "Extra light", className: "font-extralight" },
+          { id: "light", label: "Light", className: "font-light" },
+          { id: "normal", label: "Normal", className: "font-normal" },
+          { id: "medium", label: "Medium", className: "font-medium" },
+          { id: "semibold", label: "Semibold", className: "font-semibold" },
+          { id: "bold", label: "Bold", className: "font-bold" },
+          { id: "extrabold", label: "Extra bold", className: "font-extrabold" },
+          { id: "black", label: "Black", className: "font-black" },
+        ],
+      },
+      {
+        id: "textColor",
+        label: "Text color",
+        section: "Color",
+        render: "dropdown",
+        applyType: "class",
+        tokens: textTokens,
+      },
+      {
+        id: "backgroundColor",
+        label: "Background",
+        section: "Color",
+        render: "dropdown",
+        applyType: "class",
+        tokens: bgTokens,
+      },
+      {
+        id: "rounded",
+        label: "Rounded",
+        section: "Borders & Effects",
+        applyType: "class",
+        tokens: [
+          { id: "none", label: "None", className: "rounded-none" },
+          { id: "sm", label: "Small", className: "rounded-sm" },
+          { id: "md", label: "Medium", className: "rounded-md" },
+          { id: "lg", label: "Large", className: "rounded-lg" },
+          { id: "xl", label: "X-Large", className: "rounded-xl" },
+          { id: "2xl", label: "2X-Large", className: "rounded-2xl" },
+          { id: "3xl", label: "3X-Large", className: "rounded-3xl" },
+          { id: "full", label: "Full", className: "rounded-full" },
+        ],
+      },
+      {
+        id: "borderWidth",
+        label: "Border width",
+        section: "Borders & Effects",
+        applyType: "class",
+        removePattern: "^border-[0-9]",
+        tokens: [
+          { id: "none", label: "None", className: "border-0" },
+          { id: "2px", label: "2px", className: "border-2" },
+          { id: "4px", label: "4px", className: "border-4" },
+          { id: "8px", label: "8px", className: "border-8" },
+        ],
+      },
+      {
+        id: "borderStyle",
+        label: "Border style",
+        section: "Borders & Effects",
+        applyType: "class",
+        tokens: [
+          { id: "solid", label: "Solid", className: "border-solid" },
+          { id: "dashed", label: "Dashed", className: "border-dashed" },
+          { id: "dotted", label: "Dotted", className: "border-dotted" },
+        ],
+      },
+      {
+        id: "shadow",
+        label: "Shadow",
+        section: "Borders & Effects",
+        applyType: "class",
+        tokens: [
+          { id: "none", label: "None", className: "shadow-none" },
+          { id: "sm", label: "Small", className: "shadow-sm" },
+          { id: "md", label: "Medium", className: "shadow-md" },
+          { id: "lg", label: "Large", className: "shadow-lg" },
+          { id: "xl", label: "X-Large", className: "shadow-xl" },
+          { id: "2xl", label: "2X-Large", className: "shadow-2xl" },
+        ],
+      },
+      {
+        id: "btnColor",
+        label: "Button color",
+        section: "daisyUI",
+        applyType: "class",
+        tokens: [
+          { id: "primary", label: "Primary", className: "btn-primary" },
+          { id: "secondary", label: "Secondary", className: "btn-secondary" },
+          { id: "accent", label: "Accent", className: "btn-accent" },
+          { id: "info", label: "Info", className: "btn-info" },
+          { id: "success", label: "Success", className: "btn-success" },
+          { id: "warning", label: "Warning", className: "btn-warning" },
+          { id: "error", label: "Error", className: "btn-error" },
+        ],
+      },
+      {
+        id: "btnModifier",
+        label: "Button modifier",
+        section: "daisyUI",
+        applyType: "class",
+        tokens: [
+          { id: "ghost", label: "Ghost", className: "btn-ghost" },
+          { id: "outline", label: "Outline", className: "btn-outline" },
+          { id: "link", label: "Link", className: "btn-link" },
+        ],
+      },
+      {
+        id: "btnSize",
+        label: "Button size",
+        section: "daisyUI",
+        applyType: "class",
+        tokens: [
+          { id: "xs", label: "X-Small", className: "btn-xs" },
+          { id: "sm", label: "Small", className: "btn-sm" },
+          { id: "md", label: "Medium", className: "btn-md" },
+          { id: "lg", label: "Large", className: "btn-lg" },
+          { id: "xl", label: "X-Large", className: "btn-xl" },
+        ],
+      },
+      {
+        id: "badgeColor",
+        label: "Badge color",
+        section: "daisyUI",
+        applyType: "class",
+        tokens: [
+          { id: "primary", label: "Primary", className: "badge-primary" },
+          { id: "secondary", label: "Secondary", className: "badge-secondary" },
+          { id: "accent", label: "Accent", className: "badge-accent" },
+          { id: "info", label: "Info", className: "badge-info" },
+          { id: "success", label: "Success", className: "badge-success" },
+          { id: "warning", label: "Warning", className: "badge-warning" },
+          { id: "error", label: "Error", className: "badge-error" },
+          { id: "neutral", label: "Neutral", className: "badge-neutral" },
+        ],
+      },
+      {
+        id: "badgeModifier",
+        label: "Badge modifier",
+        section: "daisyUI",
+        applyType: "class",
+        tokens: [
+          { id: "ghost", label: "Ghost", className: "badge-ghost" },
+          { id: "outline", label: "Outline", className: "badge-outline" },
+        ],
+      },
+      {
+        id: "badgeSize",
+        label: "Badge size",
+        section: "daisyUI",
+        applyType: "class",
+        tokens: [
+          { id: "xs", label: "X-Small", className: "badge-xs" },
+          { id: "sm", label: "Small", className: "badge-sm" },
+          { id: "md", label: "Medium", className: "badge-md" },
+          { id: "lg", label: "Large", className: "badge-lg" },
+        ],
+      },
     ],
   };
+}
+
+/**
+ * Build a runtime token for a user-typed Tailwind/daisyUI class.
+ * Single class only; returns null when empty, too long, or not a valid
+ * class token (whitespace/punctuation rejected). id is `custom:<class>`.
+ */
+export function makeCustomToken(raw: string): Token | null {
+  const cls = raw.trim();
+  if (!cls || cls.length > 80) return null;
+  if (!CLASS_RE.test(cls)) return null;
+  return { id: `custom:${cls}`, label: cls, className: cls };
 }
 
 // ── Loading (fetch + cache) ───────────────────────────────────────────────────
@@ -378,9 +718,9 @@ function removeGroupClasses(el: Element, group: TokenGroup): void {
     for (const cls of Array.from(el.classList)) {
       if (re.test(cls)) el.classList.remove(cls);
     }
-    return;
   }
-  // No pattern: remove any class belonging to a class token in this group.
+  // Always drop this group's own class tokens too — covers custom tokens whose
+  // class does not match the group pattern (e.g. a typed class in another group).
   for (const t of group.tokens) {
     const a = resolveApply(group, t);
     if (a.type === "class" && a.className) el.classList.remove(a.className);

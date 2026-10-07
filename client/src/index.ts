@@ -252,8 +252,7 @@ import { initTheme, onThemeChange, applyTheme } from "./theme";
           verification: buildVerification(
             selector,
             context["fingerprint"] as ElementFingerprint | undefined,
-            intent,
-            context["computedStyles"] as Record<string, string> | undefined
+            intent
           ),
         };
         const result = await api.createFeedback({
@@ -393,70 +392,18 @@ import { initTheme, onThemeChange, applyTheme } from "./theme";
   }
 
   // ── Verification contract ────────────────────────────────────────────────────
-  // Maps the intent micro-form's "actual" labels (dialog.ts) to CSS props.
-  const STYLE_PROP_LABELS: [string, string][] = [
-    ["text color", "color"],
-    ["background", "backgroundColor"],
-    ["font size", "fontSize"],
-    ["weight", "fontWeight"],
-  ];
-
-  // Detect which style prop `intent.actual` was captured from, if any.
-  function detectStyleProp(
-    actual: string,
-    computedStyles: Record<string, string> | undefined
-  ): string | undefined {
-    const lower = actual.toLowerCase();
-    for (const [label, prop] of STYLE_PROP_LABELS) {
-      if (lower.startsWith(label + ":")) return prop;
-    }
-    // Fallback: exact match against a captured computed style value.
-    if (computedStyles) {
-      for (const prop of ["color", "backgroundColor", "fontSize", "fontWeight"]) {
-        if (computedStyles[prop] && computedStyles[prop] === actual) return prop;
-      }
-    }
-    return undefined;
-  }
-
-  // Extract the value after a "<label>: " prefix (defensive fallback for `before`).
-  function extractBefore(actual: string): string | undefined {
-    const idx = actual.indexOf(":");
-    if (idx >= 0) return actual.slice(idx + 1).trim();
-    return undefined;
-  }
-
+  // The dialog no longer pre-fills `intent.actual` (the "Current" row was
+  // removed), so a machine-checkable style_assertion can no longer be derived
+  // here. Applied edits ride in `intent.changes` for the reporter/AI instead.
+  // Contracts therefore fall back to anchor_stable / human.
   function buildVerification(
     selector: string,
     fingerprint: ElementFingerprint | undefined,
-    intent: FeedbackIntent,
-    computedStyles: Record<string, string> | undefined
+    intent: FeedbackIntent
   ): Verification {
     const expected = intent.expected?.trim();
-    const actual = intent.actual?.trim();
 
-    // 1. style_assertion only when the change is actually machine-checkable:
-    //    a detectable style prop AND a recorded `before` value. `changed` can
-    //    verify "the value changed" but not a specific stated outcome (e.g.
-    //    "meets WCAG AA"), so any non-empty `expected` falls through to a
-    //    weaker contract — never a false green.
-    if (actual && !expected) {
-      const prop = detectStyleProp(actual, computedStyles);
-      if (prop) {
-        const before = computedStyles?.[prop] ?? extractBefore(actual) ?? "";
-        if (before) {
-          return {
-            contract: {
-              kind: "style_assertion",
-              check: { selector, prop, before, operator: "changed" },
-            },
-            criteria: `Change ${prop} of the selected element`,
-          };
-        }
-      }
-    }
-
-    // 2. anchor_stable when a fingerprint path exists.
+    // 1. anchor_stable when a fingerprint path exists.
     if (fingerprint?.path) {
       return {
         contract: {
@@ -467,7 +414,7 @@ import { initTheme, onThemeChange, applyTheme } from "./theme";
       };
     }
 
-    // 3. human fallback.
+    // 2. human fallback.
     return {
       contract: { kind: "human" },
       criteria: expected || "Human confirmation that the change is correct",

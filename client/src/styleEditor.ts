@@ -4,14 +4,40 @@
 // token (or "Mixed" when targets differ), and applies a chosen token to every
 // selected target. Also lists each target's current class list (read-only) and
 // offers a "Revert all" action.
+//
+// Groups are grouped into collapsible sections (group.section, default "Style").
+// A group renders as a chip row by default, or as a swatch dropdown when
+// `group.render === "dropdown"`. Each group also accepts a free-typed custom
+// class; custom tokens are cached module-side so they survive the re-mounts the
+// dialog performs on every selection change.
 
-import { matchToken, type Token, type TokenGroup, type ThemeTokens } from "./tokens";
+import {
+  makeCustomToken,
+  matchToken,
+  type Token,
+  type TokenGroup,
+  type ThemeTokens,
+} from "./tokens";
 import type { TargetEntry } from "./selection";
 
 export interface StyleEditorCallbacks {
   onApply: (group: TokenGroup, token: Token) => void;
   onRevertAll: () => void;
 }
+
+/**
+ * Custom classes typed by the user, keyed by group id. Module-level so they
+ * survive mountStyleEditor being called repeatedly (once per selection change).
+ */
+const customTokens = new Map<string, Token[]>();
+
+/**
+ * Closes the dropdown currently open, if any. mountStyleEditor rewrites
+ * innerHTML on every selection change, which would otherwise orphan an open
+ * menu's document-level outside-click listener; calling this before the
+ * re-render tears down the stale menu + listener.
+ */
+let activeDropdownClose: (() => void) | null = null;
 
 function escapeHtml(s: unknown): string {
   return String(s ?? "")
@@ -21,9 +47,57 @@ function escapeHtml(s: unknown): string {
     .replace(/"/g, "&quot;");
 }
 
+/** Append any user-typed custom tokens to each group, deduped by id. */
+function augmentGroups(groups: TokenGroup[]): TokenGroup[] {
+  return groups.map((g) => {
+    const extra = customTokens.get(g.id);
+    if (!extra || extra.length === 0) return g;
+    const seen = new Set(g.tokens.map((t) => t.id));
+    const merged = g.tokens.slice();
+    for (const t of extra) {
+      if (seen.has(t.id)) continue;
+      merged.push(t);
+      seen.add(t.id);
+    }
+    return { ...g, tokens: merged };
+  });
+}
+
+interface SectionBucket {
+  section: string;
+  groups: TokenGroup[];
+}
+
+/** Group augmented groups by section, preserving first-seen section order. */
+function groupBySection(groups: TokenGroup[]): SectionBucket[] {
+  const order: string[] = [];
+  const map = new Map<string, TokenGroup[]>();
+  for (const g of groups) {
+    const section = g.section && g.section.trim() ? g.section : "Style";
+    let bucket = map.get(section);
+    if (!bucket) {
+      bucket = [];
+      map.set(section, bucket);
+      order.push(section);
+    }
+    bucket.push(g);
+  }
+  return order.map((section) => ({ section, groups: map.get(section)! }));
+}
+
 /** A token chip reads "on" only when every target currently matches it. */
 function tokenActive(token: Token, group: TokenGroup, targets: TargetEntry[]): boolean {
   return targets.every((t) => matchToken(t.el, group)?.id === token.id);
+}
+
+/** The single token every target matches, or null when none / mixed. */
+function currentToken(group: TokenGroup, targets: TargetEntry[]): Token | null {
+  const ids = targets.map((t) => matchToken(t.el, group)?.id ?? "");
+  const uniq = new Set(ids);
+  if (uniq.size !== 1) return null;
+  const id = ids[0];
+  if (!id) return null;
+  return group.tokens.find((t) => t.id === id) ?? null;
 }
 
 /** Current group value: a token label, "Default" (none), or "Mixed". */
@@ -38,17 +112,47 @@ function currentLabel(group: TokenGroup, targets: TargetEntry[]): string {
   return "Mixed";
 }
 
-function renderGroup(group: TokenGroup, targets: TargetEntry[]): string {
-  const current = currentLabel(group, targets);
+function swatchHTML(token: Token): string {
+  return token.swatch
+    ? `<span class="ef-token-swatch" style="background:${escapeHtml(token.swatch)}"></span>`
+    : "";
+}
+
+function renderChips(group: TokenGroup, targets: TargetEntry[]): string {
   const chips = group.tokens
     .map((t) => {
       const on = tokenActive(t, group, targets);
-      const swatch = t.swatch
-        ? `<span class="ef-token-swatch" style="background:${escapeHtml(t.swatch)}"></span>`
-        : "";
-      return `<button type="button" class="ef-token-chip${on ? " ef-token-on" : ""}" data-group="${escapeHtml(group.id)}" data-token="${escapeHtml(t.id)}" aria-pressed="${on}" title="${escapeHtml(t.label)}">${swatch}${escapeHtml(t.label)}</button>`;
+      return `<button type="button" class="ef-token-chip${on ? " ef-token-on" : ""}" data-group="${escapeHtml(group.id)}" data-token="${escapeHtml(t.id)}" aria-pressed="${on}" title="${escapeHtml(t.label)}">${swatchHTML(t)}${escapeHtml(t.label)}</button>`;
     })
     .join("");
+  return `<div class="ef-token-row">${chips}</div>`;
+}
+
+function renderDropdown(group: TokenGroup, targets: TargetEntry[], current: string): string {
+  const cur = currentToken(group, targets);
+  const headerSwatch = cur ? swatchHTML(cur) : "";
+  const options = group.tokens
+    .map((t) => {
+      const on = tokenActive(t, group, targets);
+      return `<li role="option" class="ef-select-option${on ? " ef-token-on" : ""}" data-group="${escapeHtml(group.id)}" data-token="${escapeHtml(t.id)}" aria-selected="${on}">${swatchHTML(t)}${escapeHtml(t.label)}</li>`;
+    })
+    .join("");
+  return `
+      <div class="ef-select" data-group="${escapeHtml(group.id)}">
+        <button type="button" class="ef-select-trigger" aria-haspopup="listbox" aria-expanded="false">
+          ${headerSwatch}<span class="ef-select-label">${escapeHtml(current)}</span>
+          <span class="ef-select-caret" aria-hidden="true">▾</span>
+        </button>
+        <ul class="ef-select-menu" role="listbox" hidden>${options}</ul>
+      </div>`;
+}
+
+function renderGroup(group: TokenGroup, targets: TargetEntry[]): string {
+  const current = currentLabel(group, targets);
+  const body =
+    group.render === "dropdown"
+      ? renderDropdown(group, targets, current)
+      : renderChips(group, targets);
 
   return `
     <div class="ef-style-group">
@@ -56,8 +160,21 @@ function renderGroup(group: TokenGroup, targets: TargetEntry[]): string {
         <span class="ef-style-group-label">${escapeHtml(group.label)}</span>
         <span class="ef-style-current${current === "Mixed" ? " ef-style-current-mixed" : ""}">${escapeHtml(current)}</span>
       </div>
-      <div class="ef-token-row">${chips}</div>
+      ${body}
+      <input type="text" class="ef-custom-input" data-group="${escapeHtml(group.id)}" placeholder="custom class…" spellcheck="false" aria-label="Custom class for ${escapeHtml(group.label)}">
     </div>`;
+}
+
+function renderSections(groups: TokenGroup[], targets: TargetEntry[]): string {
+  return groupBySection(groups)
+    .map(
+      ({ section, groups: sectionGroups }) => `
+    <details class="ef-style-section" open>
+      <summary>${escapeHtml(section)}</summary>
+      ${sectionGroups.map((g) => renderGroup(g, targets)).join("")}
+    </details>`
+    )
+    .join("");
 }
 
 function renderClasses(targets: TargetEntry[]): string {
@@ -83,17 +200,126 @@ export function renderStyleEditorHTML(
   if (targets.length === 0) {
     return `<div class="ef-style-empty">Select an element to edit padding and colors.</div>`;
   }
-  const groups = tokens.groups.map((g) => renderGroup(g, targets)).join("");
+  const groups = augmentGroups(tokens.groups);
+  const sections = renderSections(groups, targets);
   const revertDisabled = changesCount === 0 ? " disabled" : "";
   return `
     <div class="ef-style-editor">
-      <div class="ef-section-label">Style</div>
-      ${groups}
+      ${sections}
       ${renderClasses(targets)}
       <div class="ef-style-actions">
         <button type="button" class="ef-btn-secondary ef-style-revert"${revertDisabled}>Revert all</button>
       </div>
     </div>`;
+}
+
+/** Wire the swatch dropdowns: one open at a time, keyboard + outside-click close. */
+function wireDropdowns(
+  root: HTMLElement,
+  groups: TokenGroup[],
+  cb: StyleEditorCallbacks
+): void {
+  let openMenu: HTMLElement | null = null;
+  let outsideListener: ((e: MouseEvent) => void) | null = null;
+
+  const close = (menu?: HTMLElement | null): void => {
+    const m = menu ?? openMenu;
+    if (!m) return;
+    const trigger = m.parentElement?.querySelector<HTMLElement>(".ef-select-trigger");
+    m.hidden = true;
+    trigger?.setAttribute("aria-expanded", "false");
+    if (outsideListener) {
+      document.removeEventListener("click", outsideListener, true);
+      outsideListener = null;
+    }
+    openMenu = null;
+    activeDropdownClose = null;
+  };
+
+  root.querySelectorAll<HTMLElement>(".ef-select").forEach((sel) => {
+    const trigger = sel.querySelector<HTMLButtonElement>(".ef-select-trigger");
+    const menu = sel.querySelector<HTMLUListElement>(".ef-select-menu");
+    if (!trigger || !menu) return;
+
+    const options = (): HTMLElement[] =>
+      Array.from(menu.querySelectorAll<HTMLElement>(".ef-select-option"));
+
+    const open = (): void => {
+      if (openMenu && openMenu !== menu) close();
+      menu.hidden = false;
+      trigger.setAttribute("aria-expanded", "true");
+      openMenu = menu;
+      activeDropdownClose = () => close(menu);
+      if (!outsideListener) {
+        outsideListener = (e: MouseEvent) => {
+          if (!sel.contains(e.target as Node)) close(menu);
+        };
+        document.addEventListener("click", outsideListener, true);
+      }
+    };
+
+    trigger.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (menu.hidden) open();
+      else close(menu);
+    });
+
+    trigger.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        if (menu.hidden) open();
+        const opts = options();
+        if (opts.length) (e.key === "ArrowDown" ? opts[0] : opts[opts.length - 1]).focus();
+      } else if (e.key === "Escape" && !menu.hidden) {
+        e.preventDefault();
+        e.stopPropagation();
+        close(menu);
+      } else if (e.key === "Tab" && !menu.hidden) {
+        // Let focus move on naturally, but collapse the menu first.
+        close(menu);
+      }
+    });
+
+    options().forEach((opt) => {
+      opt.tabIndex = -1;
+      opt.addEventListener("click", () => {
+        const gid = opt.dataset.group ?? "";
+        const tid = opt.dataset.token ?? "";
+        const group = groups.find((g) => g.id === gid);
+        const token = group?.tokens.find((t) => t.id === tid);
+        if (group && token) cb.onApply(group, token);
+        close(menu);
+      });
+      opt.addEventListener("keydown", (e) => {
+        const opts = options();
+        const i = opts.indexOf(opt);
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          opts[Math.min(i + 1, opts.length - 1)]?.focus();
+        } else if (e.key === "ArrowUp") {
+          e.preventDefault();
+          opts[Math.max(i - 1, 0)]?.focus();
+        } else if (e.key === "Home") {
+          e.preventDefault();
+          opts[0]?.focus();
+        } else if (e.key === "End") {
+          e.preventDefault();
+          opts[opts.length - 1]?.focus();
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          e.stopPropagation();
+          close(menu);
+          trigger.focus();
+        } else if (e.key === "Tab") {
+          // Collapse the menu, then let Tab move focus out of the group.
+          close(menu);
+        } else if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          opt.click();
+        }
+      });
+    });
+  });
 }
 
 /** Render + wire the style editor into `root`. */
@@ -104,15 +330,52 @@ export function mountStyleEditor(
   changesCount: number,
   cb: StyleEditorCallbacks
 ): void {
+  // Tear down any dropdown left open by a previous mount before replacing the
+  // DOM: its outside-click listener would otherwise leak.
+  activeDropdownClose?.();
+  activeDropdownClose = null;
+
+  const groups = augmentGroups(tokens.groups);
   root.innerHTML = renderStyleEditorHTML(tokens, targets, changesCount);
 
-  root.querySelectorAll<HTMLButtonElement>("[data-token]").forEach((btn) => {
+  // Chip row wiring (dropdowns have their own handlers below).
+  root.querySelectorAll<HTMLButtonElement>(".ef-token-chip[data-token]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const gid = btn.dataset.group ?? "";
       const tid = btn.dataset.token ?? "";
-      const group = tokens.groups.find((g) => g.id === gid);
+      const group = groups.find((g) => g.id === gid);
       const token = group?.tokens.find((t) => t.id === tid);
       if (group && token) cb.onApply(group, token);
+    });
+  });
+
+  wireDropdowns(root, groups, cb);
+
+  // Free-typed custom class per group. Enter applies + remembers it.
+  root.querySelectorAll<HTMLInputElement>(".ef-custom-input[data-group]").forEach((input) => {
+    input.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      const t = makeCustomToken(input.value);
+      if (!t) {
+        input.setAttribute("aria-invalid", "true");
+        return;
+      }
+      input.removeAttribute("aria-invalid");
+      const gid = input.dataset.group ?? "";
+      const group = groups.find((g) => g.id === gid);
+      if (!group) return;
+      // Remember the token (replace any prior entry with the same id) so it
+      // survives the re-mount that cb.onApply triggers.
+      const list = customTokens.get(gid) ?? [];
+      const next = list.filter((x) => x.id !== t.id);
+      next.push(t);
+      customTokens.set(gid, next);
+      // `group` was built before the cache update, so re-augment: the applied
+      // record (and therefore revert) must carry this custom token.
+      const liveGroup = augmentGroups(tokens.groups).find((g) => g.id === gid) ?? group;
+      cb.onApply(liveGroup, t);
+      input.value = "";
     });
   });
 

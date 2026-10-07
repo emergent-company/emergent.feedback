@@ -303,9 +303,20 @@ No storage change: metadata rides in `context_json` under `context.app`.
 ## Live style editing (v5, implemented)
 
 The overlay can dock to the side of the page (non-modal, page undimmed and
-interactive) and let the reporter change **padding** and **colors** on one or
-more selected elements by choosing tokens from a project-provided theme. The
-applied class/style edits are recorded and rendered in the issue and panel.
+interactive) and let the reporter restyle one or more selected elements by
+choosing tokens from a project-provided theme. Tokens cover the common Tailwind
+and daisyUI utilities — spacing (padding/margin/gap), layout (max-width,
+width/height, display, flex), typography (text size, font weight), colors,
+borders/effects and daisyUI button/badge modifiers — organised into collapsible
+sections. Color groups render as swatch dropdowns; other groups render as chips.
+Every group also accepts a free-typed custom class. Applied class/style edits are
+recorded and rendered in the issue and panel.
+
+Docked mode reserves the rail width (document-root `margin-right`), so the host
+page reflows alongside the panel instead of being overlaid; selection outlines
+are repainted after the reflow. Modal mode sizes the card to ~50 vw (capped at
+900 px, min 480 px) and, when **Add element** is pressed, hides the dialog for the
+click-to-pick and restores it when the pick completes (Escape cancels the pick).
 
 ### Data added to the payload
 

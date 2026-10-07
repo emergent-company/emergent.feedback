@@ -17,6 +17,7 @@ import {
   getTargets as getSelectionTargets,
   isPickMode,
   onSelectionChange,
+  refreshOutlines,
   removeTarget as removeSelectionTarget,
   applyTokenToTargets,
   revertAll as revertSelectionChanges,
@@ -120,14 +121,17 @@ function injectStyles(): void {
     #__ef_dialog__ .ef-card {
       background: var(--ef-card-bg);
       border-radius: 10px;
-      width: 520px;
-      max-width: calc(100vw - 32px);
+      width: 50vw;
+      min-width: min(480px, calc(100vw - 32px));
+      max-width: min(900px, calc(100vw - 32px));
       max-height: 85vh;
       box-shadow: var(--ef-card-shadow);
       display: flex;
       flex-direction: column;
       overflow: hidden;
     }
+    /* Modal mode steps aside while the user picks an element on the page. */
+    #__ef_dialog__.ef-modal-picking { display: none !important; }
     /* Programmatic focus target — no visible ring on the card itself. */
     #__ef_dialog__ .ef-card:focus,
     #__ef_dialog__ .ef-login-card:focus { outline: none; }
@@ -552,56 +556,6 @@ function injectStyles(): void {
       line-height: 1.4;
     }
 
-    /* Current (captured actual) read-out */
-    #__ef_dialog__ .ef-current {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 4px 9px;
-      border: 1px solid var(--ef-control-border);
-      border-radius: 6px;
-      background: var(--ef-surface);
-      width: 100%;
-      min-width: 0;
-    }
-    #__ef_dialog__ .ef-swatch {
-      width: 20px;
-      height: 20px;
-      border-radius: 4px;
-      border: 1px solid var(--ef-swatch-border);
-      flex-shrink: 0;
-      overflow: hidden;
-      /* checkerboard shows through translucent colours */
-      background-image:
-        linear-gradient(45deg, var(--ef-swatch-checker) 25%, transparent 25%, transparent 75%, var(--ef-swatch-checker) 75%),
-        linear-gradient(45deg, var(--ef-swatch-checker) 25%, transparent 25%, transparent 75%, var(--ef-swatch-checker) 75%);
-      background-size: 8px 8px;
-      background-position: 0 0, 4px 4px;
-    }
-    #__ef_dialog__ .ef-swatch > span {
-      display: block;
-      width: 100%;
-      height: 100%;
-    }
-    #__ef_dialog__ .ef-current-prop {
-      font-size: 11px;
-      /* on #fafafa read-out background */
-      color: var(--ef-muted-soft);
-      flex-shrink: 0;
-      white-space: nowrap;
-    }
-    #__ef_dialog__ .ef-current input {
-      flex: 1;
-      min-width: 0;
-      border: none;
-      background: transparent;
-      padding: 2px 0;
-      font-size: 12px;
-      font-family: ui-monospace, "SF Mono", Menlo, monospace;
-      color: var(--ef-text-strong);
-      outline: none;
-    }
-
     /* ── Login card ────────────────────────────────────────────────────────── */
     #__ef_dialog__ .ef-login-card {
       background: var(--ef-card-bg);
@@ -644,6 +598,7 @@ function injectStyles(): void {
     #__ef_dialog__.ef-docked .ef-card {
       pointer-events: auto;
       width: 100%;
+      min-width: 0;
       max-width: 100%;
       height: 100%;
       max-height: 100vh;
@@ -653,6 +608,9 @@ function injectStyles(): void {
     @media (max-width: 520px) {
       #__ef_dialog__.ef-docked { width: 100vw; }
     }
+    /* Docked rail sits alongside the page: reserve its width so content reflows
+       instead of being overlaid. */
+    html.ef-dock-active { margin-right: var(--ef-dock-w, 400px) !important; }
     #__ef_dialog__ .ef-dock-btn {
       background: transparent;
       border: 1px solid var(--ef-control-border);
@@ -898,6 +856,127 @@ function injectStyles(): void {
       display: flex;
       justify-content: flex-end;
     }
+    #__ef_dialog__ .ef-style-section {
+      border-top: 1px solid var(--ef-border-subtle);
+      padding-top: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    #__ef_dialog__ .ef-style-section:first-child {
+      border-top: none;
+      padding-top: 0;
+    }
+    #__ef_dialog__ .ef-style-section > summary {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--ef-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      user-select: none;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    #__ef_dialog__ .ef-style-section > summary::-webkit-details-marker { display: none; }
+    #__ef_dialog__ .ef-style-section > summary::before {
+      content: "▶";
+      font-size: 8px;
+      transition: transform 0.15s;
+      display: inline-block;
+    }
+    #__ef_dialog__ .ef-style-section[open] > summary::before { transform: rotate(90deg); }
+    #__ef_dialog__ .ef-select {
+      position: relative;
+    }
+    #__ef_dialog__ .ef-select-trigger {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      width: 100%;
+      padding: 5px 9px;
+      border: 1.5px solid var(--ef-control-border);
+      border-radius: 6px;
+      background: var(--ef-control-bg);
+      color: var(--ef-muted-strong);
+      font-size: 12px;
+      font-weight: 500;
+      font-family: inherit;
+      text-align: left;
+      cursor: pointer;
+      transition: border-color 0.1s, background 0.1s;
+    }
+    #__ef_dialog__ .ef-select-trigger:hover {
+      border-color: var(--ef-control-border-hover);
+      background: var(--ef-hover-bg);
+    }
+    #__ef_dialog__ .ef-select-trigger:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 3px var(--ef-focus-ring-chip);
+    }
+    #__ef_dialog__ .ef-select-caret {
+      margin-left: auto;
+      color: var(--ef-muted);
+      font-size: 10px;
+      line-height: 1;
+    }
+    #__ef_dialog__ .ef-select-menu {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: calc(100% + 4px);
+      z-index: 20;
+      margin: 0;
+      padding: 4px;
+      list-style: none;
+      background: var(--ef-card-bg);
+      border: 1px solid var(--ef-border);
+      border-radius: 6px;
+      box-shadow: var(--ef-card-shadow);
+      max-height: 220px;
+      overflow-y: auto;
+    }
+    #__ef_dialog__ .ef-select-option {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 5px 8px;
+      border-radius: 5px;
+      font-size: 12px;
+      color: var(--ef-text);
+      cursor: pointer;
+      outline: none;
+    }
+    #__ef_dialog__ .ef-select-option:hover,
+    #__ef_dialog__ .ef-select-option:focus-visible {
+      background: var(--ef-hover-bg);
+    }
+    #__ef_dialog__ .ef-select-option.ef-token-on {
+      background: var(--ef-chip-on-bg);
+      color: var(--ef-chip-on-text);
+      font-weight: 600;
+    }
+    #__ef_dialog__ .ef-custom-input {
+      width: 100%;
+      border: 1px solid var(--ef-control-border);
+      border-radius: 6px;
+      padding: 4px 8px;
+      font-size: 11px;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      color: var(--ef-text-strong);
+      outline: none;
+      background: var(--ef-surface);
+    }
+    #__ef_dialog__ .ef-custom-input:focus {
+      border-color: var(--ef-primary);
+      background: var(--ef-control-bg);
+      box-shadow: 0 0 0 3px var(--ef-focus-ring-input);
+    }
+    #__ef_dialog__ .ef-custom-input[aria-invalid="true"] {
+      border-color: var(--ef-error);
+    }
 
     /* ── Changes summary ───────────────────────────────────────────────────── */
     #__ef_dialog__ .ef-changes {
@@ -1045,8 +1124,15 @@ function getFocusable(card: HTMLElement): HTMLElement[] {
  * Tab containment is only applied in modal mode (`opts.modal !== false`). The
  * docked rail is non-modal, so Tab must move out of it into the page normally.
  */
-function activateDialog(card: HTMLElement, opts?: { modal?: boolean }): void {
-  focusReturnEl = (document.activeElement as HTMLElement | null) ?? null;
+function activateDialog(
+  card: HTMLElement,
+  opts?: { modal?: boolean; preserveFocusReturn?: boolean }
+): void {
+  // When re-restoring a modal after an inline pick, keep the original opener as
+  // the focus-return target instead of the (now hidden) Add button.
+  if (!opts?.preserveFocusReturn) {
+    focusReturnEl = (document.activeElement as HTMLElement | null) ?? null;
+  }
 
   const modal = opts?.modal !== false;
   if (!modal) {
@@ -1152,18 +1238,6 @@ function buildExpectedSuggestions(
   return out;
 }
 
-/** Pick the single most relevant captured actual value to pre-fill intent.actual. */
-function pickCurrent(
-  styles: Record<string, string> | undefined
-): { label: string; value: string; swatch?: string } | null {
-  if (!styles) return null;
-  if (styles["color"]) return { label: "text color", value: styles["color"], swatch: styles["color"] };
-  if (styles["backgroundColor"]) return { label: "background", value: styles["backgroundColor"], swatch: styles["backgroundColor"] };
-  if (styles["fontSize"]) return { label: "font size", value: styles["fontSize"] };
-  if (styles["fontWeight"]) return { label: "weight", value: styles["fontWeight"] };
-  return null;
-}
-
 /** Shows the element feedback dialog: existing comments + compose area. */
 export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   injectStyles();
@@ -1171,9 +1245,30 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
 
   // ── Dock state (default docked; persisted across pages) ────────────────────
   let docked = readDockedPref();
+  // True between clicking "Add element" in modal mode and the pick finishing.
+  // The dialog hides itself (ef-modal-picking) and suspends its Tab trap so the
+  // host page is clickable; the selection subscription restores the modal.
+  let awaitingPick = false;
+  const DOCK_MAX = 400;
+  const dockWidth = () => Math.min(DOCK_MAX, window.innerWidth);
+  const applyDockReflow = () => {
+    const root = document.documentElement;
+    const active = docked && window.innerWidth > 520;
+    if (active) {
+      root.classList.add("ef-dock-active");
+      root.style.setProperty("--ef-dock-w", `${dockWidth()}px`);
+    } else {
+      root.classList.remove("ef-dock-active");
+      root.style.removeProperty("--ef-dock-w");
+    }
+  };
   const applyDockState = (card: HTMLElement | null) => {
     dialog.classList.toggle("ef-docked", docked);
     if (card) card.setAttribute("aria-modal", docked ? "false" : "true");
+    applyDockReflow();
+    // The reserved rail width reflows the host page, so repaint the selection
+    // outlines to keep them aligned with their elements.
+    refreshOutlines();
   };
 
   const tokens: ThemeTokens = opts.tokens ?? { version: 1, groups: [], source: "fallback" };
@@ -1262,23 +1357,12 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   // ── Intent micro-form pieces ───────────────────────────────────────────────
   const tagName = String(ctx["tagName"] ?? "").toLowerCase();
   const suggestions = buildExpectedSuggestions(styles, tagName);
-  const current = pickCurrent(styles);
 
   const expectedRowHTML = suggestions.length > 0 ? `
         <div class="ef-intent-row">
           <span class="ef-intent-label">Expected</span>
           <div class="ef-chips" id="__ef_expected__">
             ${suggestions.map((s) => `<button type="button" class="ef-chip${s.value === "__below__" ? " ef-chip-muted" : ""}" data-expected="${s.value}" data-sentence="${escapeHtml(s.sentence)}" aria-pressed="false">${escapeHtml(s.label)}</button>`).join("")}
-          </div>
-        </div>` : "";
-
-  const currentRowHTML = current ? `
-        <div class="ef-intent-row">
-          <span class="ef-intent-label">Current</span>
-          <div class="ef-current">
-            ${current.swatch ? `<span class="ef-swatch"><span style="background:${escapeHtml(current.swatch)}"></span></span>` : ""}
-            <span class="ef-current-prop">${escapeHtml(current.label)}</span>
-            <input id="__ef_actual__" type="text" value="${escapeHtml(current.value)}" spellcheck="false" aria-label="Current value">
           </div>
         </div>` : "";
 
@@ -1327,7 +1411,6 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
             <div class="ef-chips" id="__ef_action__"></div>
           </div>
           ${expectedRowHTML}
-          ${currentRowHTML}
           <div class="ef-intent-row">
             <span class="ef-intent-label">Scope</span>
             <div class="ef-chips" id="__ef_scope__">
@@ -1398,7 +1481,6 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   const expectedWrap = dialog.querySelector<HTMLElement>("#__ef_expected__");
   const scopeWrap = dialog.querySelector<HTMLElement>("#__ef_scope__")!;
   const scopeHint = dialog.querySelector<HTMLElement>("#__ef_scope_hint__")!;
-  const actualInput = dialog.querySelector<HTMLInputElement>("#__ef_actual__");
 
   // ── Targets + live style editor + changes summary ───────────────────────────
   const targetsHost = dialog.querySelector<HTMLElement>("#__ef_targets__")!;
@@ -1426,6 +1508,18 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
         </div>`;
     }
     targetsHost.querySelector<HTMLButtonElement>("#__ef_add_target__")?.addEventListener("click", () => {
+      if (!docked) {
+        // Modal mode: hide the dialog, suspend the Tab trap, and let the user
+        // click an element on the page. The selection subscription restores us.
+        awaitingPick = true;
+        setPickMode(true);
+        dialog.classList.add("ef-modal-picking");
+        if (dialogKeydown) {
+          document.removeEventListener("keydown", dialogKeydown, true);
+          dialogKeydown = null;
+        }
+        return;
+      }
       setPickMode(!isPickMode());
       renderTargets();
     });
@@ -1492,9 +1586,6 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   let action: IntentAction = inferAction(getType());
   let actionTouched = false;
   let expected = "";
-  // True once the human edits the prefilled "Current" value. Drives provenance:
-  // browser-prefilled actual is `captured`; human-edited actual is `stated`.
-  let actualEdited = false;
   let breadth: ScopeBreadth = "element";
 
   const renderActions = () => {
@@ -1559,13 +1650,8 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     renderScopeHint();
   });
 
-  // Any edit (including clearing the field) marks the actual value as stated.
-  actualInput?.addEventListener("input", () => { actualEdited = true; });
-  actualInput?.addEventListener("change", () => { actualEdited = true; });
-
   /** Build the structured intent passed to onSubmit as the third argument. */
   const buildIntent = (): FeedbackIntent => {
-    const actualVal = actualInput?.value.trim();
     const targets = currentTargets();
     const changes = currentChanges();
     const targetSelectors =
@@ -1574,8 +1660,6 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
       kind: getType(),
       action,
       expected: expected.trim() || undefined,
-      actual: actualVal ? `${current ? current.label + ": " : ""}${actualVal}` : undefined,
-      actualEdited,
       scope: {
         // Multi-target editing is a genuine multi selection; otherwise honour
         // the user's own scope chip.
@@ -1597,8 +1681,6 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     if (raw) return raw; // a typed note always wins
     const parts: string[] = [];
     if (expected.trim()) parts.push(expected.trim());
-    const actualVal = actualInput?.value.trim();
-    if (actualEdited && actualVal && current) parts.push(`currently ${current.label}: ${actualVal}`);
     // A changes-only report is valid: summarise the applied live edits so Save
     // and Export both accept it (the server supports this case).
     const changes = currentChanges();
@@ -1616,6 +1698,12 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
 
   const onKey = (e: KeyboardEvent) => {
     if (e.key === "Escape") {
+      if (awaitingPick) {
+        // Cancel the pick but keep the dialog: the selection subscription
+        // restores the modal once pick mode ends.
+        setPickMode(false);
+        return;
+      }
       removeKey();
       closeDialog();
       opts.onCancel();
@@ -1706,8 +1794,26 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   const unsubSelection = onSelectionChange(() => {
     renderSelection();
     renderScopeHint();
+    // A pick just finished: show the dialog again and restore modal focus.
+    if (awaitingPick && !isPickMode()) {
+      awaitingPick = false;
+      dialog.classList.remove("ef-modal-picking");
+      applyDockState(card);
+      if (!docked) activateDialog(card, { modal: true, preserveFocusReturn: true });
+    }
   });
-  dialogCleanup = unsubSelection;
+
+  // Keep the reserved dock rail width (and outlines) in step with the viewport.
+  const onResize = () => {
+    applyDockReflow();
+    refreshOutlines();
+  };
+  window.addEventListener("resize", onResize);
+
+  dialogCleanup = () => {
+    unsubSelection();
+    window.removeEventListener("resize", onResize);
+  };
 
   // Backdrop click to cancel — modal only. The docked rail is click-through
   // (pointer-events: none), so this never fires while docked.
@@ -1765,6 +1871,11 @@ export function showLoginDialog(opts: LoginDialogOptions): void {
 }
 
 export function closeDialog(): void {
+  // Always release the reserved dock rail (safe no-op when never docked).
+  const root = document.documentElement;
+  root.classList.remove("ef-dock-active");
+  root.style.removeProperty("--ef-dock-w");
+
   const dialog = document.getElementById(DIALOG_ID);
   if (!dialog) return;
   if (dialogKeydown) {
