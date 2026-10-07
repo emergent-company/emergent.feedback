@@ -42,7 +42,7 @@ Add the following snippet to your HTML, just before `</body>`:
 | `data-branch` | No | Git branch being tested. Shown in dialog and included in issue body |
 | `data-version` | No | App version being tested. Shown in dialog and included in issue body |
 | `data-theme` | No | Overlay theme: `auto` (default), `light` or `dark`. `auto` detects the host page theme, then falls back to the OS `prefers-color-scheme`. |
-| `data-theme-url` | No | Absolute or same-origin URL of a JSON theme manifest (padding/color tokens) that powers the live style editor. See [Live style editing](#live-style-editing). When omitted, the overlay reads daisyUI color variables from the page and uses a built-in spacing scale. |
+| `data-theme-url` | No | Absolute or same-origin URL of a JSON theme manifest (design-token groups) that powers the live style editor. See [Live style editing](#live-style-editing). When omitted, the overlay reads daisyUI color variables from the page and uses a built-in Tailwind/daisyUI utility set (spacing, layout, typography, colors, borders/effects, daisyUI components). |
 
 The overlay dialog, activation bar, badges and toasts follow the resolved theme. The server-rendered
 landing page and API-key panel share a persisted Light/Dark/System toggle (localStorage key
@@ -102,19 +102,38 @@ No build step, no npm install, no configuration file. The script self-initialise
 
 ### Docked panel
 
-The dialog can dock to the right edge of the viewport instead of rendering as a
-centered modal. Docked mode leaves the page fully visible and undimmed, and keeps
-it interactive: element picking, multi-select and live style editing all continue
-while the panel is open. Toggle dock/undock from the panel header; the choice is
-persisted per browser (localStorage `__ef_dialog_docked__`) and docked is the
-default. On narrow viewports the docked panel takes the full width.
+The dialog can dock to the right edge instead of rendering as a centered modal.
+Docked mode sits **alongside** the page rather than over it: the panel reserves
+its rail width (`margin-right` on the document root), so the host content reflows
+and stays fully visible and undimmed — no overlay covering the page. Element
+picking, multi-select and live style editing all continue while the panel is
+open; selection outlines are repainted after the reflow. Toggle dock/undock from
+the panel header; the choice is persisted per browser (localStorage
+`__ef_dialog_docked__`) and docked is the default. On narrow viewports (≤ 520 px)
+the panel takes the full width and the page is not reflowed.
+
+In **modal** mode the card takes roughly half the viewport width (50 vw, capped
+at 900 px, min 480 px). Because the modal backdrop blocks the page, pressing
+**Add element** hides the dialog while you click the element to add, then brings
+it straight back; press `Escape` to cancel the pick and stay in the dialog.
+
+> Caveat: host elements positioned with `position: fixed` are not shifted by the
+> reserved rail width.
 
 ### Live style editing
 
 With the panel open, click additional elements to add them to the selection (a
 click on an already-selected element toggles it off, and **Add element** enters a
-pick mode). The panel shows the selected targets and a token palette for
-**padding** and **colors**. Choosing a token applies it live to every selected
+pick mode). The panel shows the selected targets and a token palette grouped into
+collapsible sections — **Spacing**, **Layout**, **Typography**, **Color**,
+**Borders & Effects** and **daisyUI** — covering Tailwind/daisyUI utilities such
+as padding, margin, gap, max-width, width/height, display/flex, text size, font
+weight, rounding, borders, shadow and button/badge modifiers.
+
+Color groups render as **swatch dropdowns** (each option previews its color) to
+save space; other groups render as chips. Every group also has a small
+**custom class** input — type any Tailwind/daisyUI class (e.g. `max-w-6xl`) and
+press Enter to apply it. Choosing a token applies it live to every selected
 element as a CSS class (or inline style, per token) and the applied edits are
 recorded in the feedback payload.
 
@@ -164,6 +183,11 @@ Only the following style properties are accepted: `padding`, `padding-top`,
 `padding-right`, `padding-bottom`, `padding-left`, `color`, `background-color`,
 `background`, `border-radius`. Class names are validated, and all token text is
 escaped before rendering.
+
+Each group may also set `"section": "Layout"` to place it under a named
+collapsible heading (default `"Style"`), and `"render": "dropdown"` to render it
+as a swatch dropdown instead of chips (best for color groups). Both are optional
+and ignored when invalid.
 
 ### Configuring the activation hotkey
 

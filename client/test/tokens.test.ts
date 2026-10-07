@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   normalizeTheme,
   buildFallbackTokens,
+  makeCustomToken,
   matchToken,
   applyToken,
   revertToken,
@@ -184,6 +185,81 @@ test("buildFallbackTokens: reads daisyUI vars and includes a spacing scale", () 
     delete g.document;
     delete g.getComputedStyle;
   }
+});
+
+test("buildFallbackTokens: extended groups, sections, and renders", () => {
+  const theme = buildFallbackTokens();
+  const byId = (id: string) => theme.groups.find((x) => x.id === id)!;
+
+  const maxWidth = byId("maxWidth");
+  assert.ok(maxWidth, "maxWidth group exists");
+  assert.ok(maxWidth.tokens.some((t) => t.className === "max-w-6xl"));
+
+  assert.ok(theme.groups.every((g) => typeof g.section === "string" && g.section.length > 0));
+
+  assert.equal(byId("textColor").render, "dropdown");
+  assert.equal(byId("backgroundColor").render, "dropdown");
+
+  assert.equal(byId("textSize").removePattern, undefined);
+  assert.equal(byId("fontWeight").removePattern, undefined);
+  assert.equal(byId("textColor").removePattern, undefined);
+  assert.equal(byId("backgroundColor").removePattern, undefined);
+
+  assert.equal(byId("padding").removePattern, "^p[xytrbl]?-");
+  assert.equal(byId("margin").removePattern, "^m[xytrbl]?-");
+});
+
+test("collision safety: textSize and textColor do not strip each other", () => {
+  const theme = buildFallbackTokens();
+  const textSize = theme.groups.find((x) => x.id === "textSize")!;
+  const textColor = theme.groups.find((x) => x.id === "textColor")!;
+  const lg = textSize.tokens.find((t) => t.className === "text-lg")!;
+  const primary = textColor.tokens.find((t) => t.className === "text-primary")!;
+
+  const el = new FakeEl(["text-primary"]);
+  applyToken(el as unknown as Element, textSize, lg);
+  assert.ok(el.classList.contains("text-lg"));
+  assert.ok(el.classList.contains("text-primary"), "text-primary must survive a textSize apply");
+
+  const el2 = new FakeEl(["text-lg"]);
+  applyToken(el2 as unknown as Element, textColor, primary);
+  assert.ok(el2.classList.contains("text-primary"));
+  assert.ok(el2.classList.contains("text-lg"), "text-lg must survive a textColor apply");
+});
+
+test("makeCustomToken: rejects invalid input, accepts a valid class", () => {
+  assert.equal(makeCustomToken(""), null);
+  assert.equal(makeCustomToken("  "), null);
+  assert.equal(makeCustomToken("a;b"), null);
+  assert.equal(makeCustomToken("a b"), null);
+  assert.equal(makeCustomToken("a".repeat(81)), null);
+  assert.deepEqual(makeCustomToken("max-w-6xl"), {
+    id: "custom:max-w-6xl",
+    label: "max-w-6xl",
+    className: "max-w-6xl",
+  });
+});
+
+test("normalizeTheme: accepts render and section, ignores invalid render", () => {
+  const out = normalizeTheme(payload([
+    {
+      id: "g", label: "G", applyType: "class", render: "dropdown", section: "Color",
+      tokens: [{ id: "a", label: "A", className: "x" }],
+    },
+  ]));
+  assert.ok(out);
+  assert.equal(out!.groups[0].render, "dropdown");
+  assert.equal(out!.groups[0].section, "Color");
+
+  const out2 = normalizeTheme(payload([
+    {
+      id: "g", label: "G", applyType: "class", render: "radio",
+      tokens: [{ id: "a", label: "A", className: "x" }],
+    },
+  ]));
+  assert.ok(out2, "invalid render must not drop the group");
+  assert.equal(out2!.groups[0].render, undefined);
+  assert.equal(out2!.groups[0].section, undefined);
 });
 
 // ── match / apply / revert ────────────────────────────────────────────────────
