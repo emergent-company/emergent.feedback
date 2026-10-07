@@ -412,7 +412,6 @@ export function buildFallbackTokens(): ThemeTokens {
         label: "Justify",
         section: "Layout",
         applyType: "class",
-        removePattern: "^justify-",
         tokens: [
           { id: "start", label: "Start", className: "justify-start" },
           { id: "center", label: "Center", className: "justify-center" },
@@ -427,7 +426,6 @@ export function buildFallbackTokens(): ThemeTokens {
         label: "Flex direction",
         section: "Layout",
         applyType: "class",
-        removePattern: "^flex-",
         tokens: [
           { id: "row", label: "Row", className: "flex-row" },
           { id: "row-reverse", label: "Row reverse", className: "flex-row-reverse" },
@@ -489,7 +487,6 @@ export function buildFallbackTokens(): ThemeTokens {
         label: "Rounded",
         section: "Borders & Effects",
         applyType: "class",
-        removePattern: "^rounded",
         tokens: [
           { id: "none", label: "None", className: "rounded-none" },
           { id: "sm", label: "Small", className: "rounded-sm" },
@@ -502,15 +499,24 @@ export function buildFallbackTokens(): ThemeTokens {
         ],
       },
       {
-        id: "border",
-        label: "Border width/style",
+        id: "borderWidth",
+        label: "Border width",
         section: "Borders & Effects",
         applyType: "class",
+        removePattern: "^border-[0-9]",
         tokens: [
           { id: "none", label: "None", className: "border-0" },
           { id: "2px", label: "2px", className: "border-2" },
           { id: "4px", label: "4px", className: "border-4" },
           { id: "8px", label: "8px", className: "border-8" },
+        ],
+      },
+      {
+        id: "borderStyle",
+        label: "Border style",
+        section: "Borders & Effects",
+        applyType: "class",
+        tokens: [
           { id: "solid", label: "Solid", className: "border-solid" },
           { id: "dashed", label: "Dashed", className: "border-dashed" },
           { id: "dotted", label: "Dotted", className: "border-dotted" },
@@ -521,7 +527,6 @@ export function buildFallbackTokens(): ThemeTokens {
         label: "Shadow",
         section: "Borders & Effects",
         applyType: "class",
-        removePattern: "^shadow",
         tokens: [
           { id: "none", label: "None", className: "shadow-none" },
           { id: "sm", label: "Small", className: "shadow-sm" },
@@ -532,8 +537,8 @@ export function buildFallbackTokens(): ThemeTokens {
         ],
       },
       {
-        id: "btnStyle",
-        label: "Button style",
+        id: "btnColor",
+        label: "Button color",
         section: "daisyUI",
         applyType: "class",
         tokens: [
@@ -544,6 +549,14 @@ export function buildFallbackTokens(): ThemeTokens {
           { id: "success", label: "Success", className: "btn-success" },
           { id: "warning", label: "Warning", className: "btn-warning" },
           { id: "error", label: "Error", className: "btn-error" },
+        ],
+      },
+      {
+        id: "btnModifier",
+        label: "Button modifier",
+        section: "daisyUI",
+        applyType: "class",
+        tokens: [
           { id: "ghost", label: "Ghost", className: "btn-ghost" },
           { id: "outline", label: "Outline", className: "btn-outline" },
           { id: "link", label: "Link", className: "btn-link" },
@@ -563,8 +576,8 @@ export function buildFallbackTokens(): ThemeTokens {
         ],
       },
       {
-        id: "badgeStyle",
-        label: "Badge style",
+        id: "badgeColor",
+        label: "Badge color",
         section: "daisyUI",
         applyType: "class",
         tokens: [
@@ -576,6 +589,14 @@ export function buildFallbackTokens(): ThemeTokens {
           { id: "warning", label: "Warning", className: "badge-warning" },
           { id: "error", label: "Error", className: "badge-error" },
           { id: "neutral", label: "Neutral", className: "badge-neutral" },
+        ],
+      },
+      {
+        id: "badgeModifier",
+        label: "Badge modifier",
+        section: "daisyUI",
+        applyType: "class",
+        tokens: [
           { id: "ghost", label: "Ghost", className: "badge-ghost" },
           { id: "outline", label: "Outline", className: "badge-outline" },
         ],
@@ -697,9 +718,9 @@ function removeGroupClasses(el: Element, group: TokenGroup): void {
     for (const cls of Array.from(el.classList)) {
       if (re.test(cls)) el.classList.remove(cls);
     }
-    return;
   }
-  // No pattern: remove any class belonging to a class token in this group.
+  // Always drop this group's own class tokens too — covers custom tokens whose
+  // class does not match the group pattern (e.g. a typed class in another group).
   for (const t of group.tokens) {
     const a = resolveApply(group, t);
     if (a.type === "class" && a.className) el.classList.remove(a.className);

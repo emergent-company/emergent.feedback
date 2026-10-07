@@ -117,8 +117,10 @@ at 900 px, min 480 px). Because the modal backdrop blocks the page, pressing
 **Add element** hides the dialog while you click the element to add, then brings
 it straight back; press `Escape` to cancel the pick and stay in the dialog.
 
-> Caveat: host elements positioned with `position: fixed` are not shifted by the
-> reserved rail width.
+> Caveat: host elements positioned with `position: fixed` or `position: sticky`
+> are not shifted by the reserved rail width, and an explicitly sized `html`
+> (`width`/`min-width`) can defeat the reflow and produce a horizontal scrollbar
+> under the panel.
 
 ### Live style editing
 

@@ -227,6 +227,65 @@ test("collision safety: textSize and textColor do not strip each other", () => {
   assert.ok(el2.classList.contains("text-lg"), "text-lg must survive a textColor apply");
 });
 
+test("buildFallbackTokens: border/button/badge splits + exact-class removal groups", () => {
+  const theme = buildFallbackTokens();
+  const byId = (id: string) => theme.groups.find((x) => x.id === id)!;
+
+  assert.ok(byId("borderWidth"), "borderWidth exists");
+  assert.equal(byId("borderWidth").removePattern, "^border-[0-9]");
+  assert.ok(byId("borderStyle"), "borderStyle exists");
+  assert.equal(byId("borderStyle").removePattern, undefined);
+
+  for (const id of ["btnColor", "btnModifier", "btnSize", "badgeColor", "badgeModifier", "badgeSize"]) {
+    assert.ok(byId(id), `${id} exists`);
+  }
+
+  for (const id of ["justify", "flexDir", "rounded", "shadow"]) {
+    assert.equal(byId(id).removePattern, undefined, `${id} has no removePattern`);
+  }
+});
+
+test("borderWidth and borderStyle are orthogonal (neither strips the other)", () => {
+  const theme = buildFallbackTokens();
+  const width = theme.groups.find((x) => x.id === "borderWidth")!;
+  const style = theme.groups.find((x) => x.id === "borderStyle")!;
+  const two = width.tokens.find((t) => t.className === "border-2")!;
+  const solid = style.tokens.find((t) => t.className === "border-solid")!;
+
+  const el = new FakeEl(["border-2"]);
+  applyToken(el as unknown as Element, style, solid);
+  assert.ok(el.classList.contains("border-solid"));
+  assert.ok(el.classList.contains("border-2"), "width class preserved when style applied");
+
+  const el2 = new FakeEl(["border-solid"]);
+  applyToken(el2 as unknown as Element, width, two);
+  assert.ok(el2.classList.contains("border-2"));
+  assert.ok(el2.classList.contains("border-solid"), "style class preserved when width applied");
+});
+
+test("applyToken/revertToken: custom class not matching the group pattern is removed", () => {
+  const group: TokenGroup = {
+    id: "spacing",
+    label: "Spacing",
+    applyType: "class",
+    removePattern: "^p[xytrbl]?-",
+    tokens: [
+      { id: "md", label: "Medium", className: "p-4" },
+      { id: "custom:mt-4", label: "mt-4", className: "mt-4" },
+    ],
+  };
+  const custom = group.tokens.find((t) => t.id === "custom:mt-4")!;
+
+  const el = new FakeEl(["p-2"]);
+  const change = applyToken(el as unknown as Element, group, custom);
+  assert.ok(el.classList.contains("mt-4"));
+  assert.ok(!el.classList.contains("p-2"), "prior pattern-matched class removed on apply");
+
+  revertToken(el as unknown as Element, group, change);
+  assert.ok(!el.classList.contains("mt-4"), "custom class removed on revert");
+  assert.ok(el.classList.contains("p-2"), "prior class restored on revert");
+});
+
 test("makeCustomToken: rejects invalid input, accepts a valid class", () => {
   assert.equal(makeCustomToken(""), null);
   assert.equal(makeCustomToken("  "), null);

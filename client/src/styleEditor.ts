@@ -31,6 +31,14 @@ export interface StyleEditorCallbacks {
  */
 const customTokens = new Map<string, Token[]>();
 
+/**
+ * Closes the dropdown currently open, if any. mountStyleEditor rewrites
+ * innerHTML on every selection change, which would otherwise orphan an open
+ * menu's document-level outside-click listener; calling this before the
+ * re-render tears down the stale menu + listener.
+ */
+let activeDropdownClose: (() => void) | null = null;
+
 function escapeHtml(s: unknown): string {
   return String(s ?? "")
     .replace(/&/g, "&amp;")
@@ -225,6 +233,7 @@ function wireDropdowns(
       outsideListener = null;
     }
     openMenu = null;
+    activeDropdownClose = null;
   };
 
   root.querySelectorAll<HTMLElement>(".ef-select").forEach((sel) => {
@@ -240,6 +249,7 @@ function wireDropdowns(
       menu.hidden = false;
       trigger.setAttribute("aria-expanded", "true");
       openMenu = menu;
+      activeDropdownClose = () => close(menu);
       if (!outsideListener) {
         outsideListener = (e: MouseEvent) => {
           if (!sel.contains(e.target as Node)) close(menu);
@@ -264,6 +274,9 @@ function wireDropdowns(
         e.preventDefault();
         e.stopPropagation();
         close(menu);
+      } else if (e.key === "Tab" && !menu.hidden) {
+        // Let focus move on naturally, but collapse the menu first.
+        close(menu);
       }
     });
 
@@ -286,11 +299,20 @@ function wireDropdowns(
         } else if (e.key === "ArrowUp") {
           e.preventDefault();
           opts[Math.max(i - 1, 0)]?.focus();
+        } else if (e.key === "Home") {
+          e.preventDefault();
+          opts[0]?.focus();
+        } else if (e.key === "End") {
+          e.preventDefault();
+          opts[opts.length - 1]?.focus();
         } else if (e.key === "Escape") {
           e.preventDefault();
           e.stopPropagation();
           close(menu);
           trigger.focus();
+        } else if (e.key === "Tab") {
+          // Collapse the menu, then let Tab move focus out of the group.
+          close(menu);
         } else if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           opt.click();
@@ -308,6 +330,11 @@ export function mountStyleEditor(
   changesCount: number,
   cb: StyleEditorCallbacks
 ): void {
+  // Tear down any dropdown left open by a previous mount before replacing the
+  // DOM: its outside-click listener would otherwise leak.
+  activeDropdownClose?.();
+  activeDropdownClose = null;
+
   const groups = augmentGroups(tokens.groups);
   root.innerHTML = renderStyleEditorHTML(tokens, targets, changesCount);
 
@@ -344,7 +371,10 @@ export function mountStyleEditor(
       const next = list.filter((x) => x.id !== t.id);
       next.push(t);
       customTokens.set(gid, next);
-      cb.onApply(group, t);
+      // `group` was built before the cache update, so re-augment: the applied
+      // record (and therefore revert) must carry this custom token.
+      const liveGroup = augmentGroups(tokens.groups).find((g) => g.id === gid) ?? group;
+      cb.onApply(liveGroup, t);
       input.value = "";
     });
   });

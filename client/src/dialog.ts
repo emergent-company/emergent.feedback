@@ -556,56 +556,6 @@ function injectStyles(): void {
       line-height: 1.4;
     }
 
-    /* Current (captured actual) read-out */
-    #__ef_dialog__ .ef-current {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 4px 9px;
-      border: 1px solid var(--ef-control-border);
-      border-radius: 6px;
-      background: var(--ef-surface);
-      width: 100%;
-      min-width: 0;
-    }
-    #__ef_dialog__ .ef-swatch {
-      width: 20px;
-      height: 20px;
-      border-radius: 4px;
-      border: 1px solid var(--ef-swatch-border);
-      flex-shrink: 0;
-      overflow: hidden;
-      /* checkerboard shows through translucent colours */
-      background-image:
-        linear-gradient(45deg, var(--ef-swatch-checker) 25%, transparent 25%, transparent 75%, var(--ef-swatch-checker) 75%),
-        linear-gradient(45deg, var(--ef-swatch-checker) 25%, transparent 25%, transparent 75%, var(--ef-swatch-checker) 75%);
-      background-size: 8px 8px;
-      background-position: 0 0, 4px 4px;
-    }
-    #__ef_dialog__ .ef-swatch > span {
-      display: block;
-      width: 100%;
-      height: 100%;
-    }
-    #__ef_dialog__ .ef-current-prop {
-      font-size: 11px;
-      /* on #fafafa read-out background */
-      color: var(--ef-muted-soft);
-      flex-shrink: 0;
-      white-space: nowrap;
-    }
-    #__ef_dialog__ .ef-current input {
-      flex: 1;
-      min-width: 0;
-      border: none;
-      background: transparent;
-      padding: 2px 0;
-      font-size: 12px;
-      font-family: ui-monospace, "SF Mono", Menlo, monospace;
-      color: var(--ef-text-strong);
-      outline: none;
-    }
-
     /* ── Login card ────────────────────────────────────────────────────────── */
     #__ef_dialog__ .ef-login-card {
       background: var(--ef-card-bg);
