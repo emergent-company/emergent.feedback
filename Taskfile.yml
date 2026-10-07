@@ -138,6 +138,25 @@ tasks:
     cmds:
       - go test -v ./...
 
+  e2e:install:
+    desc: "Install Playwright deps + Chromium for the e2e suite"
+    dir: e2e
+    cmds:
+      - npm install
+      - npx playwright install chromium
+
+  e2e:
+    desc: "Run the Playwright e2e suite (own pages + host fixture; remote specs auto-skip)"
+    dir: e2e
+    cmds:
+      - npx playwright test
+
+  e2e:report:
+    desc: "Open the last Playwright HTML report"
+    dir: e2e
+    cmds:
+      - npx playwright show-report
+
   # ── Utilities ─────────────────────────────────────────────────────────────────
 
   tidy:

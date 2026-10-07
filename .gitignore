@@ -7,6 +7,14 @@ bin/
 client/node_modules/
 client/test-dist/
 landing/node_modules/
+e2e/node_modules/
+
+# Playwright (e2e)
+e2e/.env
+e2e/.auth/
+e2e/.tmp/
+e2e/test-results/
+e2e/playwright-report/
 
 # Data
 data/

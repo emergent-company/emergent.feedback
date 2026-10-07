@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "groups": [
+    {
+      "id": "padding",
+      "label": "Padding",
+      "applyType": "class",
+      "removePattern": "^p[xytrbl]?-",
+      "tokens": [
+        { "id": "none", "label": "None", "className": "p-0" },
+        { "id": "sm", "label": "Small", "className": "p-2" },
+        { "id": "md", "label": "Medium", "className": "p-4" },
+        {
+          "id": "lg",
+          "label": "Large",
+          "apply": { "type": "style", "prop": "padding", "value": "var(--space-lg)" }
+        }
+      ]
+    },
+    {
+      "id": "textColor",
+      "label": "Text color",
+      "applyType": "class",
+      "removePattern": "^text-",
+      "tokens": [
+        { "id": "base", "label": "Default", "className": "text-base-content", "swatch": "var(--color-base-content)" },
+        { "id": "primary", "label": "Primary", "className": "text-primary", "swatch": "var(--color-primary)" }
+      ]
+    }
+  ]
+}

@@ -368,6 +368,23 @@ go build ./server/...
 docker build -t emergent-feedback .
 ```
 
+### E2E tests (Playwright)
+
+A Playwright suite lives in `e2e/` and covers both our own pages (landing,
+panel, overlay, API) and other pages that embed the script (a local host
+fixture plus env-gated remote host apps).
+
+```bash
+task e2e:install     # npm install + download Chromium (first run)
+task e2e             # run own + host specs; remote specs auto-skip
+```
+
+The suite starts the Go server and a fixture host server itself, using known
+test secrets, and authenticates by **minting a session JWT offline** from
+`E2E_JWT_SECRET` — no GitHub OAuth round-trip. Remote host apps use a Playwright
+`storageState` captured once. See [`e2e/README.md`](e2e/README.md) for the full
+credential matrix and configuration knobs (`e2e/.env.example`).
+
 ### Environment variables
 
 **Required**
