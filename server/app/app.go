@@ -283,6 +283,7 @@ func OptionsFromEnv() (Options, func(), error) {
 	appID := envOr("GH_APP_ID", "")
 	installID := envOr("GH_INSTALLATION_ID", "")
 	botToken := envOr("GH_BOT_TOKEN", "")
+	slug := envOr("GH_APP_SLUG", "")
 	authorMode := envOr("ISSUE_AUTHOR_MODE", "bot")
 
 	var privateKey string
@@ -319,7 +320,7 @@ func OptionsFromEnv() (Options, func(), error) {
 
 	return Options{
 		Store:          s,
-		GitHub:         &github.AppConfig{AppID: appID, ClientID: clientID, ClientSecret: clientSecret, RedirectURI: redirectURI, PrivateKeyPEM: privateKey, InstallationID: installID, BotToken: botToken, AuthorMode: authorMode},
+		GitHub:         &github.AppConfig{AppID: appID, ClientID: clientID, ClientSecret: clientSecret, RedirectURI: redirectURI, PrivateKeyPEM: privateKey, InstallationID: installID, BotToken: botToken, AuthorMode: authorMode, AppSlug: slug},
 		JWTSecret:      jwtSecret,
 		AllowedOrigins: envOr("ALLOWED_ORIGINS", "*"),
 		MCPAPIKey:      os.Getenv("MCP_API_KEY"),

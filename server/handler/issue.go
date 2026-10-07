@@ -69,14 +69,15 @@ func (h *Handler) HandleExportIssue(c echo.Context) error {
 			return echo.NewHTTPError(http.StatusForbidden, "cannot export feedback you do not own")
 		}
 	}
-	// Authz: fail closed — the caller's GitHub repos must cover req.Repo before
-	// an issue is created in it.
-	allowedRepos, err := h.userRepos(c)
+	// Authz: probe the caller's token against req.Repo directly rather than via
+	// list membership, so a private repo outside the App installation returns
+	// actionable guidance instead of a blanket 403. Fail closed on any error.
+	allowed, err := h.callerCanAccessRepo(c, req.Repo)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusForbidden, "repo not in scope")
+		return h.repoAccessError(err)
 	}
-	if !repoInScope(req.Repo, allowedRepos) {
-		return echo.NewHTTPError(http.StatusForbidden, "repo not in scope")
+	if !allowed {
+		return h.repoAccessDenied(c, req.Repo)
 	}
 	// Best-effort console stack unmapping before rendering (never blocks on failure).
 	for i := range items {

@@ -7,7 +7,9 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"errors"
+	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/emergent-company/emergent.feedback/server/github"
 	"github.com/emergent-company/emergent.feedback/server/middleware"
@@ -128,4 +130,89 @@ func (h *Handler) HandleListRepos(c echo.Context) error {
 		return repoListError(err)
 	}
 	return c.JSON(http.StatusOK, repos)
+}
+
+// callerCanAccessRepo probes whether the caller's token can access repo
+// ("owner/name") directly, rather than via list membership. A userToken error
+// (echo 401) is propagated as-is.
+func (h *Handler) callerCanAccessRepo(c echo.Context, repo string) (bool, error) {
+	token, err := h.userToken(c)
+	if err != nil {
+		return false, err
+	}
+	return github.RepoAccessible(c.Request().Context(), token, repo)
+}
+
+// repoAccessError maps a repo-access-probe error to an HTTP error. An echo 401
+// (missing token) passes through unchanged; a GitHub API 401 becomes a 401 so
+// the panel re-signs-in the user; anything else is a 502 upstream error.
+func (h *Handler) repoAccessError(err error) error {
+	var he *echo.HTTPError
+	if errors.As(err, &he) && he.Code == http.StatusUnauthorized {
+		return he
+	}
+	if gitHubAuthExpired(err) {
+		return echo.NewHTTPError(http.StatusUnauthorized, "GitHub authorization expired. Sign in again to continue.")
+	}
+	return echo.NewHTTPError(http.StatusBadGateway, "failed to verify repository access")
+}
+
+// repoAccessDenied returns the 403 for a repo the caller's token cannot access:
+// a structured app_access_required body when a grant URL can be built, else the
+// plain fail-closed message.
+func (h *Handler) repoAccessDenied(c echo.Context, repo string) error {
+	if authorizeURL := h.repoAccessGuidance(c, repo); authorizeURL != "" {
+		return echo.NewHTTPError(http.StatusForbidden, map[string]any{
+			"error":         "app_access_required",
+			"message":       fmt.Sprintf("The feedback app does not have access to %s. Grant access in GitHub, then try again.", repo),
+			"repo":          repo,
+			"authorize_url": authorizeURL,
+		})
+	}
+	return echo.NewHTTPError(http.StatusForbidden, "repo not in scope")
+}
+
+// repoAccessGuidance builds a URL the user can follow to grant the feedback app
+// access to repo ("owner/name"), or "" when none can be built. Preference order:
+// the matching installation's HTMLURL, that installation's AppSlug install URL,
+// any installation's AppSlug install URL, then the configured AppSlug.
+func (h *Handler) repoAccessGuidance(c echo.Context, repo string) string {
+	token, err := h.userToken(c)
+	if err != nil {
+		return ""
+	}
+	owner := repo
+	if i := strings.IndexByte(repo, '/'); i >= 0 {
+		owner = repo[:i]
+	}
+	installs, err := github.ListUserInstallations(c.Request().Context(), token)
+	if err != nil {
+		return ""
+	}
+
+	var matched *github.Installation
+	for i := range installs {
+		if strings.EqualFold(installs[i].Account.Login, owner) {
+			matched = &installs[i]
+			break
+		}
+	}
+	if matched != nil {
+		if matched.HTMLURL != "" {
+			return matched.HTMLURL
+		}
+		if matched.AppSlug != "" {
+			return fmt.Sprintf("https://github.com/apps/%s/installations/new", matched.AppSlug)
+		}
+	}
+	// No install for this owner: fall back to any installation's AppSlug.
+	for i := range installs {
+		if installs[i].AppSlug != "" {
+			return fmt.Sprintf("https://github.com/apps/%s/installations/new", installs[i].AppSlug)
+		}
+	}
+	if h.GHConfig.AppSlug != "" {
+		return fmt.Sprintf("https://github.com/apps/%s/installations/new", h.GHConfig.AppSlug)
+	}
+	return ""
 }

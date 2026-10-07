@@ -19,7 +19,7 @@ import (
 
 // newHardeningHandler builds an echo server with the sourcemaps route and a
 // test-login middleware (mirrors newLifecycleHandler but no GitHub token is
-// ever stored, so userRepos always fails).
+// ever stored, so userToken always fails).
 func newHardeningHandler(t *testing.T) (*Handler, *store.Store, *echo.Echo) {
 	t.Helper()
 	s, err := store.OpenSQLite(filepath.Join(t.TempDir(), "test.db"))
@@ -40,11 +40,39 @@ func newHardeningHandler(t *testing.T) (*Handler, *store.Store, *echo.Echo) {
 	return h, s, e
 }
 
-// TestUploadSourcemapsFailsClosed verifies that a scope check that cannot be
-// determined (no stored GitHub token → userRepos errors) results in a 403,
-// never an arbitrary-repo upload.
+// TestUploadSourcemapsFailsClosed verifies a caller with no stored GitHub token
+// gets 401 (not 403), so the panel prompts a fresh GitHub sign-in.
 func TestUploadSourcemapsFailsClosed(t *testing.T) {
 	_, _, e := newHardeningHandler(t)
+
+	body := `{"repo":"evil/arbitrary","version":"1.0.0","maps":{"bundle.js.map":"{}"}}`
+	req := httptest.NewRequest(http.MethodPost, "/sourcemaps", strings.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	req.Header.Set("X-Test-Login", "alice")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401 (fail closed): %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestUploadSourcemapsOutOfScope verifies a caller whose token cannot access the
+// target repo is rejected with 403 (fail closed), never an arbitrary upload.
+func TestUploadSourcemapsOutOfScope(t *testing.T) {
+	h, s, e := newHardeningHandler(t)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/repos/evil/arbitrary" {
+			t.Errorf("unexpected path %q", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+	github.SetBaseURLForTesting(srv.URL)
+	defer github.SetBaseURLForTesting("https://api.github.com")
+
+	seedUserToken(t, s, h, "alice", "tok")
 
 	body := `{"repo":"evil/arbitrary","version":"1.0.0","maps":{"bundle.js.map":"{}"}}`
 	req := httptest.NewRequest(http.MethodPost, "/sourcemaps", strings.NewReader(body))

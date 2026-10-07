@@ -371,6 +371,7 @@ docker build -t emergent-feedback .
 | `GH_BOT_TOKEN` | — | Bot token used to author issues |
 | `GH_APP_ID` | — | GitHub App ID (App-based authoring) |
 | `GH_INSTALLATION_ID` | — | GitHub App installation ID |
+| `GH_APP_SLUG` | — | GitHub App URL slug; used to build the "grant access" install URL for out-of-scope repos |
 | `GH_APP_PRIVATE_KEY` | — | GitHub App private key PEM, inline |
 | `GH_APP_PRIVATE_KEY_PATH` | — | Path to the GitHub App private key PEM (preferred over inline) |
 
@@ -386,6 +387,30 @@ docker build -t emergent-feedback .
 
 > In `bot` mode with no GitHub App or `GH_BOT_TOKEN` configured, the server warns and
 > falls back to authoring issues with each reporter's own GitHub token.
+
+### Troubleshooting
+
+#### Export returns 403 / app_access_required
+
+`POST /issue/export` now probes the caller's access to the target repo directly
+(instead of list membership). When the caller's token is valid but the GitHub App
+installation does not cover the repo — e.g. the App is installed on "Only select
+repositories" and this private repo was not selected — the endpoint returns a
+structured `403`:
+
+```json
+{"error":"app_access_required","message":"The feedback app does not have access to owner/repo. Grant access in GitHub, then try again.","repo":"owner/repo","authorize_url":"https://github.com/settings/installations/1"}
+```
+
+To resolve it, grant the feedback GitHub App access to the repo:
+
+1. Open **GitHub → Settings → GitHub Apps** (or the organization's **Installed GitHub Apps**), find the feedback app, and click **Configure**.
+2. Under **Repository access**, select the repo (or choose **All repositories**).
+3. Confirm the app's **Issues** repository permission is **Read & write**.
+4. Retry the export.
+
+If no `authorize_url` is returned, set `GH_APP_SLUG` (the app's URL slug) so the
+server can build the install URL for the client to surface.
 
 ---
 

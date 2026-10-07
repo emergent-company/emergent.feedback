@@ -3,6 +3,19 @@
 import type { OverlayConfig } from "./config";
 import type { VerificationContract } from "./envelope";
 
+export class APIError extends Error {
+  status: number;
+  code?: string;
+  body?: unknown;
+  constructor(status: number, message: string, code?: string, body?: unknown) {
+    super(message);
+    this.name = "APIError";
+    this.status = status;
+    this.code = code;
+    this.body = body;
+  }
+}
+
 export type VerifyResult = "green" | "amber" | "red";
 
 export interface VerifyPendingItem {
@@ -131,7 +144,19 @@ export class APIClient {
         this.onUnauthorized();
       }
       const text = await resp.text().catch(() => resp.statusText);
-      throw new Error(`${resp.status}: ${text}`);
+      let body: unknown;
+      try {
+        body = JSON.parse(text);
+      } catch {
+        body = undefined;
+      }
+      if (body && typeof body === "object") {
+        const b = body as Record<string, unknown>;
+        const message = String(b.message ?? b.error ?? text);
+        const code = typeof b.error === "string" ? b.error : undefined;
+        throw new APIError(resp.status, `${resp.status}: ${message}`, code, body);
+      }
+      throw new APIError(resp.status, `${resp.status}: ${text}`);
     }
     if (resp.status === 204 || resp.status === 205) {
       return undefined as T;

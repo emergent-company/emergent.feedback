@@ -66,6 +66,144 @@ func TestListUserReposAuthError(t *testing.T) {
 	}
 }
 
+func TestListUserReposPagination(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Query().Get("page") == "2" {
+			_, _ = io.WriteString(w, `[{"full_name":"b/repo2","name":"repo2"}]`)
+			return
+		}
+		w.Header().Set("Link",
+			`<http://`+r.Host+`/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator,organization_member&page=2>; rel="next"`)
+		_, _ = io.WriteString(w, `[{"full_name":"a/repo1","name":"repo1"}]`)
+	}))
+	defer srv.Close()
+
+	prev := apiBase
+	SetBaseURLForTesting(srv.URL)
+	defer SetBaseURLForTesting(prev)
+
+	repos, err := ListUserRepos(context.Background(), "tok")
+	if err != nil {
+		t.Fatalf("ListUserRepos: %v", err)
+	}
+	if len(repos) != 2 {
+		t.Fatalf("got %d repos, want 2", len(repos))
+	}
+	if repos[0].FullName != "a/repo1" || repos[1].FullName != "b/repo2" {
+		t.Fatalf("unexpected repos %+v", repos)
+	}
+}
+
+func TestRepoAccessible(t *testing.T) {
+	cases := []struct {
+		name    string
+		status  int
+		want    bool
+		wantAPI bool
+		wantErr bool
+	}{
+		{"200", http.StatusOK, true, false, false},
+		{"404", http.StatusNotFound, false, false, false},
+		{"401", http.StatusUnauthorized, false, true, false},
+		{"403", http.StatusForbidden, false, true, false},
+		{"500", http.StatusInternalServerError, false, false, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/repos/org/repo" {
+					t.Errorf("unexpected path %q", r.URL.Path)
+				}
+				w.WriteHeader(tc.status)
+			}))
+			defer srv.Close()
+
+			prev := apiBase
+			SetBaseURLForTesting(srv.URL)
+			defer SetBaseURLForTesting(prev)
+
+			ok, err := RepoAccessible(context.Background(), "tok", "org/repo")
+			if ok != tc.want {
+				t.Fatalf("ok = %v, want %v", ok, tc.want)
+			}
+			switch {
+			case tc.wantAPI:
+				var apiErr *APIError
+				if !errors.As(err, &apiErr) {
+					t.Fatalf("err = %v, want *APIError", err)
+				}
+				if apiErr.Status != tc.status {
+					t.Fatalf("status = %d, want %d", apiErr.Status, tc.status)
+				}
+			case tc.wantErr:
+				if err == nil {
+					t.Fatal("expected error")
+				}
+			default:
+				if err != nil {
+					t.Fatalf("err = %v, want nil", err)
+				}
+			}
+		})
+	}
+}
+
+func TestRepoAccessibleInvalidRepo(t *testing.T) {
+	if _, err := RepoAccessible(context.Background(), "tok", "invalid"); err == nil {
+		t.Fatal("expected error for invalid repo")
+	}
+}
+
+func TestListUserInstallations(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/user/installations" {
+			t.Errorf("unexpected path %q", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"installations":[{"id":1,"app_slug":"my-app","repository_selection":"selected","html_url":"https://github.com/settings/installations/1","account":{"login":"acme","type":"Organization"}}]}`)
+	}))
+	defer srv.Close()
+
+	prev := apiBase
+	SetBaseURLForTesting(srv.URL)
+	defer SetBaseURLForTesting(prev)
+
+	installs, err := ListUserInstallations(context.Background(), "tok")
+	if err != nil {
+		t.Fatalf("ListUserInstallations: %v", err)
+	}
+	if len(installs) != 1 {
+		t.Fatalf("got %d installations, want 1", len(installs))
+	}
+	if installs[0].AppSlug != "my-app" || installs[0].Account.Login != "acme" || installs[0].HTMLURL != "https://github.com/settings/installations/1" {
+		t.Fatalf("unexpected installation %+v", installs[0])
+	}
+}
+
+func TestInstallationRepositories(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/user/installations/7/repositories" {
+			t.Errorf("unexpected path %q", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"repositories":[{"full_name":"acme/repo","name":"repo","private":true}]}`)
+	}))
+	defer srv.Close()
+
+	prev := apiBase
+	SetBaseURLForTesting(srv.URL)
+	defer SetBaseURLForTesting(prev)
+
+	repos, err := InstallationRepositories(context.Background(), "tok", 7)
+	if err != nil {
+		t.Fatalf("InstallationRepositories: %v", err)
+	}
+	if len(repos) != 1 || repos[0].FullName != "acme/repo" {
+		t.Fatalf("unexpected repos %+v", repos)
+	}
+}
+
 func TestAuthCodeURL(t *testing.T) {
 	cfg := &AppConfig{
 		ClientID:    "client-123",
