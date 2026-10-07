@@ -79,6 +79,9 @@ func TestAPIEndToEnd(t *testing.T) {
 		case r.Method == http.MethodGet && r.URL.Path == "/user/repos":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`[{"full_name":"owner/repo","name":"repo","private":false}]`))
+		case r.Method == http.MethodGet && r.URL.Path == "/repos/owner/repo":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"full_name":"owner/repo","name":"repo","private":false}`))
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}

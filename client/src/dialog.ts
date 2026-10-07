@@ -1,5 +1,6 @@
 // dialog.ts — element feedback dialog (existing comments + compose) and login dialog.
 
+import { APIError } from "./api";
 import type { FeedbackComment } from "./api";
 import type {
   FeedbackIntent,
@@ -1675,9 +1676,22 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
       // Close immediately — export happens in background.
       removeKey();
       closeDialog();
-      opts.onExport(ids, type, topic).catch((err: unknown) => {
+      const runExport = () => opts.onExport(ids, type, topic);
+      const handleExportError = (err: unknown) => {
+        if (err instanceof APIError && err.code === "app_access_required") {
+          const b = (err.body ?? {}) as { repo?: string; authorize_url?: string };
+          showGrantAccessDialog({
+            repo: b.repo ?? "this repository",
+            authorizeUrl: b.authorize_url ?? "",
+            // Return the promise so the modal awaits the retry: it closes on
+            // success and stays open (button re-enabled) if access is still missing.
+            onRetry: () => runExport(),
+          });
+          return;
+        }
         showToast(`Failed to create issue: ${String(err)}`);
-      });
+      };
+      runExport().catch(handleExportError);
     } catch (err) {
       errDiv.textContent = String(err);
       exportBtn.disabled = false;
@@ -1772,6 +1786,96 @@ export function closeDialog(): void {
   if (ret && document.contains(ret) && typeof ret.focus === "function") {
     try { ret.focus(); } catch { /* element may have been removed */ }
   }
+}
+
+export interface GrantAccessOptions {
+  repo: string;
+  authorizeUrl: string;
+  onRetry?: () => void;
+}
+
+/**
+ * Prompts the user to grant the feedback GitHub App access to the repo.
+ * Shown when `POST /issue/export` returns 403 app_access_required.
+ */
+export function showGrantAccessDialog(opts: GrantAccessOptions): void {
+  injectStyles();
+  const dialog = getOrCreateDialog();
+
+  dialog.innerHTML = `
+    <div class="ef-login-card" role="dialog" aria-modal="true" aria-labelledby="__ef_grant_title__" tabindex="-1">
+      <h2 id="__ef_grant_title__">App access required</h2>
+      <p>The feedback app does not have access to <code>${escapeHtml(opts.repo)}</code>.</p>
+      <div class="ef-login-actions">
+        <button class="ef-btn-secondary" id="__ef_cancel__">Cancel</button>
+        <button class="ef-btn-primary" id="__ef_grant__">Grant access</button>
+        <button class="ef-btn-primary" id="__ef_retry__">Retry</button>
+      </div>
+    </div>
+  `;
+
+  const card = dialog.querySelector<HTMLElement>(".ef-login-card")!;
+  activateDialog(card);
+
+  const grantBtn = dialog.querySelector<HTMLButtonElement>("#__ef_grant__")!;
+  const retryBtn = dialog.querySelector<HTMLButtonElement>("#__ef_retry__")!;
+  const cancelBtn = dialog.querySelector<HTMLButtonElement>("#__ef_cancel__")!;
+
+  // With no authorize URL there is nothing to grant — show Retry directly.
+  const showGrant = !!opts.authorizeUrl;
+  grantBtn.style.display = showGrant ? "" : "none";
+  retryBtn.style.display = showGrant ? "none" : "";
+
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === "Escape") {
+      removeKey();
+      closeDialog();
+    }
+  };
+  const removeKey = () => {
+    document.removeEventListener("keydown", onKey);
+    if (dialogKeyHandler === onKey) dialogKeyHandler = null;
+  };
+  document.addEventListener("keydown", onKey);
+  dialogKeyHandler = onKey;
+
+  grantBtn.addEventListener("click", () => {
+    if (opts.authorizeUrl) window.open(opts.authorizeUrl, "_blank", "noopener");
+    grantBtn.style.display = "none";
+    retryBtn.style.display = "";
+    retryBtn.focus();
+  });
+
+  retryBtn.addEventListener("click", async () => {
+    if (!opts.onRetry) return;
+    retryBtn.disabled = true;
+    retryBtn.textContent = "Retrying…";
+    try {
+      await opts.onRetry();
+      removeKey();
+      closeDialog();
+    } catch (err) {
+      retryBtn.disabled = false;
+      retryBtn.textContent = "Retry";
+      // Still missing access → keep the modal open silently; any other
+      // failure gets the usual toast.
+      if (!(err instanceof APIError && err.code === "app_access_required")) {
+        showToast(`Failed to create issue: ${String(err)}`);
+      }
+    }
+  });
+
+  cancelBtn.addEventListener("click", () => {
+    removeKey();
+    closeDialog();
+  });
+
+  dialog.addEventListener("click", (e) => {
+    if (e.target === dialog) {
+      removeKey();
+      closeDialog();
+    }
+  });
 }
 
 const TOAST_ID = "__ef_toast__";

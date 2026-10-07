@@ -42,13 +42,13 @@ func (h *Handler) HandleUploadSourcemaps(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "maps is required")
 	}
 
-	// Fail closed: if the caller's repo scope cannot be determined, reject the
-	// upload rather than allowing an arbitrary repo.
-	names, err := h.userRepos(c)
+	// Fail closed: probe the caller's token against req.Repo directly. A missing
+	// or expired token is 401, an out-of-scope repo is 403, upstream failures 502.
+	allowed, err := h.callerCanAccessRepo(c, req.Repo)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusForbidden, "repo not in scope")
+		return h.repoAccessError(err)
 	}
-	if !repoInScope(req.Repo, names) {
+	if !allowed {
 		return echo.NewHTTPError(http.StatusForbidden, "repo not in scope")
 	}
 

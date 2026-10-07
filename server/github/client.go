@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -48,6 +49,7 @@ type AppConfig struct {
 	InstallationID string // numeric installation ID on the target org/account
 	BotToken       string // optional PAT used to create issues when no GitHub App is configured
 	AuthorMode     string // "bot" (default) or "user"
+	AppSlug        string // GitHub App URL slug (used to build the grant-access install URL)
 
 	keyOnce sync.Once
 	keyVal  *rsa.PrivateKey
@@ -267,26 +269,187 @@ type Repo struct {
 	Private  bool   `json:"private"`
 }
 
-// ListUserRepos lists the repositories the access token's user can access.
+// maxGitHubPages bounds pagination to avoid an unbounded follow of the Link
+// header (a misbehaving upstream or truncated scope cannot loop forever).
+const maxGitHubPages = 50
+
+// nextLink returns the URL of the Link header's rel="next" entry, or "".
+func nextLink(resp *http.Response) string {
+	link := resp.Header.Get("Link")
+	if link == "" {
+		return ""
+	}
+	for _, seg := range splitLinkHeader(link) {
+		seg = strings.TrimSpace(seg)
+		if !strings.Contains(seg, `rel="next"`) && !strings.Contains(seg, `rel=next`) {
+			continue
+		}
+		start := strings.IndexByte(seg, '<')
+		end := strings.IndexByte(seg, '>')
+		if start < 0 || end < 0 || end <= start {
+			return ""
+		}
+		return seg[start+1 : end]
+	}
+	return ""
+}
+
+// splitLinkHeader splits a Link header on commas, ignoring commas that appear
+// inside angle-bracket URLs (e.g. an affiliation query param).
+func splitLinkHeader(s string) []string {
+	var parts []string
+	depth := 0
+	start := 0
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '<':
+			depth++
+		case '>':
+			if depth > 0 {
+				depth--
+			}
+		case ',':
+			if depth == 0 {
+				parts = append(parts, s[start:i])
+				start = i + 1
+			}
+		}
+	}
+	parts = append(parts, s[start:])
+	return parts
+}
+
+// listPages performs a paginated GET with the token, following Link rel="next"
+// headers (capped at maxGitHubPages) and invoking decode on each page's body.
+func listPages(ctx context.Context, url, accessToken, op string, decode func(body []byte) error) error {
+	for page := 0; url != "" && page < maxGitHubPages; page++ {
+		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		req.Header.Set("Authorization", "Bearer "+accessToken)
+		req.Header.Set("Accept", "application/vnd.github+json")
+
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("github: %s: %w", op, err)
+		}
+		body, readErr := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if readErr != nil {
+			return fmt.Errorf("github: %s: read: %w", op, readErr)
+		}
+		if resp.StatusCode != http.StatusOK {
+			return &APIError{Op: op, Status: resp.StatusCode}
+		}
+		if err := decode(body); err != nil {
+			return fmt.Errorf("github: %s: decode: %w", op, err)
+		}
+		url = nextLink(resp)
+	}
+	return nil
+}
+
+// ListUserRepos lists all repositories the access token's user can access,
+// following pagination across every page.
 func ListUserRepos(ctx context.Context, accessToken string) ([]Repo, error) {
 	url := apiBase + "/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator,organization_member"
+	var repos []Repo
+	err := listPages(ctx, url, accessToken, "list user repos", func(body []byte) error {
+		var page []Repo
+		if err := json.Unmarshal(body, &page); err != nil {
+			return err
+		}
+		repos = append(repos, page...)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return repos, nil
+}
+
+// RepoAccessible reports whether accessToken can access repo ("owner/name").
+// 200 => (true,nil); 404 => (false,nil); 401/403 => (false,&APIError); other => (false,err).
+func RepoAccessible(ctx context.Context, accessToken, repo string) (bool, error) {
+	parts := strings.SplitN(repo, "/", 2)
+	if len(parts) != 2 {
+		return false, fmt.Errorf("github: invalid repo %q (want owner/repo)", repo)
+	}
+	url := fmt.Sprintf("%s/repos/%s/%s", apiBase, parts[0], parts[1])
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 	req.Header.Set("Accept", "application/vnd.github+json")
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("github: list user repos: %w", err)
+		return false, fmt.Errorf("github: get repo: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		return nil, &APIError{Op: "list user repos", Status: resp.StatusCode}
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return true, nil
+	case http.StatusNotFound:
+		return false, nil
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return false, &APIError{Op: "get repo", Status: resp.StatusCode}
+	default:
+		return false, fmt.Errorf("github: get repo: status %d", resp.StatusCode)
 	}
-	var repos []Repo
-	if err := json.NewDecoder(resp.Body).Decode(&repos); err != nil {
-		return nil, fmt.Errorf("github: decode repos: %w", err)
+}
+
+// Account is a GitHub account (user or organization).
+type Account struct {
+	Login string `json:"login"`
+	Type  string `json:"type"`
+}
+
+// Installation is a GitHub App installation accessible to a user token.
+type Installation struct {
+	ID                  int64   `json:"id"`
+	AppSlug             string  `json:"app_slug"`
+	RepositorySelection string  `json:"repository_selection"`
+	HTMLURL             string  `json:"html_url"`
+	Account             Account `json:"account"`
+}
+
+// ListUserInstallations lists GitHub App installations accessible to a GitHub
+// App user token.
+func ListUserInstallations(ctx context.Context, accessToken string) ([]Installation, error) {
+	url := apiBase + "/user/installations?per_page=100"
+	var out []Installation
+	err := listPages(ctx, url, accessToken, "list user installations", func(body []byte) error {
+		var env struct {
+			Installations []Installation `json:"installations"`
+		}
+		if err := json.Unmarshal(body, &env); err != nil {
+			return err
+		}
+		out = append(out, env.Installations...)
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
-	return repos, nil
+	return out, nil
+}
+
+// InstallationRepositories lists repositories accessible to the user token for
+// an installation (paginated).
+func InstallationRepositories(ctx context.Context, accessToken string, installationID int64) ([]Repo, error) {
+	url := fmt.Sprintf("%s/user/installations/%d/repositories?per_page=100", apiBase, installationID)
+	var out []Repo
+	err := listPages(ctx, url, accessToken, "list installation repositories", func(body []byte) error {
+		var env struct {
+			Repositories []Repo `json:"repositories"`
+		}
+		if err := json.Unmarshal(body, &env); err != nil {
+			return err
+		}
+		out = append(out, env.Repositories...)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // CreateIssueParams holds the data for creating a GitHub issue.
