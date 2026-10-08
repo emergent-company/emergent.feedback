@@ -16,6 +16,9 @@ e2e/.tmp/
 e2e/test-results/
 e2e/playwright-report/
 
+# Playwright MCP local artifacts (console logs, snapshots, screenshots)
+.playwright-mcp/
+
 # Data
 data/
 *.db
