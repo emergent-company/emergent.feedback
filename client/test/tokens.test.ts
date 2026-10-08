@@ -200,6 +200,10 @@ test("buildFallbackTokens: extended groups, sections, and renders", () => {
   assert.equal(byId("textColor").render, "dropdown");
   assert.equal(byId("backgroundColor").render, "dropdown");
 
+  for (const id of ["padding", "margin", "gap", "maxWidth", "width", "height"]) {
+    assert.equal(byId(id).render, "dropdown", `${id} renders as dropdown`);
+  }
+
   assert.equal(byId("textSize").removePattern, undefined);
   assert.equal(byId("fontWeight").removePattern, undefined);
   assert.equal(byId("textColor").removePattern, undefined);

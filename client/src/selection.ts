@@ -141,19 +141,23 @@ export function clear(): void {
 
 // ── Applied changes ───────────────────────────────────────────────────────────
 
-/** Apply a token to every selected target; records (and dedupes) the change. */
-export function applyTokenToTargets(group: TokenGroup, token: Token): void {
-  for (const t of targets) {
-    const { before, after } = applyToken(t.el, group, token);
-    // Keep the ORIGINAL before across repeated edits of the same group so the
-    // recorded change reads as first-state → latest-state for the feedback.
-    const existing = applied.find((r) => r.el === t.el && r.group.id === group.id);
-    const effectiveBefore = existing ? existing.before : before;
-    applied = applied.filter((r) => !(r.el === t.el && r.group.id === group.id));
-    applied.push({ el: t.el, group, token, before: effectiveBefore, after, selector: t.selector });
-  }
+/** Apply a token to a single element; records (and dedupes) the change. */
+export function applyTokenToTarget(el: Element, group: TokenGroup, token: Token): void {
+  const { before, after } = applyToken(el, group, token);
+  // Keep the ORIGINAL before across repeated edits of the same group so the
+  // recorded change reads as first-state → latest-state for the feedback.
+  const existing = applied.find((r) => r.el === el && r.group.id === group.id);
+  const effectiveBefore = existing ? existing.before : before;
+  const selector = targets.find((t) => t.el === el)?.selector ?? "";
+  applied = applied.filter((r) => !(r.el === el && r.group.id === group.id));
+  applied.push({ el, group, token, before: effectiveBefore, after, selector });
   renderOutlines();
   emit();
+}
+
+/** Apply a token to every selected target; records (and dedupes) the change. */
+export function applyTokenToTargets(group: TokenGroup, token: Token): void {
+  for (const t of targets) applyTokenToTarget(t.el, group, token);
 }
 
 /** Applied edits as feedback records (selector, group, before→after). */
@@ -168,6 +172,37 @@ export function getChanges(): StyleChange[] {
 
 export function getChangeCount(): number {
   return applied.length;
+}
+
+/** Applied edits for a single element, as feedback records. */
+export function getChangesFor(el: Element): StyleChange[] {
+  return applied
+    .filter((r) => r.el === el)
+    .map((r) => ({
+      target: r.selector,
+      group: r.group.id,
+      before: r.before,
+      after: r.after,
+    }));
+}
+
+/** Number of applied records tracked for a single element. */
+export function getChangeCountFor(el: Element): number {
+  return applied.filter((r) => r.el === el).length;
+}
+
+/** Revert only the applied changes belonging to `el`, keeping other targets. */
+export function revertChangesFor(el: Element): void {
+  for (const r of applied.filter((rec) => rec.el === el)) {
+    try {
+      revertToken(r.el, r.group, { before: r.before, after: r.after });
+    } catch {
+      // Element may have left the DOM — nothing to restore.
+    }
+  }
+  applied = applied.filter((r) => r.el !== el);
+  renderOutlines();
+  emit();
 }
 
 /** Revert every applied token change on the host page. Selection is kept. */

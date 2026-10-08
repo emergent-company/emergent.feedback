@@ -304,13 +304,23 @@ No storage change: metadata rides in `context_json` under `context.app`.
 
 The overlay can dock to the side of the page (non-modal, page undimmed and
 interactive) and let the reporter restyle one or more selected elements by
-choosing tokens from a project-provided theme. Tokens cover the common Tailwind
-and daisyUI utilities — spacing (padding/margin/gap), layout (max-width,
-width/height, display, flex), typography (text size, font weight), colors,
-borders/effects and daisyUI button/badge modifiers — organised into collapsible
-sections. Color groups render as swatch dropdowns; other groups render as chips.
-Every group also accepts a free-typed custom class. Applied class/style edits are
-recorded and rendered in the issue and panel.
+choosing tokens from a project-provided theme. The panel is split into two tabs —
+**Design** and **Issues** — so the property editor and the report form don't
+compete for space. Tokens cover the common Tailwind and daisyUI utilities —
+spacing (padding/margin/gap), layout (max-width, width/height, display, flex),
+typography (text size, font weight), colors, borders/effects and daisyUI
+button/badge modifiers — organised into collapsible sections. Each group renders
+as a horizontal property row (label left, control right). Color groups and the
+sizing groups (padding, margin, gap, max-width, width, height) render as
+dropdowns; other groups render as chips. Every dropdown ends with a **Custom
+class…** item (chip groups expose a **+ Custom** toggle) that reveals an inline
+field for a free-typed class. Applied class/style edits are recorded per element
+and rendered in the issue and panel.
+
+When more than one element is selected they are presented as **per-element tabs**
+in the Design tab; the editor configures only the active element, so edits are
+bounded to that component instead of applying globally. A scope hint notes when
+a selection spans multiple targets.
 
 Docked mode reserves the rail width (document-root `margin-right`), so the host
 page reflows alongside the panel instead of being overlaid; selection outlines
@@ -323,10 +333,12 @@ click-to-pick and restores it when the pick completes (Escape cancels the pick).
 - `context.targets: SelectionTarget[]` — every selected element
   (`{ selector, tagName, dataComponent? }`). The primary target's full capture
   (`context.computedStyles`, `outerHTML`, fingerprint, …) is unchanged.
-- `context.intent.changes: StyleChange[]` — applied edits, where
-  `StyleChange = { target: string; group: string; before: string; after: string }`
-  (`before`/`after` are token class names or style values; `before` may be empty).
-  Scope breadth becomes `multi` when more than one target is selected.
+- `context.intent.changes: StyleChange[]` — applied edits across all targets,
+  where `StyleChange = { target: string; group: string; before: string; after:
+  string }` (`before`/`after` are token class names or style values; `before` may
+  be empty). Even though editing is per element, the payload aggregates every
+  target's changes and each record carries its `target` selector. Scope breadth
+  becomes `multi` when more than one target is selected.
 - Provenance: `intent.changes` is `stated` when non-empty, else `absent`.
 
 No storage schema change — everything rides inside `context_json`.
@@ -335,7 +347,9 @@ No storage schema change — everything rides inside `context_json`.
 
 | Surface | Change |
 |---|---|
-| `client/src/dialog.ts` | docked rail + dock toggle, targets list, token palette, changes summary |
+| `client/src/dialog.ts` | Design/Issues tabs, docked rail + dock toggle, per-element target tabs, token palette, per-target changes summary |
+| `client/src/styleEditor.ts` | single-target Figma-like property rows, dropdown/chip controls, custom-class affordance |
+| `client/src/selection.ts` | per-target apply/change/revert API (`applyTokenToTarget`, `getChangesFor`, `getChangeCountFor`, `revertChangesFor`) |
 | `client/src/index.ts` | `editing` mode; picking stays live; commit on save, revert on cancel |
 | `server/handler/issue.go` | `## Requested changes` (`buildSingleItem`) / `### Requested changes` (`buildMultiItem`); `whatToDo` clause |
 | `server/handler/envelope.go` | `buildIntent` surfaces `changes`; `buildTarget` surfaces `targets` |
@@ -348,7 +362,9 @@ validates and normalizes it and falls back to daisyUI `--color-*` variables read
 from the live page plus a built-in spacing scale when absent. See the README
 "Project theme tokens" section for the full manifest schema. Each token applies
 as a class (default) or an inline style; class names, style properties and style
-values are validated and all token text is escaped before rendering.
+values are validated and all token text is escaped before rendering. A group may
+set `render: "dropdown"` (color and sizing groups do in the fallback set) to
+render as a dropdown rather than chips.
 
 ## Remaining
 

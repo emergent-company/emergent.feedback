@@ -1,15 +1,16 @@
-// styleEditor.ts — live CSS-class editing panel.
+// styleEditor.ts — live CSS-class editing panel for a single active target.
 //
-// Renders one row per token group for the current selection, shows the applied
-// token (or "Mixed" when targets differ), and applies a chosen token to every
-// selected target. Also lists each target's current class list (read-only) and
-// offers a "Revert all" action.
+// The editor configures ONE element at a time (the active per-element tab in the
+// dialog). Each token group renders as a Figma-like horizontal property row:
+// group label on the left, control on the right (chips or a swatch dropdown).
+//
+// Dropdown menus end with a "Custom class…" item that reveals an inline text
+// input. A typed class is validated + cached module-side (so it survives the
+// re-mounts the dialog performs on every selection change) and applied through
+// the onApply callback. Chip groups expose the same affordance via a "+ Custom"
+// toggle.
 //
 // Groups are grouped into collapsible sections (group.section, default "Style").
-// A group renders as a chip row by default, or as a swatch dropdown when
-// `group.render === "dropdown"`. Each group also accepts a free-typed custom
-// class; custom tokens are cached module-side so they survive the re-mounts the
-// dialog performs on every selection change.
 
 import {
   makeCustomToken,
@@ -22,7 +23,6 @@ import type { TargetEntry } from "./selection";
 
 export interface StyleEditorCallbacks {
   onApply: (group: TokenGroup, token: Token) => void;
-  onRevertAll: () => void;
 }
 
 /**
@@ -85,31 +85,14 @@ function groupBySection(groups: TokenGroup[]): SectionBucket[] {
   return order.map((section) => ({ section, groups: map.get(section)! }));
 }
 
-/** A token chip reads "on" only when every target currently matches it. */
-function tokenActive(token: Token, group: TokenGroup, targets: TargetEntry[]): boolean {
-  return targets.every((t) => matchToken(t.el, group)?.id === token.id);
+/** A token chip reads "on" only when the active element currently matches it. */
+function tokenActive(token: Token, group: TokenGroup, el: Element): boolean {
+  return matchToken(el, group)?.id === token.id;
 }
 
-/** The single token every target matches, or null when none / mixed. */
-function currentToken(group: TokenGroup, targets: TargetEntry[]): Token | null {
-  const ids = targets.map((t) => matchToken(t.el, group)?.id ?? "");
-  const uniq = new Set(ids);
-  if (uniq.size !== 1) return null;
-  const id = ids[0];
-  if (!id) return null;
-  return group.tokens.find((t) => t.id === id) ?? null;
-}
-
-/** Current group value: a token label, "Default" (none), or "Mixed". */
-function currentLabel(group: TokenGroup, targets: TargetEntry[]): string {
-  const ids = targets.map((t) => matchToken(t.el, group)?.id ?? "");
-  const uniq = Array.from(new Set(ids));
-  if (uniq.length === 1) {
-    const id = uniq[0];
-    if (!id) return "Default";
-    return group.tokens.find((t) => t.id === id)?.label ?? id;
-  }
-  return "Mixed";
+/** Current group value label for the active element ("Default" when unset). */
+function currentLabel(group: TokenGroup, el: Element): string {
+  return matchToken(el, group)?.label ?? "Default";
 }
 
 function swatchHTML(token: Token): string {
@@ -118,98 +101,103 @@ function swatchHTML(token: Token): string {
     : "";
 }
 
-function renderChips(group: TokenGroup, targets: TargetEntry[]): string {
+function customInputHTML(group: TokenGroup): string {
+  return `<input type="text" class="ef-custom-input" data-group="${escapeHtml(group.id)}" placeholder="custom class…" spellcheck="false" aria-label="Custom class for ${escapeHtml(group.label)}">`;
+}
+
+function renderChips(group: TokenGroup, el: Element): string {
   const chips = group.tokens
     .map((t) => {
-      const on = tokenActive(t, group, targets);
+      const on = tokenActive(t, group, el);
       return `<button type="button" class="ef-token-chip${on ? " ef-token-on" : ""}" data-group="${escapeHtml(group.id)}" data-token="${escapeHtml(t.id)}" aria-pressed="${on}" title="${escapeHtml(t.label)}">${swatchHTML(t)}${escapeHtml(t.label)}</button>`;
     })
     .join("");
-  return `<div class="ef-token-row">${chips}</div>`;
+  return `
+      <div class="ef-token-row">
+        ${chips}
+        <button type="button" class="ef-custom-toggle" data-group="${escapeHtml(group.id)}" aria-expanded="false" title="Custom class">+ Custom</button>
+      </div>
+      <div class="ef-custom-field" hidden>${customInputHTML(group)}</div>`;
 }
 
-function renderDropdown(group: TokenGroup, targets: TargetEntry[], current: string): string {
-  const cur = currentToken(group, targets);
+function renderDropdown(group: TokenGroup, el: Element): string {
+  const cur = matchToken(el, group);
   const headerSwatch = cur ? swatchHTML(cur) : "";
   const options = group.tokens
     .map((t) => {
-      const on = tokenActive(t, group, targets);
+      const on = tokenActive(t, group, el);
       return `<li role="option" class="ef-select-option${on ? " ef-token-on" : ""}" data-group="${escapeHtml(group.id)}" data-token="${escapeHtml(t.id)}" aria-selected="${on}">${swatchHTML(t)}${escapeHtml(t.label)}</li>`;
     })
     .join("");
   return `
       <div class="ef-select" data-group="${escapeHtml(group.id)}">
         <button type="button" class="ef-select-trigger" aria-haspopup="listbox" aria-expanded="false">
-          ${headerSwatch}<span class="ef-select-label">${escapeHtml(current)}</span>
+          ${headerSwatch}<span class="ef-select-label">${escapeHtml(currentLabel(group, el))}</span>
           <span class="ef-select-caret" aria-hidden="true">▾</span>
         </button>
-        <ul class="ef-select-menu" role="listbox" hidden>${options}</ul>
+        <ul class="ef-select-menu" role="listbox" hidden>
+          ${options}
+          <li class="ef-select-sep" role="presentation"></li>
+          <li role="option" class="ef-select-custom" data-group="${escapeHtml(group.id)}" aria-selected="false" tabindex="-1">Custom class…</li>
+          <li class="ef-select-custom-edit" role="presentation" hidden>${customInputHTML(group)}</li>
+        </ul>
       </div>`;
 }
 
-function renderGroup(group: TokenGroup, targets: TargetEntry[]): string {
-  const current = currentLabel(group, targets);
-  const body =
+/** One Figma-like horizontal property row: label left, control right. */
+function renderGroup(group: TokenGroup, el: Element): string {
+  const control =
     group.render === "dropdown"
-      ? renderDropdown(group, targets, current)
-      : renderChips(group, targets);
-
+      ? renderDropdown(group, el)
+      : renderChips(group, el);
   return `
-    <div class="ef-style-group">
-      <div class="ef-style-group-head">
-        <span class="ef-style-group-label">${escapeHtml(group.label)}</span>
-        <span class="ef-style-current${current === "Mixed" ? " ef-style-current-mixed" : ""}">${escapeHtml(current)}</span>
-      </div>
-      ${body}
-      <input type="text" class="ef-custom-input" data-group="${escapeHtml(group.id)}" placeholder="custom class…" spellcheck="false" aria-label="Custom class for ${escapeHtml(group.label)}">
+    <div class="ef-prop-row" data-group="${escapeHtml(group.id)}">
+      <span class="ef-prop-label" title="${escapeHtml(group.label)}">${escapeHtml(group.label)}</span>
+      <div class="ef-prop-control">${control}</div>
     </div>`;
 }
 
-function renderSections(groups: TokenGroup[], targets: TargetEntry[]): string {
+function renderSections(groups: TokenGroup[], el: Element): string {
   return groupBySection(groups)
     .map(
       ({ section, groups: sectionGroups }) => `
     <details class="ef-style-section" open>
       <summary>${escapeHtml(section)}</summary>
-      ${sectionGroups.map((g) => renderGroup(g, targets)).join("")}
+      <div class="ef-style-section-body">
+        ${sectionGroups.map((g) => renderGroup(g, el)).join("")}
+      </div>
     </details>`
     )
     .join("");
 }
 
-function renderClasses(targets: TargetEntry[]): string {
-  if (targets.length === 0) return "";
-  const rows = targets
-    .map((t, i) => {
-      const classes = Array.from(t.el.classList ?? []).join(" ");
-      return `<div class="ef-style-class-item"><span class="ef-style-class-idx">${i + 1}</span><code>${classes ? escapeHtml(classes) : "(no classes)"}</code></div>`;
-    })
-    .join("");
+/** "Current classes" for the active element only. */
+function renderClasses(target: TargetEntry): string {
+  const classes = Array.from(target.el.classList ?? []).join(" ");
   return `
     <details class="ef-style-classes">
       <summary>Current classes</summary>
-      <div class="ef-style-class-list">${rows}</div>
+      <div class="ef-style-class-list">
+        <div class="ef-style-class-item"><code>${classes ? escapeHtml(classes) : "(no classes)"}</code></div>
+      </div>
     </details>`;
 }
 
-export function renderStyleEditorHTML(
+function renderEditorHTML(
   tokens: ThemeTokens,
-  targets: TargetEntry[],
+  target: TargetEntry,
   changesCount: number
 ): string {
-  if (targets.length === 0) {
-    return `<div class="ef-style-empty">Select an element to edit padding and colors.</div>`;
-  }
   const groups = augmentGroups(tokens.groups);
-  const sections = renderSections(groups, targets);
-  const revertDisabled = changesCount === 0 ? " disabled" : "";
+  const label = target.dataComponent || target.selector;
   return `
-    <div class="ef-style-editor">
-      ${sections}
-      ${renderClasses(targets)}
-      <div class="ef-style-actions">
-        <button type="button" class="ef-btn-secondary ef-style-revert"${revertDisabled}>Revert all</button>
+    <div class="ef-style-editor" data-changes="${changesCount}">
+      <div class="ef-style-head">
+        <span class="ef-style-target-label">Editing</span>
+        <code class="ef-style-target-sel" title="${escapeHtml(target.selector)}">${escapeHtml(label)}</code>
       </div>
+      ${renderSections(groups, target.el)}
+      ${renderClasses(target)}
     </div>`;
 }
 
@@ -241,8 +229,10 @@ function wireDropdowns(
     const menu = sel.querySelector<HTMLUListElement>(".ef-select-menu");
     if (!trigger || !menu) return;
 
-    const options = (): HTMLElement[] =>
-      Array.from(menu.querySelectorAll<HTMLElement>(".ef-select-option"));
+    const items = (): HTMLElement[] =>
+      Array.from(
+        menu.querySelectorAll<HTMLElement>(".ef-select-option, .ef-select-custom")
+      );
 
     const open = (): void => {
       if (openMenu && openMenu !== menu) close();
@@ -268,7 +258,7 @@ function wireDropdowns(
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
         if (menu.hidden) open();
-        const opts = options();
+        const opts = items();
         if (opts.length) (e.key === "ArrowDown" ? opts[0] : opts[opts.length - 1]).focus();
       } else if (e.key === "Escape" && !menu.hidden) {
         e.preventDefault();
@@ -280,18 +270,27 @@ function wireDropdowns(
       }
     });
 
-    options().forEach((opt) => {
+    items().forEach((opt) => {
       opt.tabIndex = -1;
       opt.addEventListener("click", () => {
+        if (opt.classList.contains("ef-select-custom")) {
+          const edit = menu.querySelector<HTMLElement>(".ef-select-custom-edit");
+          const input = edit?.querySelector<HTMLInputElement>(".ef-custom-input");
+          if (edit && input) {
+            edit.hidden = false;
+            input.focus();
+          }
+          return;
+        }
         const gid = opt.dataset.group ?? "";
         const tid = opt.dataset.token ?? "";
         const group = groups.find((g) => g.id === gid);
         const token = group?.tokens.find((t) => t.id === tid);
-        if (group && token) cb.onApply(group, token);
         close(menu);
+        if (group && token) cb.onApply(group, token);
       });
       opt.addEventListener("keydown", (e) => {
-        const opts = options();
+        const opts = items();
         const i = opts.indexOf(opt);
         if (e.key === "ArrowDown") {
           e.preventDefault();
@@ -322,11 +321,64 @@ function wireDropdowns(
   });
 }
 
-/** Render + wire the style editor into `root`. */
+/** Wire the chip-group "+ Custom" toggles to their inline text fields. */
+function wireCustomToggles(root: HTMLElement): void {
+  root.querySelectorAll<HTMLButtonElement>(".ef-custom-toggle").forEach((btn) => {
+    const field = btn.closest(".ef-prop-control")?.querySelector<HTMLElement>(".ef-custom-field");
+    if (!field) return;
+    btn.addEventListener("click", () => {
+      const show = field.hidden;
+      field.hidden = !show;
+      btn.setAttribute("aria-expanded", show ? "true" : "false");
+      if (show) field.querySelector<HTMLInputElement>(".ef-custom-input")?.focus();
+    });
+  });
+}
+
+/** Free-typed custom class inputs (chip fields + dropdown menu inputs). */
+function wireCustomInputs(
+  root: HTMLElement,
+  tokens: ThemeTokens,
+  cb: StyleEditorCallbacks
+): void {
+  root.querySelectorAll<HTMLInputElement>(".ef-custom-input[data-group]").forEach((input) => {
+    input.addEventListener("input", () => input.removeAttribute("aria-invalid"));
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        // Keep Escape from reaching the dialog's close handler while editing.
+        e.stopPropagation();
+        if (input.closest(".ef-select-menu")) activeDropdownClose?.();
+        else input.blur();
+        return;
+      }
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      e.stopPropagation();
+      const t = makeCustomToken(input.value);
+      if (!t) {
+        input.setAttribute("aria-invalid", "true");
+        return;
+      }
+      input.removeAttribute("aria-invalid");
+      const gid = input.dataset.group ?? "";
+      // Remember the token (replace any prior entry with the same id) so it
+      // survives the re-mount that cb.onApply triggers.
+      const list = customTokens.get(gid) ?? [];
+      customTokens.set(gid, [...list.filter((x) => x.id !== t.id), t]);
+      // Re-augment so the applied record carries this custom token.
+      const liveGroup = augmentGroups(tokens.groups).find((g) => g.id === gid);
+      if (!liveGroup) return;
+      cb.onApply(liveGroup, t);
+      input.value = "";
+    });
+  });
+}
+
+/** Render + wire the style editor into `root` for the active target. */
 export function mountStyleEditor(
   root: HTMLElement,
   tokens: ThemeTokens,
-  targets: TargetEntry[],
+  target: TargetEntry | null,
   changesCount: number,
   cb: StyleEditorCallbacks
 ): void {
@@ -335,8 +387,13 @@ export function mountStyleEditor(
   activeDropdownClose?.();
   activeDropdownClose = null;
 
+  if (!target) {
+    root.innerHTML = `<div class="ef-style-empty">Select an element to edit padding and colors.</div>`;
+    return;
+  }
+
   const groups = augmentGroups(tokens.groups);
-  root.innerHTML = renderStyleEditorHTML(tokens, targets, changesCount);
+  root.innerHTML = renderEditorHTML(tokens, target, changesCount);
 
   // Chip row wiring (dropdowns have their own handlers below).
   root.querySelectorAll<HTMLButtonElement>(".ef-token-chip[data-token]").forEach((btn) => {
@@ -350,35 +407,6 @@ export function mountStyleEditor(
   });
 
   wireDropdowns(root, groups, cb);
-
-  // Free-typed custom class per group. Enter applies + remembers it.
-  root.querySelectorAll<HTMLInputElement>(".ef-custom-input[data-group]").forEach((input) => {
-    input.addEventListener("keydown", (e) => {
-      if (e.key !== "Enter") return;
-      e.preventDefault();
-      const t = makeCustomToken(input.value);
-      if (!t) {
-        input.setAttribute("aria-invalid", "true");
-        return;
-      }
-      input.removeAttribute("aria-invalid");
-      const gid = input.dataset.group ?? "";
-      const group = groups.find((g) => g.id === gid);
-      if (!group) return;
-      // Remember the token (replace any prior entry with the same id) so it
-      // survives the re-mount that cb.onApply triggers.
-      const list = customTokens.get(gid) ?? [];
-      const next = list.filter((x) => x.id !== t.id);
-      next.push(t);
-      customTokens.set(gid, next);
-      // `group` was built before the cache update, so re-augment: the applied
-      // record (and therefore revert) must carry this custom token.
-      const liveGroup = augmentGroups(tokens.groups).find((g) => g.id === gid) ?? group;
-      cb.onApply(liveGroup, t);
-      input.value = "";
-    });
-  });
-
-  const revert = root.querySelector<HTMLButtonElement>(".ef-style-revert");
-  revert?.addEventListener("click", () => cb.onRevertAll());
+  wireCustomToggles(root);
+  wireCustomInputs(root, tokens, cb);
 }
