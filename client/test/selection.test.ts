@@ -11,9 +11,13 @@ import {
   hasTarget,
   clear,
   applyTokenToTargets,
+  applyTokenToTarget,
   getChanges,
   getChangeCount,
+  getChangesFor,
+  getChangeCountFor,
   revertAll,
+  revertChangesFor,
   commit,
   onSelectionChange,
 } from "../src/selection";
@@ -153,6 +157,52 @@ test("applyTokenToTargets: dedupes per target+group, keeping the latest", () => 
   // A different group adds a second record for the same target.
   applyTokenToTargets(textGroup, textGroup.tokens.find((t) => t.id === "primary")!);
   assert.equal(getChangeCount(), 2);
+});
+
+test("applyTokenToTarget: applies only to the given element and records a change", () => {
+  const a = el(["p-0"]);
+  const b = el(["p-0"]);
+  addTarget(a, "#a");
+  addTarget(b, "#b");
+
+  applyTokenToTarget(a, paddingGroup, paddingGroup.tokens.find((t) => t.id === "md")!);
+
+  assert.ok(a.classList.contains("p-4"));
+  assert.ok(!b.classList.contains("p-4"), "second target untouched");
+  assert.equal(getChangeCountFor(a), 1);
+  assert.equal(getChangeCountFor(b), 0);
+  assert.deepEqual(getChangesFor(a)[0], { target: "#a", group: "padding", before: "p-0", after: "p-4" });
+});
+
+test("getChangesFor/getChangeCountFor: isolate one element's records", () => {
+  const a = el(["p-0"]);
+  const b = el(["p-0"]);
+  addTarget(a, "#a");
+  addTarget(b, "#b");
+
+  applyTokenToTargets(paddingGroup, paddingGroup.tokens.find((t) => t.id === "md")!);
+  applyTokenToTargets(textGroup, textGroup.tokens.find((t) => t.id === "primary")!);
+
+  assert.equal(getChangeCountFor(a), 2);
+  assert.equal(getChangeCountFor(b), 2);
+  assert.ok(getChangesFor(a).every((c) => c.target === "#a"));
+  assert.ok(getChangesFor(b).every((c) => c.target === "#b"));
+});
+
+test("revertChangesFor: restores only the given element", () => {
+  const a = el(["p-0"]);
+  const b = el(["p-0"]);
+  addTarget(a, "#a");
+  addTarget(b, "#b");
+
+  applyTokenToTargets(paddingGroup, paddingGroup.tokens.find((t) => t.id === "md")!);
+
+  revertChangesFor(a);
+  assert.ok(!a.classList.contains("p-4"), "a restored");
+  assert.ok(a.classList.contains("p-0"));
+  assert.ok(b.classList.contains("p-4"), "b edit survives");
+  assert.equal(getChangeCountFor(a), 0);
+  assert.equal(getChangeCountFor(b), 1);
 });
 
 test("revertAll: restores the host page and clears records", () => {

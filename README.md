@@ -124,20 +124,29 @@ it straight back; press `Escape` to cancel the pick and stay in the dialog.
 
 ### Live style editing
 
+The panel is split into two tabs: **Design** and **Issues**. Write the report on
+the Issues tab; restyle elements on the Design tab. Both tabs keep their state
+while you switch.
+
 With the panel open, click additional elements to add them to the selection (a
 click on an already-selected element toggles it off, and **Add element** enters a
-pick mode). The panel shows the selected targets and a token palette grouped into
-collapsible sections — **Spacing**, **Layout**, **Typography**, **Color**,
-**Borders & Effects** and **daisyUI** — covering Tailwind/daisyUI utilities such
-as padding, margin, gap, max-width, width/height, display/flex, text size, font
-weight, rounding, borders, shadow and button/badge modifiers.
+pick mode). When more than one element is selected, the Design tab shows them as
+**per-element tabs**: pick a tab to edit that element on its own. Each edit is
+bounded to the active element — nothing is applied globally.
 
-Color groups render as **swatch dropdowns** (each option previews its color) to
-save space; other groups render as chips. Every group also has a small
-**custom class** input — type any Tailwind/daisyUI class (e.g. `max-w-6xl`) and
-press Enter to apply it. Choosing a token applies it live to every selected
-element as a CSS class (or inline style, per token) and the applied edits are
-recorded in the feedback payload.
+Properties are grouped into collapsible sections — **Spacing**, **Layout**,
+**Typography**, **Color**, **Borders & Effects** and **daisyUI** — covering
+Tailwind/daisyUI utilities such as padding, margin, gap, max-width, width/height,
+display/flex, text size, font weight, rounding, borders, shadow and button/badge
+modifiers. Each group renders as a Figma-like row (label left, control right).
+Color groups and the sizing groups (padding, margin, gap, max-width, width,
+height) render as **dropdowns**; the rest render as chips.
+
+Every dropdown ends with a **Custom class…** item (chip groups expose a
+**+ Custom** toggle) — type any Tailwind/daisyUI class (e.g. `max-w-6xl`) and
+press Enter to apply it. Choosing a token applies it live to the active element as
+a CSS class (or inline style, per token); applied edits are recorded per element
+and shown in the Design tab's **Changes** list.
 
 Edits are reverted when the panel is cancelled or the editing session ends; they
 are kept and included in the feedback when you Save or Send to GitHub. The GitHub
@@ -188,8 +197,9 @@ escaped before rendering.
 
 Each group may also set `"section": "Layout"` to place it under a named
 collapsible heading (default `"Style"`), and `"render": "dropdown"` to render it
-as a swatch dropdown instead of chips (best for color groups). Both are optional
-and ignored when invalid.
+as a dropdown instead of chips (best for color and sizing groups). Both are
+optional and ignored when invalid. Dropdowns always offer a **Custom class…**
+entry for a free-typed class, regardless of `render`.
 
 ### Configuring the activation hotkey
 

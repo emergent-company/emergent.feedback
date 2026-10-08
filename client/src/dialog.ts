@@ -12,14 +12,15 @@ import { syncThemeTo } from "./theme";
 import { mountStyleEditor } from "./styleEditor";
 import type { ThemeTokens } from "./tokens";
 import {
-  getChanges as getSelectionChanges,
-  getChangeCount as getSelectionChangeCount,
+  applyTokenToTarget,
+  getChangesFor,
+  getChangeCountFor,
+  revertChangesFor,
   getTargets as getSelectionTargets,
   isPickMode,
   onSelectionChange,
   refreshOutlines,
   removeTarget as removeSelectionTarget,
-  applyTokenToTargets,
   revertAll as revertSelectionChanges,
   setPickMode,
   type TargetEntry,
@@ -175,6 +176,62 @@ function injectStyles(): void {
       word-break: break-all;
     }
 
+    /* ── Top-level tabs (Design / Issues) ──────────────────────────────────── */
+    #__ef_dialog__ .ef-tabs {
+      display: flex;
+      gap: 2px;
+      padding: 0 12px;
+      border-bottom: 1px solid var(--ef-border);
+      flex-shrink: 0;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    #__ef_dialog__ .ef-tabs::-webkit-scrollbar { display: none; }
+    #__ef_dialog__ .ef-tab {
+      appearance: none;
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--ef-muted-strong);
+      font-size: 13px;
+      font-weight: 600;
+      font-family: inherit;
+      padding: 9px 12px 7px;
+      margin-bottom: -1px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: color 0.12s, border-color 0.12s;
+    }
+    #__ef_dialog__ .ef-tab:hover { color: var(--ef-text-strong); }
+    #__ef_dialog__ .ef-tab[aria-selected="true"] {
+      color: var(--ef-primary);
+      border-bottom-color: var(--ef-primary);
+    }
+    #__ef_dialog__ .ef-tab:focus-visible {
+      outline: none;
+      border-radius: 4px 4px 0 0;
+      box-shadow: 0 0 0 3px var(--ef-focus-ring-chip);
+    }
+    #__ef_dialog__ .ef-tabpanels {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    #__ef_dialog__ .ef-tabpanel {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+    }
+    #__ef_dialog__ .ef-tabpanel[hidden] { display: none; }
+    #__ef_dialog__ .ef-design-body {
+      padding: 16px 18px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+    }
+
     /* ── Existing comments ─────────────────────────────────────────────────── */
     #__ef_dialog__ .ef-comments {
       flex-shrink: 0;
@@ -210,13 +267,10 @@ function injectStyles(): void {
 
     /* ── Compose area ──────────────────────────────────────────────────────── */
     #__ef_dialog__ .ef-compose {
-      flex: 1;
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      padding: 12px 18px;
-      min-height: 0;
-      overflow-y: auto;
+      gap: 12px;
+      padding: 16px 18px 20px;
     }
 
     #__ef_dialog__ textarea {
@@ -647,27 +701,42 @@ function injectStyles(): void {
       margin-bottom: 6px;
     }
 
-    /* ── Targets ───────────────────────────────────────────────────────────── */
+    /* ── Targets (per-element tabs) ────────────────────────────────────────── */
     #__ef_dialog__ .ef-targets {
-      padding: 10px 18px;
+      padding: 12px 18px;
       border-bottom: 1px solid var(--ef-border);
       flex-shrink: 0;
     }
-    #__ef_dialog__ .ef-target-list {
+    #__ef_dialog__ .ef-target-tabs {
       display: flex;
       flex-wrap: wrap;
       gap: 6px;
       align-items: center;
     }
-    #__ef_dialog__ .ef-target-item {
+    #__ef_dialog__ .ef-target-tablist {
+      display: contents;
+    }
+    #__ef_dialog__ .ef-target-tab {
       display: inline-flex;
       align-items: center;
       gap: 5px;
-      background: var(--ef-surface-alt);
+      background: var(--ef-surface);
       border: 1px solid var(--ef-border);
-      border-radius: 6px;
-      padding: 3px 4px 3px 6px;
+      border-radius: 8px;
+      padding: 4px 4px 4px 7px;
       max-width: 100%;
+      cursor: pointer;
+      transition: background 0.12s, border-color 0.12s;
+    }
+    #__ef_dialog__ .ef-target-tab:hover { border-color: var(--ef-control-border-hover); }
+    #__ef_dialog__ .ef-target-tab[aria-selected="true"] {
+      background: var(--ef-chip-on-bg);
+      border-color: var(--ef-primary);
+      box-shadow: 0 0 0 2px var(--ef-focus-ring-input);
+    }
+    #__ef_dialog__ .ef-target-tab:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 3px var(--ef-focus-ring-chip);
     }
     #__ef_dialog__ .ef-target-num {
       min-width: 16px;
@@ -682,6 +751,10 @@ function injectStyles(): void {
       flex-shrink: 0;
       padding: 0 3px;
       box-sizing: border-box;
+    }
+    #__ef_dialog__ .ef-target-tab[aria-selected="true"] .ef-target-num {
+      background: var(--ef-primary);
+      color: var(--ef-primary-content);
     }
     #__ef_dialog__ .ef-target-name {
       font-size: 11px;
@@ -732,38 +805,59 @@ function injectStyles(): void {
     #__ef_dialog__ .ef-style-editor {
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 16px;
     }
     #__ef_dialog__ .ef-style-empty {
       font-size: 12px;
       color: var(--ef-muted);
       padding: 2px 0 4px;
     }
-    #__ef_dialog__ .ef-style-group {
-      display: flex;
-      flex-direction: column;
-      gap: 5px;
-    }
-    #__ef_dialog__ .ef-style-group-head {
+    #__ef_dialog__ .ef-style-head {
       display: flex;
       align-items: baseline;
-      justify-content: space-between;
       gap: 8px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--ef-border-subtle);
     }
-    #__ef_dialog__ .ef-style-group-label {
+    #__ef_dialog__ .ef-style-target-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--ef-muted);
+      flex-shrink: 0;
+    }
+    #__ef_dialog__ .ef-style-target-sel {
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 11px;
+      color: var(--ef-text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #__ef_dialog__ .ef-prop-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      min-width: 0;
+    }
+    #__ef_dialog__ .ef-prop-label {
+      flex: 0 0 auto;
+      width: 94px;
+      padding-top: 5px;
       font-size: 11px;
       font-weight: 600;
       color: var(--ef-text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
-    #__ef_dialog__ .ef-style-current {
-      font-size: 11px;
-      color: var(--ef-muted);
-      font-style: italic;
-    }
-    #__ef_dialog__ .ef-style-current-mixed {
-      color: var(--ef-accent);
-      font-style: normal;
-      font-weight: 600;
+    #__ef_dialog__ .ef-prop-control {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
     }
     #__ef_dialog__ .ef-token-row {
       display: flex;
@@ -810,6 +904,30 @@ function injectStyles(): void {
       background-size: 6px 6px;
       background-position: 0 0, 3px 3px;
     }
+    #__ef_dialog__ .ef-custom-toggle {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 9px;
+      border-radius: 20px;
+      border: 1.5px dashed var(--ef-control-border);
+      background: transparent;
+      color: var(--ef-muted-strong);
+      font-size: 12px;
+      font-weight: 500;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.1s, border-color 0.1s, color 0.1s;
+    }
+    #__ef_dialog__ .ef-custom-toggle:hover {
+      border-color: var(--ef-control-border-hover);
+      background: var(--ef-hover-bg);
+      color: var(--ef-text-strong);
+    }
+    #__ef_dialog__ .ef-custom-toggle:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 3px var(--ef-focus-ring-chip);
+    }
+    #__ef_dialog__ .ef-custom-field[hidden] { display: none; }
     #__ef_dialog__ .ef-style-classes summary {
       font-size: 11px;
       color: var(--ef-muted);
@@ -858,14 +976,23 @@ function injectStyles(): void {
     }
     #__ef_dialog__ .ef-style-section {
       border-top: 1px solid var(--ef-border-subtle);
-      padding-top: 8px;
+      padding-top: 14px;
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 12px;
+    }
+    #__ef_dialog__ .ef-style-section + .ef-style-section {
+      margin-top: 14px;
     }
     #__ef_dialog__ .ef-style-section:first-child {
       border-top: none;
       padding-top: 0;
+      margin-top: 0;
+    }
+    #__ef_dialog__ .ef-style-section-body {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
     }
     #__ef_dialog__ .ef-style-section > summary {
       font-size: 11px;
@@ -958,6 +1085,33 @@ function injectStyles(): void {
       color: var(--ef-chip-on-text);
       font-weight: 600;
     }
+    #__ef_dialog__ .ef-select-sep {
+      height: 1px;
+      margin: 4px 2px;
+      background: var(--ef-border-subtle);
+      list-style: none;
+    }
+    #__ef_dialog__ .ef-select-custom {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 8px;
+      border-radius: 5px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--ef-primary);
+      cursor: pointer;
+      outline: none;
+    }
+    #__ef_dialog__ .ef-select-custom:hover,
+    #__ef_dialog__ .ef-select-custom:focus-visible {
+      background: var(--ef-hover-bg);
+    }
+    #__ef_dialog__ .ef-select-custom-edit {
+      padding: 4px 4px 2px;
+      list-style: none;
+    }
+    #__ef_dialog__ .ef-select-custom-edit[hidden] { display: none; }
     #__ef_dialog__ .ef-custom-input {
       width: 100%;
       border: 1px solid var(--ef-control-border);
@@ -1018,6 +1172,12 @@ function injectStyles(): void {
     #__ef_dialog__ .ef-changes-actions {
       display: flex;
       justify-content: flex-end;
+      gap: 8px;
+    }
+    #__ef_dialog__ .ef-changes-empty {
+      font-size: 11px;
+      color: var(--ef-muted);
+      font-style: italic;
     }
 
     /* ── Dark theme ─────────────────────────────────────────────────────────
@@ -1276,8 +1436,16 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   // Live accessors — default to the selection module singletons.
   const currentTargets = (): TargetEntry[] =>
     opts.getTargets ? opts.getTargets() : getSelectionTargets();
-  const currentChanges = (): StyleChange[] =>
-    opts.getChanges ? opts.getChanges() : getSelectionChanges();
+  // All applied changes across every target (for the feedback record), falling
+  // back to per-target lookups when the caller doesn't supply a snapshot.
+  const allChanges = (): StyleChange[] => {
+    if (opts.getChanges) return opts.getChanges();
+    const out: StyleChange[] = [];
+    for (const t of currentTargets()) out.push(...getChangesFor(t.el));
+    return out;
+  };
+  const globalChangeCount = (): number =>
+    currentTargets().reduce((n, t) => n + getChangeCountFor(t.el), 0);
 
   const existing = opts.existingComments;
   const existingIds = existing.map((c) => c.id);
@@ -1390,39 +1558,51 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
       </div>
       ${componentPickerHTML}
       ${targetStripHTML}
-      <div class="ef-targets" id="__ef_targets__"></div>
-      ${commentsHTML}
-      <div class="ef-compose">
-        <div id="__ef_style_editor__"></div>
-        <div class="ef-changes" id="__ef_changes__"></div>
-        <div class="ef-topic-row">
-          <label class="ef-topic-label" for="__ef_topic__">Issue title</label>
-          <input class="ef-topic-input" id="__ef_topic__" type="text" value="${escapeHtml(opts.defaultIssueTopic)}">
-        </div>
-        <div class="ef-type-toggle">
-          <input type="radio" name="__ef_type__" id="__ef_type_bug__" value="bug">
-          <label for="__ef_type_bug__">🐛 Bug</label>
-          <input type="radio" name="__ef_type__" id="__ef_type_enh__" value="enhancement" checked>
-          <label for="__ef_type_enh__">✨ Enhancement</label>
-        </div>
-        <div class="ef-intent">
-          <div class="ef-intent-row">
-            <span class="ef-intent-label">Action</span>
-            <div class="ef-chips" id="__ef_action__"></div>
+      <div class="ef-tabs" role="tablist" aria-label="Feedback panel">
+        <button type="button" class="ef-tab" id="__ef_tab_design__" role="tab" aria-selected="true" aria-controls="__ef_panel_design__">Design</button>
+        <button type="button" class="ef-tab" id="__ef_tab_issues__" role="tab" aria-selected="false" aria-controls="__ef_panel_issues__">Issues</button>
+      </div>
+      <div class="ef-tabpanels">
+        <div class="ef-tabpanel ef-design-panel" id="__ef_panel_design__" role="tabpanel" aria-labelledby="__ef_tab_design__">
+          <div class="ef-targets" id="__ef_targets__"></div>
+          <div class="ef-design-body">
+            <div id="__ef_style_editor__"></div>
+            <div class="ef-changes" id="__ef_changes__"></div>
           </div>
-          ${expectedRowHTML}
-          <div class="ef-intent-row">
-            <span class="ef-intent-label">Scope</span>
-            <div class="ef-chips" id="__ef_scope__">
-              <button type="button" class="ef-chip ef-chip-on" data-breadth="element" aria-pressed="true">This element</button>
-              <button type="button" class="ef-chip" data-breadth="region" aria-pressed="false">Region</button>
-              <button type="button" class="ef-chip" data-breadth="multi" aria-pressed="false">Multiple</button>
+        </div>
+        <div class="ef-tabpanel ef-issues-panel" id="__ef_panel_issues__" role="tabpanel" aria-labelledby="__ef_tab_issues__" hidden>
+          ${commentsHTML}
+          <div class="ef-compose">
+            <div class="ef-topic-row">
+              <label class="ef-topic-label" for="__ef_topic__">Issue title</label>
+              <input class="ef-topic-input" id="__ef_topic__" type="text" value="${escapeHtml(opts.defaultIssueTopic)}">
             </div>
-            <span class="ef-hint" id="__ef_scope_hint__"></span>
+            <div class="ef-type-toggle">
+              <input type="radio" name="__ef_type__" id="__ef_type_bug__" value="bug">
+              <label for="__ef_type_bug__">🐛 Bug</label>
+              <input type="radio" name="__ef_type__" id="__ef_type_enh__" value="enhancement" checked>
+              <label for="__ef_type_enh__">✨ Enhancement</label>
+            </div>
+            <div class="ef-intent">
+              <div class="ef-intent-row">
+                <span class="ef-intent-label">Action</span>
+                <div class="ef-chips" id="__ef_action__"></div>
+              </div>
+              ${expectedRowHTML}
+              <div class="ef-intent-row">
+                <span class="ef-intent-label">Scope</span>
+                <div class="ef-chips" id="__ef_scope__">
+                  <button type="button" class="ef-chip ef-chip-on" data-breadth="element" aria-pressed="true">This element</button>
+                  <button type="button" class="ef-chip" data-breadth="region" aria-pressed="false">Region</button>
+                  <button type="button" class="ef-chip" data-breadth="multi" aria-pressed="false">Multiple</button>
+                </div>
+                <span class="ef-hint" id="__ef_scope_hint__"></span>
+              </div>
+            </div>
+            <textarea id="__ef_comment__" placeholder="Anything else? (optional)"></textarea>
+            <div class="ef-error" id="__ef_err__"></div>
           </div>
         </div>
-        <textarea id="__ef_comment__" placeholder="Anything else? (optional)"></textarea>
-        <div class="ef-error" id="__ef_err__"></div>
       </div>
       <div class="ef-footer">
         <button class="ef-btn-secondary" id="__ef_submit__">Save</button>
@@ -1487,6 +1667,48 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   const styleHost = dialog.querySelector<HTMLElement>("#__ef_style_editor__")!;
   const changesHost = dialog.querySelector<HTMLElement>("#__ef_changes__")!;
 
+  // ── Top-level tabs (Design / Issues) ────────────────────────────────────────
+  const tabDesign = dialog.querySelector<HTMLButtonElement>("#__ef_tab_design__")!;
+  const tabIssues = dialog.querySelector<HTMLButtonElement>("#__ef_tab_issues__")!;
+  const designPanel = dialog.querySelector<HTMLElement>("#__ef_panel_design__")!;
+  const issuesPanel = dialog.querySelector<HTMLElement>("#__ef_panel_issues__")!;
+  const TABS: { tab: "design" | "issues"; btn: HTMLButtonElement; panel: HTMLElement }[] = [
+    { tab: "design", btn: tabDesign, panel: designPanel },
+    { tab: "issues", btn: tabIssues, panel: issuesPanel },
+  ];
+  let activeTab: "design" | "issues" = "design";
+  const setTab = (tab: "design" | "issues", focus = false): void => {
+    activeTab = tab;
+    for (const t of TABS) {
+      const on = t.tab === tab;
+      t.btn.setAttribute("aria-selected", on ? "true" : "false");
+      t.btn.tabIndex = on ? 0 : -1;
+      t.panel.hidden = !on;
+      if (on && focus) t.btn.focus();
+    }
+  };
+  for (const t of TABS) {
+    t.btn.addEventListener("click", () => setTab(t.tab));
+    t.btn.addEventListener("keydown", (e) => {
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      e.preventDefault();
+      const i = TABS.findIndex((x) => x.tab === activeTab);
+      const next = (i + (e.key === "ArrowRight" ? 1 : TABS.length - 1)) % TABS.length;
+      setTab(TABS[next].tab, true);
+    });
+  }
+  setTab("design");
+
+  // Active per-element tab (Design panel).
+  let activeTargetIdx = 0;
+  const activeTarget = (): TargetEntry | null => currentTargets()[activeTargetIdx] ?? null;
+  const clampActiveTarget = (): void => {
+    const n = currentTargets().length;
+    if (n === 0) activeTargetIdx = 0;
+    else if (activeTargetIdx > n - 1) activeTargetIdx = n - 1;
+    else if (activeTargetIdx < 0) activeTargetIdx = 0;
+  };
+
   const targetLabel = (t: TargetEntry): string => {
     if (t.dataComponent) return t.dataComponent;
     const tail = t.selector.split(">").pop()?.trim();
@@ -1497,16 +1719,18 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     const targets = currentTargets();
     const picking = isPickMode();
     const addBtn = `<button type="button" class="ef-target-add${picking ? " ef-picking" : ""}" id="__ef_add_target__">+ Add element</button>`;
-    if (targets.length === 0) {
-      targetsHost.innerHTML = `<div class="ef-section-label">Targets</div><div class="ef-target-list">${addBtn}</div>`;
-    } else {
-      targetsHost.innerHTML = `
-        <div class="ef-section-label">Targets</div>
-        <div class="ef-target-list">
-          ${targets.map((t, i) => `<span class="ef-target-item"><span class="ef-target-num">${i + 1}</span><span class="ef-target-name" title="${escapeHtml(t.selector)}">${escapeHtml(targetLabel(t))}</span><button type="button" class="ef-target-remove" data-idx="${i}" aria-label="Remove target">×</button></span>`).join("")}
-          ${addBtn}
-        </div>`;
-    }
+    const tabsHTML = targets
+      .map((t, i) => {
+        const on = i === activeTargetIdx;
+        return `<div class="ef-target-tab" role="tab" tabindex="${on ? 0 : -1}" aria-selected="${on}" data-idx="${i}" title="${escapeHtml(t.selector)}"><span class="ef-target-num">${i + 1}</span><span class="ef-target-name">${escapeHtml(targetLabel(t))}</span><button type="button" class="ef-target-remove" data-idx="${i}" aria-label="Remove target">×</button></div>`;
+      })
+      .join("");
+    targetsHost.innerHTML = `
+      <div class="ef-section-label">Targets</div>
+      <div class="ef-target-tabs">
+        <div class="ef-target-tablist" role="tablist" aria-label="Selected elements">${tabsHTML}</div>
+        ${addBtn}
+      </div>`;
     targetsHost.querySelector<HTMLButtonElement>("#__ef_add_target__")?.addEventListener("click", () => {
       if (!docked) {
         // Modal mode: hide the dialog, suspend the Tab trap, and let the user
@@ -1523,45 +1747,86 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
       setPickMode(!isPickMode());
       renderTargets();
     });
+    targetsHost.querySelectorAll<HTMLElement>(".ef-target-tab").forEach((tab) => {
+      const activate = () => {
+        const idx = parseInt(tab.dataset.idx ?? "-1", 10);
+        if (idx < 0 || idx === activeTargetIdx) return;
+        activeTargetIdx = idx;
+        renderSelection();
+      };
+      tab.addEventListener("click", (e) => {
+        if ((e.target as HTMLElement).closest(".ef-target-remove")) return;
+        activate();
+      });
+      tab.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          activate();
+        }
+      });
+    });
     targetsHost.querySelectorAll<HTMLButtonElement>(".ef-target-remove").forEach((btn) => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", (e) => {
+        // Don't also activate the tab we're removing.
+        e.stopPropagation();
         const idx = parseInt(btn.dataset.idx ?? "-1", 10);
         const t = currentTargets()[idx];
-        if (t) removeSelectionTarget(t.el);
+        if (!t) return;
+        // Keep the active element stable when an earlier tab is removed; the
+        // selection-change subscription re-renders + clamps the index.
+        if (idx < activeTargetIdx) activeTargetIdx -= 1;
+        removeSelectionTarget(t.el);
       });
     });
   };
 
   const renderStyle = () => {
-    mountStyleEditor(styleHost, tokens, currentTargets(), currentChanges().length, {
-      onApply: (group, token) => applyTokenToTargets(group, token),
-      onRevertAll: () => revertSelectionChanges(),
+    const t = activeTarget();
+    mountStyleEditor(styleHost, tokens, t, t ? getChangeCountFor(t.el) : 0, {
+      onApply: (group, token) => {
+        const cur = activeTarget();
+        if (cur) applyTokenToTarget(cur.el, group, token);
+      },
     });
   };
 
   const renderChanges = () => {
-    const changes = currentChanges();
-    if (changes.length === 0) {
+    const t = activeTarget();
+    const changes = t ? getChangesFor(t.el) : [];
+    const total = globalChangeCount();
+    if (!t || (changes.length === 0 && total === 0)) {
       changesHost.innerHTML = "";
       return;
     }
+    const list =
+      changes.length === 0
+        ? `<div class="ef-changes-empty">No changes on this element.</div>`
+        : `<ul class="ef-changes-list">
+            ${changes.map((c) => `<li><span class="ef-change-group">${escapeHtml(c.group)}</span><span class="ef-change-before">${escapeHtml(c.before || "—")}</span><span>→</span><span class="ef-change-after">${escapeHtml(c.after)}</span></li>`).join("")}
+          </ul>`;
     changesHost.innerHTML = `
       <div class="ef-section-label">Changes (${changes.length})</div>
-      <ul class="ef-changes-list">
-        ${changes.map((c) => `<li><span class="ef-change-group">${escapeHtml(c.group)}</span><span class="ef-change-before">${escapeHtml(c.before || "—")}</span><span>→</span><span class="ef-change-after">${escapeHtml(c.after)}</span></li>`).join("")}
-      </ul>
-      <div class="ef-changes-actions"><button type="button" class="ef-btn-secondary" id="__ef_revert__">Revert all</button></div>`;
-    changesHost.querySelector<HTMLButtonElement>("#__ef_revert__")?.addEventListener("click", () => {
+      ${list}
+      <div class="ef-changes-actions">
+        <button type="button" class="ef-btn-secondary" id="__ef_revert_target__"${changes.length === 0 ? " disabled" : ""}>Revert</button>
+        <button type="button" class="ef-btn-secondary" id="__ef_revert_all__"${total === 0 ? " disabled" : ""}>Revert all</button>
+      </div>`;
+    changesHost.querySelector<HTMLButtonElement>("#__ef_revert_target__")?.addEventListener("click", () => {
+      const cur = activeTarget();
+      if (cur) revertChangesFor(cur.el);
+    });
+    changesHost.querySelector<HTMLButtonElement>("#__ef_revert_all__")?.addEventListener("click", () => {
       revertSelectionChanges();
     });
   };
 
   const renderSelection = () => {
+    clampActiveTarget();
     // Re-rendering replaces innerHTML, which would collapse the "Current
     // classes" disclosure and jump scroll positions. Capture + restore them so
     // live edits don't yank the panel around.
-    const compose = dialog.querySelector<HTMLElement>(".ef-compose");
-    const composeScroll = compose?.scrollTop ?? 0;
+    const designScroll = designPanel.scrollTop;
+    const issuesScroll = issuesPanel.scrollTop;
     const detailsOpen = !!styleHost.querySelector<HTMLDetailsElement>(".ef-style-classes")?.open;
     const classListScroll =
       styleHost.querySelector<HTMLElement>(".ef-style-class-list")?.scrollTop ?? 0;
@@ -1580,7 +1845,8 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     if (newClassList) newClassList.scrollTop = classListScroll;
     const newChanges = changesHost.querySelector<HTMLElement>(".ef-changes-list");
     if (newChanges) newChanges.scrollTop = changesScroll;
-    if (compose) compose.scrollTop = composeScroll;
+    designPanel.scrollTop = designScroll;
+    issuesPanel.scrollTop = issuesScroll;
   };
 
   let action: IntentAction = inferAction(getType());
@@ -1630,7 +1896,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   const renderScopeHint = () => {
     const n = currentTargets().length;
     if (n > 1) {
-      scopeHint.textContent = `Applies to all ${n} selected targets.`;
+      scopeHint.textContent = `Editing ${n} elements individually — switch tabs in Design.`;
       return;
     }
     scopeHint.textContent = breadth === "element"
@@ -1653,7 +1919,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   /** Build the structured intent passed to onSubmit as the third argument. */
   const buildIntent = (): FeedbackIntent => {
     const targets = currentTargets();
-    const changes = currentChanges();
+    const changes = allChanges();
     const targetSelectors =
       targets.length > 0 ? targets.map((t) => t.selector) : [opts.selector];
     const intent: FeedbackIntent = {
@@ -1683,7 +1949,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     if (expected.trim()) parts.push(expected.trim());
     // A changes-only report is valid: summarise the applied live edits so Save
     // and Export both accept it (the server supports this case).
-    const changes = currentChanges();
+    const changes = allChanges();
     if (changes.length > 0) {
       const desc = changes
         .map((c) => `${c.group} ${c.before || "—"} → ${c.after}`)
@@ -1789,9 +2055,14 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   });
 
   // Initial render + keep selection-driven sections live as the user picks.
+  let prevTargetCount = currentTargets().length;
   renderSelection();
   renderScopeHint();
   const unsubSelection = onSelectionChange(() => {
+    const count = currentTargets().length;
+    // A new element landed: focus its tab so the editor targets it.
+    if (count > prevTargetCount) activeTargetIdx = count - 1;
+    prevTargetCount = count;
     renderSelection();
     renderScopeHint();
     // A pick just finished: show the dialog again and restore modal focus.

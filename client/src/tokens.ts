@@ -285,6 +285,7 @@ export function buildFallbackTokens(): ThemeTokens {
         id: "padding",
         label: "Padding",
         section: "Spacing",
+        render: "dropdown",
         applyType: "class",
         removePattern: "^p[xytrbl]?-",
         tokens: [
@@ -300,6 +301,7 @@ export function buildFallbackTokens(): ThemeTokens {
         id: "margin",
         label: "Margin",
         section: "Spacing",
+        render: "dropdown",
         applyType: "class",
         removePattern: "^m[xytrbl]?-",
         tokens: [
@@ -315,6 +317,7 @@ export function buildFallbackTokens(): ThemeTokens {
         id: "gap",
         label: "Gap",
         section: "Spacing",
+        render: "dropdown",
         applyType: "class",
         removePattern: "^gap-",
         tokens: [
@@ -331,6 +334,7 @@ export function buildFallbackTokens(): ThemeTokens {
         id: "maxWidth",
         label: "Max width",
         section: "Layout",
+        render: "dropdown",
         applyType: "class",
         removePattern: "^max-w-",
         tokens: [
@@ -354,6 +358,7 @@ export function buildFallbackTokens(): ThemeTokens {
         id: "width",
         label: "Width",
         section: "Layout",
+        render: "dropdown",
         applyType: "class",
         removePattern: "^w-",
         tokens: [
@@ -369,6 +374,7 @@ export function buildFallbackTokens(): ThemeTokens {
         id: "height",
         label: "Height",
         section: "Layout",
+        render: "dropdown",
         applyType: "class",
         removePattern: "^h-",
         tokens: [
