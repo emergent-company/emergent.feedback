@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Fallback-tokens fixture — emergent.feedback E2E</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 0; padding: 32px; color: #0f172a; }
+      h1 { font-size: 22px; margin: 0 0 16px; }
+      .toolbar { display: flex; gap: 8px; padding: 12px; border: 1px solid #cbd5e1; border-radius: 10px; width: 420px; }
+      .toolbar button { flex: 1; padding: 10px; }
+      .stack { width: 420px; margin-top: 16px; padding: 8px; border: 1px dashed #cbd5e1; border-radius: 10px; }
+      .stack button { display: block; width: 100%; padding: 10px; margin-bottom: 6px; }
+    </style>
+  </head>
+  <body data-testid="structure-root">
+    <h1 id="structure-heading">Reorder fixture</h1>
+
+    <div class="toolbar" id="toolbar">
+      <button id="btn-a" type="button">A</button>
+      <button id="btn-b" type="button">B</button>
+      <button id="btn-c" type="button">C</button>
+    </div>
+
+    <!-- Carries a group class in the markup (not an overlay edit). -->
+    <button id="markup-btn" type="button" class="p-4">Markup padded</button>
+
+    <div class="stack" id="stack">
+      <button id="row-1" type="button">Row 1</button>
+      <button id="row-2" type="button">Row 2</button>
+    </div>
+
+    <!--
+      The overlay, as a third-party host embeds it. data-api is rewritten to the
+      running API server by serve-fixtures.mjs.
+    -->
+    <script
+      src="__API_URL__/emergent-feedback.js"
+      data-api="__API_URL__"
+      data-repo="e2e/host-fixture"
+      data-label="feedback"
+      data-branch="e2e"
+      data-version="0.0.0-test"
+     
+      async
+    ></script>
+  </body>
+</html>

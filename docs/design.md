@@ -313,15 +313,54 @@ typography (text size, font weight), colors, borders/effects and daisyUI
 button/badge modifiers — organised into collapsible sections. Each group renders
 as a horizontal property row (label left, control right). Color groups and the
 sizing groups (padding, margin, gap, max-width, width, height) render as
-dropdowns; other groups render as chips. Every dropdown ends with a **Custom
+dropdowns; layout/position groups render as **icon rows** (inlined SVG glyph
+buttons); other groups render as chips. `render` accepts `chips` (default),
+`dropdown`, or `icons`. Group ids must not collide with `position`, which is
+reserved for recorded DOM moves (the CSS position tokens are grouped under
+`positioning`). Every dropdown ends with a **Custom
 class…** item (chip groups expose a **+ Custom** toggle) that reveals an inline
 field for a free-typed class. Applied class/style edits are recorded per element
 and rendered in the issue modal and panel.
+
+Every group also carries a **Default** control — the leading chip in a chip row,
+the leading item in a dropdown — which resets the group to the element's own
+styling: the recorded edit (pending or committed) is reverted and dropped, so a
+committed edit stops being replayed too. Clicking an already-active chip (or the
+selected dropdown option) is the same action. `Default` differs from the `None`
+tokens (`p-0`, `m-0`, `gap-0`), which apply an explicit zero value. A group whose
+value comes from the host markup has no recorded edit, so Default is reported as
+a no-op instead of stripping the page's class.
+
+**Moving elements.** While editing, a selected element can be dragged anywhere on
+the page — there is no separate move mode. The gesture only owns the pointer past
+a 5 px threshold (below it, links, buttons and text fields inside the element
+keep working, and the click that follows a drop is swallowed so it cannot also
+toggle the selection). Dragging inside a container reorders siblings (the
+insertion line follows the container's flex/grid axis); dragging over a
+container's own padding/gap area appends into it, which is how an element is
+reparented. Drops that would put an element inside itself (or its own subtree),
+onto overlay chrome, or onto the page root are refused.
+
+Each move is recorded per element as an anchor pair (`from` → `to`) rather than a
+node reference, so it survives a page reload and is replayed on boot alongside
+committed style edits; repeated moves of one element collapse into a single
+record that keeps the original from-position. Moves join the same pending /
+Commit / Committed-changes lifecycle as style edits (Default does not touch them —
+they are undone with Remove or revert), and the editor's **Position** row shows
+where the active element currently sits (`2nd of 3 in .toolbar`).
 
 When more than one element is selected they are presented as **per-element tabs**
 in the Design editor; the editor configures only the active element, so edits are
 bounded to that component instead of applying globally. A scope hint notes when
 a selection spans multiple targets.
+
+Selection outlines are **hover-driven, not persistent**: selecting an element
+leaves no box on the page, because a permanent outline sits on top of the very
+border/background/shadow the reporter is judging. Hovering (or focusing) a
+target label in the panel outlines that element — amber box plus the badge
+number matching its tab — and a short **select flash** confirms which element a
+click just bound the editor to. Hovering a selected element on the page outlines
+it too and peeks its tab in the panel (reverse hover).
 
 Edits start **pending** — applied live but reverted on Cancel/close. The
 **Commit** button freezes pending edits and persists them (localStorage) across
@@ -329,8 +368,8 @@ sidebar close, reopen and page reload until explicitly removed from the global
 **Committed changes** list (per-entry Remove + Remove all).
 
 Docked mode reserves the rail width (document-root `margin-right`), so the host
-page reflows alongside the panel instead of being overlaid; selection outlines
-are repainted after the reflow. Modal mode sizes the card to ~50 vw (capped at
+page reflows alongside the panel instead of being overlaid; the hover highlight
+is repainted after the reflow. Modal mode sizes the card to ~50 vw (capped at
 900 px, min 480 px) and, when **Add element** is pressed, hides the dialog for the
 click-to-pick and restores it when the pick completes (Escape cancels the pick).
 
@@ -345,6 +384,14 @@ click-to-pick and restores it when the pick completes (Escape cancels the pick).
   be empty). Even though editing is per element, the payload aggregates every
   target's changes and each record carries its `target` selector. Scope breadth
   becomes `multi` when more than one target is selected.
+- A DOM move is the same record with `group: "position"` and a `move` field:
+  `{ from, to }`, each anchor `{ container, before, index, label }` (`before:
+  null` = last child; selectors, so a reload can replay). `before`/`after` carry
+  the human position text (`2nd of 3 in .toolbar`). `intent.action` defaults to
+  `move` when the recorded edits include a move. A move is identified by the
+  presence of `move`, never by the group id — the CSS position tokens live in a
+  group named `positioning`, so `relative`/`absolute` can never be read as a
+  reorder.
 - Provenance: `intent.changes` is `stated` when non-empty, else `absent`.
 
 No storage schema change — everything rides inside `context_json`.
@@ -353,11 +400,12 @@ No storage schema change — everything rides inside `context_json`.
 
 | Surface | Change |
 |---|---|
-| `client/src/dialog.ts` | Design editor (no Issues tab), Commit + persistent Committed-changes list (localStorage, per-entry Remove / Remove all), issue submission modal (context/HTML rendered here only), docked rail + dock toggle, per-element target tabs, token palette, per-target changes summary |
-| `client/src/styleEditor.ts` | single-target Figma-like property rows, dropdown/chip controls, custom-class affordance |
-| `client/src/selection.ts` | per-target apply/change/revert API (`applyTokenToTarget`, `getChangesFor`, `getChangeCountFor`, `revertChangesFor`) |
-| `client/src/index.ts` | `editing` mode; picking stays live; pending edits revert on cancel/close; Commit freezes + persists in localStorage until removed |
-| `server/handler/issue.go` | `## Requested changes` (`buildSingleItem`) / `### Requested changes` (`buildMultiItem`); `whatToDo` clause |
+| `client/src/dialog.ts` | Design editor (no Issues tab), Commit + persistent Committed-changes list (localStorage, per-entry Remove / Remove all), issue submission modal (context/HTML rendered here only), docked rail + dock toggle, per-element target tabs, token palette, per-target changes summary, drag ghost/insertion-line/container layers |
+| `client/src/styleEditor.ts` | single-target Figma-like property rows, dropdown/chip/icon controls, Default (unset) control, custom-class affordance, Position row |
+| `client/src/selection.ts` | per-target apply/change/revert API (`applyTokenToTarget`, `recordMove`, `getChangesFor`, `getChangeCountFor`, `revertChangesFor`, `clearTokenForTarget`), hover-driven highlight, `position` records |
+| `client/src/structure.ts` | drop resolution (`computeDrop`), `moveElement`, replay (`placeAt`), `describePosition`/`ordinal` |
+| `client/src/index.ts` | `editing` mode; picking stays live; always-on drag to move (5px threshold, click swallowed after a drop); pending edits revert on cancel/close; Commit freezes + persists in localStorage until removed |
+| `server/handler/issue.go` | `## Requested changes` (`buildSingleItem`) / `### Requested changes` (`buildMultiItem`) incl. `move:` lines; `whatToDo` clause distinguishes style edits from moves |
 | `server/handler/envelope.go` | `buildIntent` surfaces `changes`; `buildTarget` surfaces `targets` |
 | `server/panel/panel.templ` | "Requested changes" list + `Targets (N)` row in `contextSection` |
 
@@ -370,7 +418,12 @@ from the live page plus a built-in spacing scale when absent. See the README
 as a class (default) or an inline style; class names, style properties and style
 values are validated and all token text is escaped before rendering. A group may
 set `render: "dropdown"` (color and sizing groups do in the fallback set) to
-render as a dropdown rather than chips.
+render as a dropdown, or `render: "icons"` to render as a row of glyph buttons
+(layout/position groups do in the fallback set); the default is chips. A token
+may set an inline `icon: { viewBox, paths }` for icon rows; `viewBox` must match
+`0 0 <n> <n>` (1–3 digits each) and every path `d` is held to a strict charset
+(SVG commands, digits and whitespace, ≤ 400 chars, ≤ 12 paths). An invalid icon
+is dropped while the token is kept.
 
 ## Remaining
 

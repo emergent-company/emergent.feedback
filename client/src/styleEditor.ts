@@ -19,10 +19,17 @@ import {
   type TokenGroup,
   type ThemeTokens,
 } from "./tokens";
-import type { TargetEntry } from "./selection";
+import { setHighlight, type TargetEntry } from "./selection";
+import { describePosition } from "./structure";
+import { ICONS, type GlyphIcon } from "./icons";
 
 export interface StyleEditorCallbacks {
   onApply: (group: TokenGroup, token: Token) => void;
+  /**
+   * Reset the group to the element's own styling ("Default"). Called from the
+   * Default control and from a click on an already-active control.
+   */
+  onClear: (group: TokenGroup) => void;
 }
 
 /**
@@ -101,19 +108,37 @@ function swatchHTML(token: Token): string {
     : "";
 }
 
+/**
+ * Inline `<svg>` for a glyph. `viewBox` and every `d` were already validated in
+ * tokens.ts against a strict charset whitelist (path commands, digits and
+ * whitespace only), so no HTML metacharacter can appear here. This markup must
+ * NEVER be built from unvalidated strings.
+ */
+function iconSVG(icon: GlyphIcon): string {
+  const paths = icon.paths.map((d) => `<path d="${d}"/>`).join("");
+  return `<svg viewBox="${icon.viewBox}" aria-hidden="true" focusable="false">${paths}</svg>`;
+}
+
 function customInputHTML(group: TokenGroup): string {
   return `<input type="text" class="ef-custom-input" data-group="${escapeHtml(group.id)}" placeholder="custom class…" spellcheck="false" aria-label="Custom class for ${escapeHtml(group.label)}">`;
+}
+
+/** The group's Default control, always first in a chip row. */
+function defaultChipHTML(group: TokenGroup, el: Element): string {
+  const atDefault = matchToken(el, group) === null;
+  return `<button type="button" class="ef-token-chip ef-token-default${atDefault ? " ef-token-on" : ""}" data-group="${escapeHtml(group.id)}" data-default="1" aria-pressed="${atDefault}" title="Unset (back to the element's own styling)">Default</button>`;
 }
 
 function renderChips(group: TokenGroup, el: Element): string {
   const chips = group.tokens
     .map((t) => {
       const on = tokenActive(t, group, el);
-      return `<button type="button" class="ef-token-chip${on ? " ef-token-on" : ""}" data-group="${escapeHtml(group.id)}" data-token="${escapeHtml(t.id)}" aria-pressed="${on}" title="${escapeHtml(t.label)}">${swatchHTML(t)}${escapeHtml(t.label)}</button>`;
+      return `<button type="button" class="ef-token-chip${on ? " ef-token-on" : ""}" data-group="${escapeHtml(group.id)}" data-token="${escapeHtml(t.id)}" aria-pressed="${on}" title="${escapeHtml(t.label)}${on ? " — click to unset" : ""}">${swatchHTML(t)}${escapeHtml(t.label)}</button>`;
     })
     .join("");
   return `
       <div class="ef-token-row">
+        ${defaultChipHTML(group, el)}
         ${chips}
         <button type="button" class="ef-custom-toggle" data-group="${escapeHtml(group.id)}" aria-expanded="false" title="Custom class">+ Custom</button>
       </div>
@@ -122,6 +147,7 @@ function renderChips(group: TokenGroup, el: Element): string {
 
 function renderDropdown(group: TokenGroup, el: Element): string {
   const cur = matchToken(el, group);
+  const atDefault = cur === null;
   const headerSwatch = cur ? swatchHTML(cur) : "";
   const options = group.tokens
     .map((t) => {
@@ -136,6 +162,8 @@ function renderDropdown(group: TokenGroup, el: Element): string {
           <span class="ef-select-caret" aria-hidden="true">▾</span>
         </button>
         <ul class="ef-select-menu" role="listbox" hidden>
+          <li role="option" class="ef-select-option ef-select-default${atDefault ? " ef-token-on" : ""}" data-group="${escapeHtml(group.id)}" data-default="1" aria-selected="${atDefault}">Default</li>
+          <li class="ef-select-sep" role="presentation"></li>
           ${options}
           <li class="ef-select-sep" role="presentation"></li>
           <li role="option" class="ef-select-custom" data-group="${escapeHtml(group.id)}" aria-selected="false" tabindex="-1">Custom class…</li>
@@ -144,12 +172,33 @@ function renderDropdown(group: TokenGroup, el: Element): string {
       </div>`;
 }
 
+/** Icon-button row: Figma-style glyph buttons, reusing the chip chrome. */
+function renderIcons(group: TokenGroup, el: Element): string {
+  const atDefault = matchToken(el, group) === null;
+  const buttons = group.tokens
+    .map((t) => {
+      const on = tokenActive(t, group, el);
+      const glyph = t.icon ? iconSVG(t.icon) : "";
+      return `<button type="button" class="ef-token-chip ef-icon-btn${on ? " ef-token-on" : ""}" data-group="${escapeHtml(group.id)}" data-token="${escapeHtml(t.id)}" aria-pressed="${on}" title="${escapeHtml(t.label)}${on ? " — click to unset" : ""}" aria-label="${escapeHtml(t.label)}">${glyph}</button>`;
+    })
+    .join("");
+  return `
+      <div class="ef-token-row ef-icon-row">
+        <button type="button" class="ef-token-chip ef-icon-btn ef-token-default${atDefault ? " ef-token-on" : ""}" data-group="${escapeHtml(group.id)}" data-default="1" aria-pressed="${atDefault}" title="Unset (back to the element's own styling)" aria-label="Default">${iconSVG(ICONS.unset)}</button>
+        ${buttons}
+        <button type="button" class="ef-custom-toggle" data-group="${escapeHtml(group.id)}" aria-expanded="false" title="Custom class">+ Custom</button>
+      </div>
+      <div class="ef-custom-field" hidden>${customInputHTML(group)}</div>`;
+}
+
 /** One Figma-like horizontal property row: label left, control right. */
 function renderGroup(group: TokenGroup, el: Element): string {
   const control =
     group.render === "dropdown"
       ? renderDropdown(group, el)
-      : renderChips(group, el);
+      : group.render === "icons"
+        ? renderIcons(group, el)
+        : renderChips(group, el);
   return `
     <div class="ef-prop-row" data-group="${escapeHtml(group.id)}">
       <span class="ef-prop-label" title="${escapeHtml(group.label)}">${escapeHtml(group.label)}</span>
@@ -196,6 +245,11 @@ function renderEditorHTML(
         <span class="ef-style-target-label">Editing</span>
         <code class="ef-style-target-sel" title="${escapeHtml(target.selector)}">${escapeHtml(label)}</code>
       </div>
+      <div class="ef-style-structure" title="Drag the element on the page to move it">
+        <span class="ef-style-target-label">Position</span>
+        <span class="ef-style-position">${escapeHtml(describePosition(target.el))}</span>
+        <span class="ef-style-drag-hint" aria-hidden="true">drag to move</span>
+      </div>
       ${renderSections(groups, target.el)}
       ${renderClasses(target)}
     </div>`;
@@ -205,6 +259,7 @@ function renderEditorHTML(
 function wireDropdowns(
   root: HTMLElement,
   groups: TokenGroup[],
+  el: Element,
   cb: StyleEditorCallbacks
 ): void {
   let openMenu: HTMLElement | null = null;
@@ -273,6 +328,14 @@ function wireDropdowns(
     items().forEach((opt) => {
       opt.tabIndex = -1;
       opt.addEventListener("click", () => {
+        const gid = opt.dataset.group ?? "";
+        const group = groups.find((g) => g.id === gid);
+        // "Default" — back to the element's own styling.
+        if (opt.dataset.default) {
+          close(menu);
+          if (group) cb.onClear(group);
+          return;
+        }
         if (opt.classList.contains("ef-select-custom")) {
           const edit = menu.querySelector<HTMLElement>(".ef-select-custom-edit");
           const input = edit?.querySelector<HTMLInputElement>(".ef-custom-input");
@@ -282,12 +345,14 @@ function wireDropdowns(
           }
           return;
         }
-        const gid = opt.dataset.group ?? "";
         const tid = opt.dataset.token ?? "";
-        const group = groups.find((g) => g.id === gid);
         const token = group?.tokens.find((t) => t.id === tid);
         close(menu);
-        if (group && token) cb.onApply(group, token);
+        if (!group || !token) return;
+        // Choosing the option that is already applied unsets the group, exactly
+        // like clicking an active chip (and like the Default item).
+        if (tokenActive(token, group, el)) cb.onClear(group);
+        else cb.onApply(group, token);
       });
       opt.addEventListener("keydown", (e) => {
         const opts = items();
@@ -395,18 +460,39 @@ export function mountStyleEditor(
   const groups = augmentGroups(tokens.groups);
   root.innerHTML = renderEditorHTML(tokens, target, changesCount);
 
-  // Chip row wiring (dropdowns have their own handlers below).
-  root.querySelectorAll<HTMLButtonElement>(".ef-token-chip[data-token]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const gid = btn.dataset.group ?? "";
-      const tid = btn.dataset.token ?? "";
-      const group = groups.find((g) => g.id === gid);
-      const token = group?.tokens.find((t) => t.id === tid);
-      if (group && token) cb.onApply(group, token);
+  // Chip/icon row wiring (dropdowns have their own handlers below). Icon
+  // buttons reuse `.ef-token-chip`, so they share this wiring: an active
+  // control unselects the group, anything else applies it.
+  root
+    .querySelectorAll<HTMLButtonElement>(".ef-token-chip[data-token], .ef-token-chip[data-default]")
+    .forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const gid = btn.dataset.group ?? "";
+        const group = groups.find((g) => g.id === gid);
+        if (!group) return;
+        if (btn.dataset.default) {
+          cb.onClear(group);
+          return;
+        }
+        const tid = btn.dataset.token ?? "";
+        const token = group.tokens.find((t) => t.id === tid);
+        if (!token) return;
+        // Clicking the active control unselects it — back to the element's own
+        // styling, the same thing the Default chip does.
+        if (tokenActive(token, group, target.el)) cb.onClear(group);
+        else cb.onApply(group, token);
+      });
     });
-  });
 
-  wireDropdowns(root, groups, cb);
+  wireDropdowns(root, groups, target.el, cb);
   wireCustomToggles(root);
   wireCustomInputs(root, tokens, cb);
+
+  // Hovering the "Editing <target>" label outlines the element, matching the
+  // per-target tab hover in the dialog (there is no permanent outline).
+  const head = root.querySelector<HTMLElement>(".ef-style-target-sel");
+  if (head) {
+    head.addEventListener("mouseenter", () => setHighlight(target.el));
+    head.addEventListener("mouseleave", () => setHighlight(null));
+  }
 }

@@ -5,6 +5,8 @@
 // docs/ai-feedback-strategy.md §2.2. Keep this file framework-agnostic and
 // side-effect free (types + pure helpers only).
 
+import type { PlacementAnchor } from "./structure";
+
 /** Where a value came from. Machine-readable honesty marker. */
 export type Provenance = "captured" | "inferred" | "stated" | "absent";
 
@@ -70,6 +72,12 @@ export interface StyleChange {
   before: string;
   /** Applied state (class name or inline style value). */
   after: string;
+  /**
+   * Present for a DOM move (group `"position"`): the anchors that describe and
+   * replay the reorder. `container`/`before` are selectors, `before: null` means
+   * the element ends up last; `index` is the fallback when a selector drifted.
+   */
+  move?: { from: PlacementAnchor; to: PlacementAnchor };
 }
 
 /** A selected element captured for multi-element editing. */

@@ -20,6 +20,13 @@ import {
   revertChangesFor,
   commit,
   onSelectionChange,
+  onHighlightChange,
+  recordMove,
+  clearTokenForTarget,
+  setHighlight,
+  getHighlight,
+  flash,
+  refreshOutlines,
   commitChanges,
   markSent,
   revertPending,
@@ -56,6 +63,10 @@ class FakeEl {
   classList: FakeClassList;
   style = new FakeStyle();
   constructor(classes: string[] = []) { this.classList = new FakeClassList(classes); }
+  /** Only the highlight renderer needs this (zero-size box is fine). */
+  getBoundingClientRect(): { top: number; left: number; width: number; height: number } {
+    return { top: 10, left: 20, width: 100, height: 40 };
+  }
 }
 
 const el = (classes: string[] = []): Element => new FakeEl(classes) as unknown as Element;
@@ -484,4 +495,363 @@ test("getAllChanges / getCommittedChanges: pending + committed are distinguishab
 
   assert.equal(getAllChangeCountFor(a), 2);
   assert.deepEqual(getAllChangesFor(a).map((c) => c.group).sort(), ["padding", "textColor"]);
+});
+
+// ── Highlight: hover-driven outline (no persistent boxes on the page) ─────────
+
+interface FakeNode {
+  id: string;
+  style: Record<string, string>;
+  textContent: string;
+  remove(): void;
+}
+
+/** Minimal document fake so the highlight renderer runs under node --test. */
+function installDom(): { nodes: () => FakeNode[]; restore: () => void } {
+  const g = globalThis as unknown as { document: unknown };
+  const prev = g.document;
+  const live: (FakeNode & { removed: boolean })[] = [];
+
+  const createElement = (): FakeNode & { removed: boolean } => {
+    const node = {
+      id: "",
+      style: {} as Record<string, string>,
+      textContent: "",
+      removed: false,
+      remove(): void {
+        node.removed = true;
+      },
+    };
+    return node;
+  };
+
+  g.document = {
+    body: { appendChild: (n: FakeNode & { removed: boolean }): void => { live.push(n); } },
+    createElement,
+    getElementById: (id: string): FakeNode | null => live.find((n) => !n.removed && n.id === id) ?? null,
+    querySelectorAll: (sel: string): FakeNode[] => {
+      const prefix = /\[id\^="([^"]*)"\]/.exec(sel)?.[1] ?? "";
+      return live.filter((n) => !n.removed && n.id.startsWith(prefix));
+    },
+  };
+
+  return {
+    nodes: () => live.filter((n) => !n.removed),
+    restore: () => {
+      g.document = prev;
+    },
+  };
+}
+
+test("highlight: nothing is drawn until a label is hovered; hover draws one box", () => {
+  const dom = installDom();
+  try {
+    const a = el();
+    const b = el();
+    addTarget(a, "#a");
+    addTarget(b, "#b");
+
+    refreshOutlines();
+    assert.equal(dom.nodes().length, 0, "no permanent outline for selected targets");
+
+    setHighlight(a);
+    const nodes = dom.nodes();
+    assert.equal(nodes.length, 2, "one box + one badge");
+    assert.equal(nodes.filter((n) => n.textContent === "1").length, 1, "badge shows the tab number (1-based)");
+    assert.equal(nodes[0].style.backgroundColor, "transparent", "no fill: it would hide the style edit");
+
+    setHighlight(a);
+    assert.equal(dom.nodes().length, 2, "re-highlighting the same element does not stack boxes");
+
+    setHighlight(b);
+    assert.equal(dom.nodes().length, 2, "switching target replaces the box, never accumulates");
+    assert.ok(dom.nodes().some((n) => n.textContent === "2"));
+
+    setHighlight(null);
+    assert.equal(dom.nodes().length, 0, "leaving the label clears the outline");
+    assert.equal(getHighlight(), null);
+  } finally {
+    dom.restore();
+  }
+});
+
+test("highlight: a hovered element that is not a target gets a box but no badge", () => {
+  const dom = installDom();
+  try {
+    const a = el();
+    addTarget(a, "#a");
+    const stranger = el();
+    setHighlight(stranger);
+    assert.equal(dom.nodes().length, 1, "box only");
+    assert.equal(dom.nodes()[0].textContent, "");
+  } finally {
+    dom.restore();
+  }
+});
+
+test("flash: outlines briefly then clears itself", async () => {
+  const dom = installDom();
+  try {
+    const a = el();
+    addTarget(a, "#a");
+    flash(a, 5);
+    assert.equal(dom.nodes().length, 2, "flashing target is outlined");
+    await new Promise((r) => setTimeout(r, 25));
+    assert.equal(dom.nodes().length, 0, "flash clears without a hover");
+  } finally {
+    dom.restore();
+  }
+});
+
+test("highlight: hovering wins over a running flash, and removal drops it", () => {
+  const dom = installDom();
+  try {
+    const a = el();
+    addTarget(a, "#a");
+    flash(a, 50);
+    setHighlight(a);
+    assert.ok(dom.nodes()[0].style.backgroundColor === "transparent", "hover box wins");
+
+    removeTarget(a);
+    assert.equal(getHighlight(), null, "removing the target clears the highlight");
+    assert.equal(dom.nodes().length, 0);
+  } finally {
+    dom.restore();
+  }
+});
+
+test("onHighlightChange: notifies subscribers and unsubscribes", () => {
+  const seen: (Element | null)[] = [];
+  const off = onHighlightChange((e) => seen.push(e));
+  const a = el();
+  addTarget(a, "#a");
+  setHighlight(a);
+  setHighlight(null);
+  off();
+  setHighlight(a);
+  assert.deepEqual(seen, [a, null]);
+});
+
+// ── Default / toggle-off (clearTokenForTarget) ────────────────────────────────
+
+test("clearTokenForTarget: unsetting a pending edit restores the element's own styling", () => {
+  const a = el(["p-2"]);
+  addTarget(a, "#a");
+  applyTokenToTarget(a, paddingGroup, paddingGroup.tokens.find((t) => t.id === "md")!);
+  assert.ok(a.classList.contains("p-4"));
+  assert.equal(getChangeCountFor(a), 1);
+
+  assert.equal(clearTokenForTarget(a, paddingGroup), true);
+
+  assert.ok(!a.classList.contains("p-4"), "applied class removed");
+  assert.ok(a.classList.contains("p-2"), "pre-existing class restored from `before`");
+  assert.equal(getChangeCountFor(a), 0);
+  assert.deepEqual(getChanges(), []);
+});
+
+test("clearTokenForTarget: Default also undoes a committed edit and stops its replay", () => {
+  const a = el(["p-2"]);
+  addTarget(a, "#a");
+  applyTokenToTarget(a, paddingGroup, paddingGroup.tokens.find((t) => t.id === "md")!);
+  commitChanges();
+  assert.equal(getCommittedCount(), 1);
+  assert.equal(committedStorage().length, 1);
+
+  assert.equal(clearTokenForTarget(a, paddingGroup), true);
+
+  assert.equal(getCommittedCount(), 0);
+  assert.deepEqual(committedStorage(), [], "nothing left to replay");
+  assert.ok(a.classList.contains("p-2"));
+  assert.ok(!a.classList.contains("p-4"));
+});
+
+test("clearTokenForTarget: clears the pending edit only, leaving the committed one", () => {
+  const a = el();
+  addTarget(a, "#a");
+  applyTokenToTarget(a, paddingGroup, paddingGroup.tokens.find((t) => t.id === "md")!);
+  commitChanges(); // committed p-4
+  applyTokenToTarget(a, paddingGroup, paddingGroup.tokens.find((t) => t.id === "lg")!); // pending p-6
+  assert.equal(a.classList.contains("p-6"), true);
+
+  assert.equal(clearTokenForTarget(a, paddingGroup), true);
+
+  assert.equal(getCommittedCount(), 1, "committed entry survives");
+  assert.equal(a.classList.contains("p-6"), false);
+  assert.equal(a.classList.contains("p-4"), true, "falls back to the committed value");
+});
+
+test("clearTokenForTarget: no recorded edit → reports false and leaves the DOM alone", () => {
+  const a = el(["p-4"]);
+  addTarget(a, "#a");
+
+  assert.equal(clearTokenForTarget(a, paddingGroup), false);
+
+  assert.ok(a.classList.contains("p-4"), "a class from the host markup is never stripped");
+  assert.equal(getChangeCountFor(a), 0);
+});
+
+test("clearTokenForTarget: unsetting one group leaves the other groups' edits intact", () => {
+  const a = el();
+  addTarget(a, "#a");
+  applyTokenToTarget(a, paddingGroup, paddingGroup.tokens.find((t) => t.id === "md")!);
+  applyTokenToTarget(a, textGroup, textGroup.tokens.find((t) => t.id === "primary")!);
+
+  assert.equal(clearTokenForTarget(a, paddingGroup), true);
+
+  assert.equal(a.classList.contains("p-4"), false);
+  assert.equal(a.classList.contains("text-primary"), true);
+  assert.deepEqual(getChanges().map((c) => c.group), ["textColor"]);
+});
+
+// ── Moves (position records) ──────────────────────────────────────────────────
+
+const anchor = (container: string, before: string | null, index: number, label: string) => ({
+  container,
+  before,
+  index,
+  label,
+});
+
+test("recordMove: a move is a position change carrying its replayable anchors", () => {
+  const a = el();
+  addTarget(a, "#a");
+  recordMove(a, {
+    from: anchor("#toolbar", "#b", 0, "1st of 3 in #toolbar"),
+    to: anchor("#toolbar", null, 2, "3rd of 3 in #toolbar"),
+  });
+
+  const changes = getChanges();
+  assert.equal(changes.length, 1);
+  assert.equal(changes[0].target, "#a");
+  assert.equal(changes[0].group, "position");
+  assert.equal(changes[0].before, "1st of 3 in #toolbar");
+  assert.equal(changes[0].after, "3rd of 3 in #toolbar");
+  assert.equal(changes[0].move?.from.container, "#toolbar");
+  assert.equal(changes[0].move?.to.before, null);
+  assert.equal(changes[0].move?.to.index, 2);
+  assert.equal(getChangeCountFor(a), 1);
+});
+
+test("recordMove: repeated moves collapse to one record keeping the original anchor", () => {
+  const a = el();
+  addTarget(a, "#a");
+  recordMove(a, {
+    from: anchor("#toolbar", "#b", 0, "1st of 3 in #toolbar"),
+    to: anchor("#toolbar", "#c", 1, "2nd of 3 in #toolbar"),
+  });
+  // The post-move recompute can drift the TARGET's selector. The record must keep
+  // the original one: a reload starts from the original DOM order, so a selector
+  // captured mid-session would resolve the wrong element (or nothing).
+  getTargets()[0].selector = "#a-moved";
+  recordMove(a, {
+    from: anchor("#toolbar", "#c", 1, "2nd of 3 in #toolbar"),
+    to: anchor("#toolbar", null, 2, "3rd of 3 in #toolbar"),
+  });
+
+  const changes = getChanges();
+  assert.equal(changes.length, 1, "one move per element, not a move history");
+  assert.equal(changes[0].target, "#a", "selector stays anchored to the original position");
+  assert.equal(changes[0].before, "1st of 3 in #toolbar", "first state preserved");
+  assert.equal(changes[0].after, "3rd of 3 in #toolbar", "latest state reported");
+  assert.equal(changes[0].move?.from.label, "1st of 3 in #toolbar");
+  assert.equal(changes[0].move?.to.label, "3rd of 3 in #toolbar");
+});
+
+test("recordMove + commitChanges: the move joins the committed list and persists", () => {
+  const a = el();
+  addTarget(a, "#a");
+  recordMove(a, {
+    from: anchor("#toolbar", "#b", 0, "1st of 2 in #toolbar"),
+    to: anchor("#toolbar", null, 1, "2nd of 2 in #toolbar"),
+  });
+  commitChanges();
+
+  assert.equal(getChangeCount(), 0, "pending list cleared by commit");
+  const entries = getCommittedEntries();
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].group, "position");
+  assert.equal(entries[0].groupLabel, "Position");
+  assert.equal(entries[0].before, "1st of 2 in #toolbar");
+  assert.equal(entries[0].after, "2nd of 2 in #toolbar");
+  assert.equal(entries[0].stale, false);
+
+  const stored = committedStorage();
+  assert.equal(stored.length, 1);
+  assert.equal(stored[0].kind, "position");
+  assert.equal(stored[0].to.index, 1);
+
+  // The committed move is reported in the payload, and removing it drops it.
+  assert.equal(getCommittedChanges()[0].group, "position");
+  removeCommittedAt(0);
+  assert.equal(getCommittedEntries().length, 0);
+  assert.deepEqual(committedStorage(), []);
+});
+
+test("revertChangesFor: reverting a target drops its move record too", () => {
+  const a = el();
+  addTarget(a, "#a");
+  applyTokenToTarget(a, paddingGroup, paddingGroup.tokens[0]);
+  recordMove(a, {
+    from: anchor("#toolbar", "#b", 0, "1st of 2 in #toolbar"),
+    to: anchor("#toolbar", null, 1, "2nd of 2 in #toolbar"),
+  });
+  assert.equal(getChanges().length, 2);
+
+  revertChangesFor(a);
+
+  assert.deepEqual(getChanges(), []);
+  assert.equal(a.classList.contains("p-0"), false, "the style edit was reverted as well");
+});
+
+/** The CSS position group (id deliberately not POSITION_GROUP — see tokens.ts). */
+const positioningGroup: TokenGroup = {
+  id: "positioning",
+  label: "Position",
+  applyType: "class",
+  render: "icons",
+  tokens: [
+    { id: "static", label: "Static", className: "static" },
+    { id: "relative", label: "Relative", className: "relative" },
+    { id: "absolute", label: "Absolute", className: "absolute" },
+  ],
+};
+
+test("a CSS position token records a style change, never a move", () => {
+  const a = el();
+  addTarget(a, "#a");
+  applyTokenToTarget(a, positioningGroup, positioningGroup.tokens[1]); // relative
+
+  const change = getChanges()[0];
+  assert.equal(change.group, "positioning");
+  assert.equal(change.after, "relative");
+  // Moves are identified by their anchors, never by the group id: the server
+  // renders and counts a move only when this field is present.
+  assert.equal(change.move, undefined);
+});
+
+test("clearTokenForTarget: Default on a group never touches a recorded move", () => {
+  const a = el();
+  addTarget(a, "#a");
+  recordMove(a, {
+    from: anchor("#toolbar", "#b", 0, "1st of 2 in #toolbar"),
+    to: anchor("#toolbar", null, 1, "2nd of 2 in #toolbar"),
+  });
+
+  assert.equal(clearTokenForTarget(a, paddingGroup), false, "no style record for that group");
+  assert.equal(getChanges()[0].group, "position", "the move survives");
+});
+
+test("getAllChanges: a committed move and a pending style edit are both reported", () => {
+  const a = el();
+  addTarget(a, "#a");
+  recordMove(a, {
+    from: anchor("#toolbar", "#b", 0, "1st of 2 in #toolbar"),
+    to: anchor("#toolbar", null, 1, "2nd of 2 in #toolbar"),
+  });
+  commitChanges();
+  applyTokenToTarget(a, paddingGroup, paddingGroup.tokens[1]);
+
+  const all = getAllChanges();
+  assert.equal(all.length, 2);
+  assert.deepEqual(all.map((c) => c.group).sort(), ["padding", "position"]);
 });

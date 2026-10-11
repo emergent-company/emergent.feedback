@@ -113,7 +113,7 @@ Docked mode sits **alongside** the page rather than over it: the panel reserves
 its rail width (`margin-right` on the document root), so the host content reflows
 and stays fully visible and undimmed — no overlay covering the page. Element
 picking, multi-select and live style editing all continue while the panel is
-open; selection outlines are repainted after the reflow. Toggle dock/undock from
+open; the hover highlight is repainted after the reflow. Toggle dock/undock from
 the panel header; the choice is persisted per browser (localStorage
 `__ef_dialog_docked__`) and docked is the default. On narrow viewports (≤ 520 px)
 the panel takes the full width and the page is not reflowed.
@@ -141,19 +141,54 @@ pick mode). When more than one element is selected, the Design editor shows them
 as **per-element tabs**: pick a tab to edit that element on its own. Each edit is
 bounded to the active element — nothing is applied globally.
 
+Outlines are hover-driven: a selected element is **not** permanently boxed (that
+would cover the border/background/shadow being judged). Hover or focus a target
+label in the panel to outline that element, or hover the element itself to peek
+its tab — plus a short flash on select.
+
 Properties are grouped into collapsible sections — **Spacing**, **Layout**,
 **Typography**, **Color**, **Borders & Effects** and **daisyUI** — covering
 Tailwind/daisyUI utilities such as padding, margin, gap, max-width, width/height,
 display/flex, text size, font weight, rounding, borders, shadow and button/badge
 modifiers. Each group renders as a Figma-like row (label left, control right).
 Color groups and the sizing groups (padding, margin, gap, max-width, width,
-height) render as **dropdowns**; the rest render as chips.
+height) render as **dropdowns**; layout/position groups (display, flex
+direction, alignment, wrap, self/position/inset, object fit, text align, font
+weight, rounding, borders, shadow) render as **icon rows** of glyph buttons
+(inlined SVG, no icon font); the rest render as chips. The `render` field
+accepts `chips` (default), `dropdown`, or `icons`.
 
 Every dropdown ends with a **Custom class…** item (chip groups expose a
 **+ Custom** toggle) — type any Tailwind/daisyUI class (e.g. `max-w-6xl`) and
 press Enter to apply it. Choosing a token applies it live to the active element as
 a CSS class (or inline style, per token); applied edits are recorded per element
 and shown in the **Changes** list.
+
+Every group also has a **Default** control — the first chip in a chip row, the
+first item in a dropdown — which unsets the group: the overlay's edit is reverted
+and dropped, restoring whatever the element had before (a committed edit too, so
+it stops being replayed). Clicking an already-selected chip or choosing the
+selected dropdown option does the same. `Default` (unset) is not `None`
+(`p-0`, `m-0`, `gap-0`), which explicitly applies a zero value. When the value on
+an element comes from the page's own markup rather than an overlay edit, Default
+leaves it alone and says so.
+
+Selected elements can also be **dragged to move them**. There is no move mode:
+press a selected element on the page, move more than ~5 px and drop it. Inside a
+container the drop reorders siblings (the insertion line follows the row/column
+axis); dropping over a container's own padding/gap area appends into it, so an
+element can be reparented. Below the threshold nothing is intercepted — links,
+buttons and text fields inside the element keep working — and the click after a
+drop is swallowed so it does not also toggle the selection. Illegal drops
+(onto/into itself, onto overlay chrome, onto the page root) are refused.
+
+A move is recorded per element as an anchor pair (container selector + the
+sibling it sits before + index, plus the readable position, e.g.
+`2nd of 3 in .toolbar`). It shows up in the **Changes**/**Committed changes**
+lists as `Position`, is reverted with the element's other pending edits, replays
+after a reload once committed, and rides in the payload as
+`{ target, group: "position", before, after, move: { from, to } }` — the issue
+body renders it as a `move:` line.
 
 Edits start **pending**: they apply live to the page but are reverted when the
 panel is cancelled or the editing session ends. Press **Commit** to freeze the
@@ -206,10 +241,16 @@ Only the following style properties are accepted: `padding`, `padding-top`,
 escaped before rendering.
 
 Each group may also set `"section": "Layout"` to place it under a named
-collapsible heading (default `"Style"`), and `"render": "dropdown"` to render it
-as a dropdown instead of chips (best for color and sizing groups). Both are
-optional and ignored when invalid. Dropdowns always offer a **Custom class…**
-entry for a free-typed class, regardless of `render`.
+collapsible heading (default `"Style"`), and `"render": "dropdown"` or
+`"render": "icons"` to render it as a dropdown (best for color and sizing
+groups) or as an icon row (best for layout/position groups) instead of chips.
+All three are optional and ignored when invalid. Dropdowns always offer a
+**Custom class…** entry for a free-typed class, regardless of `render`.
+
+A token may carry an inline glyph for icon rows via `"icon": { "viewBox":
+"0 0 24 24", "paths": ["M4 5 …"] }`. The `viewBox` and every path `d` are
+validated against a strict charset before rendering; an invalid icon is dropped
+while the token itself is kept (the editor falls back to a text chip).
 
 ### Configuring the activation hotkey
 

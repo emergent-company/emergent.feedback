@@ -262,6 +262,8 @@ You are fixing feedback captured from a live page. Rules:
   verify the path exists before trusting a file:line. Fall back: fingerprint -> text -> selector.
 - Edit where markup is AUTHORED (component/template/partial), not built output.
 - Apply `Change to:` / before->after values verbatim. If "current" no longer matches, STOP and report.
+- "move:" entries are DOM reorders: place the element at the recorded position (the anchors under
+  the change's "move" field are selector-accurate; do it in the authored markup, not built output).
 - Keep design tokens (var(--x)) instead of hardcoding pixels where styles are tokenized.
 - If explanation.quality is "vague", ask ONE clarifying question before editing.
 - Read all notes first; reconcile conflicts; finish with a per-note checklist (done/blocked/covered).

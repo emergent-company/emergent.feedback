@@ -193,6 +193,8 @@ const behavioralPreamble = `You are fixing feedback captured from a live page. R
   verify the path exists before trusting a file:line. Fall back: fingerprint -> text -> selector.
 - Edit where markup is AUTHORED (component/template/partial), not built output.
 - Apply Change to: / before->after values verbatim. If "current" no longer matches, STOP and report.
+- "move:" entries are DOM reorders: place the element at the recorded position (the anchors under
+  the change's "move" field are selector-accurate; do it in the authored markup, not built output).
 - Keep design tokens (var(--x)) instead of hardcoding pixels where styles are tokenized.
 - If explanation.quality is "vague", ask ONE clarifying question before editing.
 - Read all notes first; reconcile conflicts; finish with a per-note checklist (done/blocked/covered).
@@ -394,11 +396,10 @@ func whatToDo(ctx map[string]any, env map[string]any, f store.Feedback) string {
 
 	expected := strVal(intent["expected"])
 	actual := strVal(intent["actual"])
-	changes := changeCount(intent)
 
 	if expected == "" && actual == "" {
-		if changes > 0 {
-			return fmt.Sprintf("Apply %d live style change(s) recorded on the selected element(s).", changes)
+		if clause := changesClause(intent); clause != "" {
+			return strings.TrimSpace(clause)
 		}
 		return fmt.Sprintf("Address the feedback on `%s`: %s", f.Selector, redactSecrets(f.Comment))
 	}
@@ -423,9 +424,7 @@ func whatToDo(ctx map[string]any, env map[string]any, f store.Feedback) string {
 	if actual != "" {
 		fmt.Fprintf(&sb, " Currently %s.", actual)
 	}
-	if changes > 0 {
-		fmt.Fprintf(&sb, " Apply %d live style change(s) recorded on the selected element(s).", changes)
-	}
+	sb.WriteString(changesClause(intent))
 	return sb.String()
 }
 
@@ -540,6 +539,16 @@ func writeChanges(sb *strings.Builder, ctx map[string]any, heading string) {
 		if before == "" {
 			before = "(none)"
 		}
+		// A DOM move is identified by its `move` anchors, never by the group id: a
+		// token group could otherwise be mistaken for a reorder.
+		if c["move"] != nil {
+			lines = append(lines, fmt.Sprintf("- `%s` — move: `%s` → `%s`",
+				mdTickSafe(redactSecrets(strVal(c["target"]))),
+				mdTickSafe(redactSecrets(before)),
+				mdTickSafe(redactSecrets(strVal(c["after"]))),
+			))
+			continue
+		}
 		lines = append(lines, fmt.Sprintf("- `%s` — %s: `%s` → `%s`",
 			mdTickSafe(redactSecrets(strVal(c["target"]))),
 			mdTickSafe(redactSecrets(strVal(c["group"]))),
@@ -562,17 +571,45 @@ func writeChanges(sb *strings.Builder, ctx map[string]any, heading string) {
 // changeCount returns the number of renderable live style changes recorded on
 // the intent — only entries that are maps, matching what writeChanges renders.
 func changeCount(intent map[string]any) int {
+	styles, moves := changeCounts(intent)
+	return styles + moves
+}
+
+// changeCounts splits the recorded changes into style edits and DOM moves
+// (those carrying `move` anchors), so the instruction can name both accurately.
+func changeCounts(intent map[string]any) (styles int, moves int) {
 	arr, ok := intent["changes"].([]any)
 	if !ok {
-		return 0
+		return 0, 0
 	}
-	n := 0
 	for _, v := range arr {
-		if _, ok := v.(map[string]any); ok {
-			n++
+		c, ok := v.(map[string]any)
+		if !ok {
+			continue
 		}
+		if c["move"] != nil {
+			moves++
+			continue
+		}
+		styles++
 	}
-	return n
+	return styles, moves
+}
+
+// changesClause renders "Apply N style change(s) and move M element(s)" for the
+// recorded live edits, or "" when there are none.
+func changesClause(intent map[string]any) string {
+	styles, moves := changeCounts(intent)
+	switch {
+	case styles > 0 && moves > 0:
+		return fmt.Sprintf(" Apply %d live style change(s) and move %d element(s) recorded on the selected element(s).", styles, moves)
+	case moves > 0:
+		return fmt.Sprintf(" Move %d element(s) to the recorded position on the selected element(s).", moves)
+	case styles > 0:
+		return fmt.Sprintf(" Apply %d live style change(s) recorded on the selected element(s).", styles)
+	default:
+		return ""
+	}
 }
 
 // mdTickSafe neutralizes markdown injection in values interpolated inside an

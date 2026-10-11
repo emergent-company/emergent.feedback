@@ -5,6 +5,8 @@
 // is validated + normalized before use — the overlay never injects raw strings
 // from the endpoint as HTML, and never applies an unbounded CSS value.
 
+import { ICONS, iconID, type GlyphIcon } from "./icons";
+
 /** How a single token is applied to an element. */
 export interface Apply {
   type: "class" | "style";
@@ -24,6 +26,8 @@ export interface Token {
   apply?: Apply;
   /** Optional CSS color used to render a swatch. */
   swatch?: string;
+  /** Optional inlined glyph for the "icons" render mode. */
+  icon?: GlyphIcon;
 }
 
 /** A group of mutually-exclusive tokens (e.g. padding, text color). */
@@ -39,7 +43,7 @@ export interface TokenGroup {
   removePattern?: string;
   tokens: Token[];
   /** Preferred editor rendering. Defaults to "chips". */
-  render?: "chips" | "dropdown";
+  render?: "chips" | "dropdown" | "icons";
   /** Editor section heading. Defaults to "Style" when unset. */
   section?: string;
 }
@@ -93,6 +97,36 @@ function safeSwatch(raw: unknown): string | undefined {
   if (!v || v.length > MAX_SWATCH) return undefined;
   if (/[;\n\r]|url\s*\(|image-set\s*\(|element\s*\(/i.test(v)) return undefined;
   return v;
+}
+
+// ── Icon validation ───────────────────────────────────────────────────────────
+
+const ICON_VIEWBOX_RE = /^0 0 \d{1,3} \d{1,3}$/;
+/** Path `d` data: SVG commands, digits, separators and whitespace only. */
+const ICON_PATH_RE = /^[MmLlHhVvCcSsQqTtAaZz0-9,.\s-]+$/;
+const ICON_MAX_PATH = 400;
+const ICON_MAX_PATHS = 12;
+
+/**
+ * Validate an inline glyph. The `d` strings are only ever interpolated into
+ * `<path d="…">`, so they are held to a strict charset (no HTML
+ * metacharacters) and a length cap. An invalid icon is dropped while the
+ * token survives — the editor falls back to a text chip.
+ */
+function safeIcon(raw: unknown): GlyphIcon | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const g = raw as Record<string, unknown>;
+  if (typeof g.viewBox !== "string" || !ICON_VIEWBOX_RE.test(g.viewBox)) return undefined;
+  if (!Array.isArray(g.paths) || g.paths.length === 0 || g.paths.length > ICON_MAX_PATHS) {
+    return undefined;
+  }
+  const paths: string[] = [];
+  for (const p of g.paths) {
+    if (typeof p !== "string" || p.length === 0 || p.length > ICON_MAX_PATH) return undefined;
+    if (!ICON_PATH_RE.test(p)) return undefined;
+    paths.push(p);
+  }
+  return { viewBox: g.viewBox, paths };
 }
 
 /**
@@ -155,6 +189,7 @@ function normalizeToken(raw: unknown, groupApplyType: "class" | "style"): Token 
   if (!apply && !className) return null;
 
   const swatch = safeSwatch(t.swatch);
+  const icon = safeIcon(t.icon);
 
   return {
     id,
@@ -162,6 +197,7 @@ function normalizeToken(raw: unknown, groupApplyType: "class" | "style"): Token 
     ...(className !== undefined ? { className } : {}),
     ...(apply !== undefined ? { apply } : {}),
     ...(swatch !== undefined ? { swatch } : {}),
+    ...(icon !== undefined ? { icon } : {}),
   };
 }
 
@@ -201,8 +237,10 @@ export function normalizeTheme(raw: unknown): ThemeTokens | null {
       removePattern = gg.removePattern as string;
     }
 
-    const render: "chips" | "dropdown" | undefined =
-      gg.render === "chips" || gg.render === "dropdown" ? gg.render : undefined;
+    const render: "chips" | "dropdown" | "icons" | undefined =
+      gg.render === "chips" || gg.render === "dropdown" || gg.render === "icons"
+        ? gg.render
+        : undefined;
 
     const section: string | undefined =
       typeof gg.section === "string" && gg.section ? gg.section : undefined;
@@ -389,14 +427,15 @@ export function buildFallbackTokens(): ThemeTokens {
         label: "Display",
         section: "Layout",
         applyType: "class",
+        render: "icons",
         tokens: [
-          { id: "block", label: "Block", className: "block" },
-          { id: "inline", label: "Inline", className: "inline" },
-          { id: "inline-block", label: "Inline block", className: "inline-block" },
-          { id: "flex", label: "Flex", className: "flex" },
-          { id: "inline-flex", label: "Inline flex", className: "inline-flex" },
-          { id: "grid", label: "Grid", className: "grid" },
-          { id: "hidden", label: "Hidden", className: "hidden" },
+          { id: "block", label: "Block", className: "block", icon: iconID("display", "block") },
+          { id: "inline", label: "Inline", className: "inline", icon: iconID("display", "inline") },
+          { id: "inline-block", label: "Inline block", className: "inline-block", icon: iconID("display", "inline-block") },
+          { id: "flex", label: "Flex", className: "flex", icon: iconID("display", "flex") },
+          { id: "inline-flex", label: "Inline flex", className: "inline-flex", icon: iconID("display", "inline-flex") },
+          { id: "grid", label: "Grid", className: "grid", icon: iconID("display", "grid") },
+          { id: "hidden", label: "Hidden", className: "hidden", icon: iconID("display", "hidden") },
         ],
       },
       {
@@ -404,13 +443,14 @@ export function buildFallbackTokens(): ThemeTokens {
         label: "Align items",
         section: "Layout",
         applyType: "class",
+        render: "icons",
         removePattern: "^items-",
         tokens: [
-          { id: "start", label: "Start", className: "items-start" },
-          { id: "center", label: "Center", className: "items-center" },
-          { id: "end", label: "End", className: "items-end" },
-          { id: "stretch", label: "Stretch", className: "items-stretch" },
-          { id: "baseline", label: "Baseline", className: "items-baseline" },
+          { id: "start", label: "Start", className: "items-start", icon: iconID("align", "start") },
+          { id: "center", label: "Center", className: "items-center", icon: iconID("align", "center") },
+          { id: "end", label: "End", className: "items-end", icon: iconID("align", "end") },
+          { id: "stretch", label: "Stretch", className: "items-stretch", icon: iconID("align", "stretch") },
+          { id: "baseline", label: "Baseline", className: "items-baseline", icon: iconID("align", "baseline") },
         ],
       },
       {
@@ -418,13 +458,14 @@ export function buildFallbackTokens(): ThemeTokens {
         label: "Justify",
         section: "Layout",
         applyType: "class",
+        render: "icons",
         tokens: [
-          { id: "start", label: "Start", className: "justify-start" },
-          { id: "center", label: "Center", className: "justify-center" },
-          { id: "end", label: "End", className: "justify-end" },
-          { id: "between", label: "Between", className: "justify-between" },
-          { id: "around", label: "Around", className: "justify-around" },
-          { id: "evenly", label: "Evenly", className: "justify-evenly" },
+          { id: "start", label: "Start", className: "justify-start", icon: iconID("justify", "start") },
+          { id: "center", label: "Center", className: "justify-center", icon: iconID("justify", "center") },
+          { id: "end", label: "End", className: "justify-end", icon: iconID("justify", "end") },
+          { id: "between", label: "Between", className: "justify-between", icon: iconID("justify", "between") },
+          { id: "around", label: "Around", className: "justify-around", icon: iconID("justify", "around") },
+          { id: "evenly", label: "Evenly", className: "justify-evenly", icon: iconID("justify", "evenly") },
         ],
       },
       {
@@ -432,11 +473,84 @@ export function buildFallbackTokens(): ThemeTokens {
         label: "Flex direction",
         section: "Layout",
         applyType: "class",
+        render: "icons",
         tokens: [
-          { id: "row", label: "Row", className: "flex-row" },
-          { id: "row-reverse", label: "Row reverse", className: "flex-row-reverse" },
-          { id: "col", label: "Col", className: "flex-col" },
-          { id: "col-reverse", label: "Col reverse", className: "flex-col-reverse" },
+          { id: "row", label: "Row", className: "flex-row", icon: iconID("flex", "row") },
+          { id: "row-reverse", label: "Row reverse", className: "flex-row-reverse", icon: iconID("flex", "row-reverse") },
+          { id: "col", label: "Col", className: "flex-col", icon: iconID("flex", "col") },
+          { id: "col-reverse", label: "Col reverse", className: "flex-col-reverse", icon: iconID("flex", "col-reverse") },
+        ],
+      },
+      {
+        id: "wrap",
+        label: "Wrap",
+        section: "Layout",
+        applyType: "class",
+        render: "icons",
+        tokens: [
+          { id: "wrap", label: "Wrap", className: "flex-wrap", icon: ICONS["wrap"] },
+          { id: "nowrap", label: "No wrap", className: "flex-nowrap", icon: ICONS["nowrap"] },
+          { id: "wrap-reverse", label: "Wrap reverse", className: "flex-wrap-reverse", icon: ICONS["wrap-reverse"] },
+        ],
+      },
+      {
+        id: "self",
+        label: "Align self",
+        section: "Layout",
+        applyType: "class",
+        render: "icons",
+        removePattern: "^self-",
+        tokens: [
+          { id: "auto", label: "Auto", className: "self-auto", icon: iconID("self", "auto") },
+          { id: "start", label: "Start", className: "self-start", icon: iconID("self", "start") },
+          { id: "center", label: "Center", className: "self-center", icon: iconID("self", "center") },
+          { id: "end", label: "End", className: "self-end", icon: iconID("self", "end") },
+          { id: "stretch", label: "Stretch", className: "self-stretch", icon: iconID("self", "stretch") },
+        ],
+      },
+      {
+        // NOT "position": that id is reserved for recorded DOM moves
+        // (selection.ts POSITION_GROUP), and the payload must not be ambiguous.
+        id: "positioning",
+        label: "Position",
+        section: "Layout",
+        applyType: "class",
+        render: "icons",
+        tokens: [
+          { id: "static", label: "Static", className: "static", icon: iconID("position", "static") },
+          { id: "relative", label: "Relative", className: "relative", icon: iconID("position", "relative") },
+          { id: "absolute", label: "Absolute", className: "absolute", icon: iconID("position", "absolute") },
+          { id: "fixed", label: "Fixed", className: "fixed", icon: iconID("position", "fixed") },
+          { id: "sticky", label: "Sticky", className: "sticky", icon: iconID("position", "sticky") },
+        ],
+      },
+      {
+        id: "inset",
+        label: "Inset",
+        section: "Layout",
+        applyType: "class",
+        render: "icons",
+        tokens: [
+          { id: "inset", label: "All sides", className: "inset-0", icon: iconID("pin", "inset") },
+          { id: "top", label: "Top", className: "top-0", icon: iconID("pin", "top") },
+          { id: "right", label: "Right", className: "right-0", icon: iconID("pin", "right") },
+          { id: "bottom", label: "Bottom", className: "bottom-0", icon: iconID("pin", "bottom") },
+          { id: "left", label: "Left", className: "left-0", icon: iconID("pin", "left") },
+        ],
+      },
+      {
+        id: "objectFit",
+        label: "Object fit",
+        section: "Layout",
+        applyType: "class",
+        render: "icons",
+        removePattern: "^object-",
+        tokens: [
+          { id: "cover", label: "Cover", className: "object-cover", icon: iconID("object", "cover") },
+          { id: "contain", label: "Contain", className: "object-contain", icon: iconID("object", "contain") },
+          { id: "fill", label: "Fill", className: "object-fill", icon: iconID("object", "fill") },
+          { id: "none", label: "None", className: "object-none", icon: iconID("object", "none") },
+          { id: "scale-down", label: "Scale down", className: "object-scale-down", icon: iconID("object", "scale-down") },
         ],
       },
       {
@@ -460,16 +574,33 @@ export function buildFallbackTokens(): ThemeTokens {
         label: "Font weight",
         section: "Typography",
         applyType: "class",
+        render: "icons",
         tokens: [
-          { id: "thin", label: "Thin", className: "font-thin" },
-          { id: "extralight", label: "Extra light", className: "font-extralight" },
-          { id: "light", label: "Light", className: "font-light" },
-          { id: "normal", label: "Normal", className: "font-normal" },
-          { id: "medium", label: "Medium", className: "font-medium" },
-          { id: "semibold", label: "Semibold", className: "font-semibold" },
-          { id: "bold", label: "Bold", className: "font-bold" },
-          { id: "extrabold", label: "Extra bold", className: "font-extrabold" },
-          { id: "black", label: "Black", className: "font-black" },
+          { id: "thin", label: "Thin", className: "font-thin", icon: iconID("weight", "thin") },
+          { id: "extralight", label: "Extra light", className: "font-extralight", icon: iconID("weight", "extralight") },
+          { id: "light", label: "Light", className: "font-light", icon: iconID("weight", "light") },
+          { id: "normal", label: "Normal", className: "font-normal", icon: iconID("weight", "normal") },
+          { id: "medium", label: "Medium", className: "font-medium", icon: iconID("weight", "medium") },
+          { id: "semibold", label: "Semibold", className: "font-semibold", icon: iconID("weight", "semibold") },
+          { id: "bold", label: "Bold", className: "font-bold", icon: iconID("weight", "bold") },
+          { id: "extrabold", label: "Extra bold", className: "font-extrabold", icon: iconID("weight", "extrabold") },
+          { id: "black", label: "Black", className: "font-black", icon: iconID("weight", "black") },
+        ],
+      },
+      {
+        id: "textAlign",
+        label: "Text align",
+        section: "Typography",
+        applyType: "class",
+        render: "icons",
+        // No removePattern: a `^text-` pattern would also strip the text-size
+        // (`text-lg`) and text-color (`text-primary`) classes. Exact-class
+        // removal (like textSize/textColor) strips the previous alignment.
+        tokens: [
+          { id: "left", label: "Left", className: "text-left", icon: iconID("text", "left") },
+          { id: "center", label: "Center", className: "text-center", icon: iconID("text", "center") },
+          { id: "right", label: "Right", className: "text-right", icon: iconID("text", "right") },
+          { id: "justify", label: "Justify", className: "text-justify", icon: iconID("text", "justify") },
         ],
       },
       {
@@ -493,15 +624,16 @@ export function buildFallbackTokens(): ThemeTokens {
         label: "Rounded",
         section: "Borders & Effects",
         applyType: "class",
+        render: "icons",
         tokens: [
-          { id: "none", label: "None", className: "rounded-none" },
-          { id: "sm", label: "Small", className: "rounded-sm" },
-          { id: "md", label: "Medium", className: "rounded-md" },
-          { id: "lg", label: "Large", className: "rounded-lg" },
-          { id: "xl", label: "X-Large", className: "rounded-xl" },
-          { id: "2xl", label: "2X-Large", className: "rounded-2xl" },
-          { id: "3xl", label: "3X-Large", className: "rounded-3xl" },
-          { id: "full", label: "Full", className: "rounded-full" },
+          { id: "none", label: "None", className: "rounded-none", icon: iconID("radius", "none") },
+          { id: "sm", label: "Small", className: "rounded-sm", icon: iconID("radius", "sm") },
+          { id: "md", label: "Medium", className: "rounded-md", icon: iconID("radius", "md") },
+          { id: "lg", label: "Large", className: "rounded-lg", icon: iconID("radius", "lg") },
+          { id: "xl", label: "X-Large", className: "rounded-xl", icon: iconID("radius", "xl") },
+          { id: "2xl", label: "2X-Large", className: "rounded-2xl", icon: iconID("radius", "2xl") },
+          { id: "3xl", label: "3X-Large", className: "rounded-3xl", icon: iconID("radius", "3xl") },
+          { id: "full", label: "Full", className: "rounded-full", icon: iconID("radius", "full") },
         ],
       },
       {
@@ -509,12 +641,13 @@ export function buildFallbackTokens(): ThemeTokens {
         label: "Border width",
         section: "Borders & Effects",
         applyType: "class",
+        render: "icons",
         removePattern: "^border-[0-9]",
         tokens: [
-          { id: "none", label: "None", className: "border-0" },
-          { id: "2px", label: "2px", className: "border-2" },
-          { id: "4px", label: "4px", className: "border-4" },
-          { id: "8px", label: "8px", className: "border-8" },
+          { id: "none", label: "None", className: "border-0", icon: ICONS["border-0"] },
+          { id: "2px", label: "2px", className: "border-2", icon: ICONS["border-2"] },
+          { id: "4px", label: "4px", className: "border-4", icon: ICONS["border-4"] },
+          { id: "8px", label: "8px", className: "border-8", icon: ICONS["border-8"] },
         ],
       },
       {
@@ -522,10 +655,11 @@ export function buildFallbackTokens(): ThemeTokens {
         label: "Border style",
         section: "Borders & Effects",
         applyType: "class",
+        render: "icons",
         tokens: [
-          { id: "solid", label: "Solid", className: "border-solid" },
-          { id: "dashed", label: "Dashed", className: "border-dashed" },
-          { id: "dotted", label: "Dotted", className: "border-dotted" },
+          { id: "solid", label: "Solid", className: "border-solid", icon: iconID("stroke", "solid") },
+          { id: "dashed", label: "Dashed", className: "border-dashed", icon: iconID("stroke", "dashed") },
+          { id: "dotted", label: "Dotted", className: "border-dotted", icon: iconID("stroke", "dotted") },
         ],
       },
       {
@@ -533,13 +667,14 @@ export function buildFallbackTokens(): ThemeTokens {
         label: "Shadow",
         section: "Borders & Effects",
         applyType: "class",
+        render: "icons",
         tokens: [
-          { id: "none", label: "None", className: "shadow-none" },
-          { id: "sm", label: "Small", className: "shadow-sm" },
-          { id: "md", label: "Medium", className: "shadow-md" },
-          { id: "lg", label: "Large", className: "shadow-lg" },
-          { id: "xl", label: "X-Large", className: "shadow-xl" },
-          { id: "2xl", label: "2X-Large", className: "shadow-2xl" },
+          { id: "none", label: "None", className: "shadow-none", icon: iconID("shadow", "none") },
+          { id: "sm", label: "Small", className: "shadow-sm", icon: iconID("shadow", "sm") },
+          { id: "md", label: "Medium", className: "shadow-md", icon: iconID("shadow", "md") },
+          { id: "lg", label: "Large", className: "shadow-lg", icon: iconID("shadow", "lg") },
+          { id: "xl", label: "X-Large", className: "shadow-xl", icon: iconID("shadow", "xl") },
+          { id: "2xl", label: "2X-Large", className: "shadow-2xl", icon: iconID("shadow", "2xl") },
         ],
       },
       {
