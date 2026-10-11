@@ -37,10 +37,10 @@ Zero-config feedback overlay. One `<script>` tag adds element-level commenting +
 
 ### Feedback dialog
 
-- Existing comments shown at top
-- Type comment, pick Bug/Enhancement
-- **Save** — saves locally without GitHub issue
-- **Send to GitHub** — creates issue with full CSS context (selector, computed styles, framework detection, viewport, HTML)
+- Panel shows the **Design** editor (restyle the selected element(s))
+- **Commit** — freezes pending edits; committed edits persist (localStorage) across close/reload until removed via the Committed-changes list
+- **Send to GitHub** — opens the issue submission modal (does not create the issue directly)
+- In the modal: fill title/type/intent/note, then **Create issue**; **Save** saves locally without a GitHub issue
 
 ## `data-component` attribute
 

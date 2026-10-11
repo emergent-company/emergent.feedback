@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { signIn } from "../../support/auth";
-import { openIssuesTab } from "../../support/dialog";
+import { openIssueModal } from "../../support/dialog";
 
 // "Other page": a third-party-style host page (served by the fixture server)
 // that embeds the overlay via a <script> tag. Verifies activation, capture and
@@ -26,7 +26,7 @@ test.describe("embedded overlay on a host page", () => {
     await activate(page);
     await page.locator("#target-btn").click();
     await expect(page.locator("#__ef_dialog__")).toBeVisible();
-    await openIssuesTab(page);
+    await openIssueModal(page);
 
     await page.fill("#__ef_comment__", "primary action label is unclear");
     const [response] = await Promise.all([
@@ -55,7 +55,7 @@ test.describe("embedded overlay on a host page", () => {
     await activate(page);
     await page.locator('[data-testid="pricing-upgrade"]').click();
     await expect(page.locator("#__ef_dialog__")).toBeVisible();
-    await openIssuesTab(page);
+    await openIssueModal(page);
 
     await page.fill("#__ef_comment__", "upgrade CTA is unclear");
     const [response] = await Promise.all([

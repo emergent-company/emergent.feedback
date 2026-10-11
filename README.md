@@ -94,11 +94,17 @@ No build step, no npm install, no configuration file. The script self-initialise
 
 ### Feedback dialog
 
-1. Existing comments for that element are shown at the top (scrollable)
-2. Type a new comment in the textarea
-3. Select **Bug** or **Enhancement**
-4. **Save** — saves the comment without creating a GitHub issue
-5. **Send to GitHub** — submits the comment (if any) and creates a GitHub issue with full context
+The panel opens on the **Design** editor. To report feedback:
+
+1. Restyle the selected element(s) in the Design editor, then **Commit**
+   (`#__ef_commit__`) to freeze the pending edits — committed edits persist
+   (localStorage) across sidebar close, reopen and page reload.
+2. **Send to GitHub** opens the issue submission modal (it no longer creates
+   the issue directly).
+3. In the modal, fill the title, type (**Bug** / **Enhancement**), intent and
+   note, then **Create issue** to submit.
+4. **Save** (also inside the modal) saves the feedback without creating a
+   GitHub issue.
 
 ### Docked panel
 
@@ -124,14 +130,15 @@ it straight back; press `Escape` to cancel the pick and stay in the dialog.
 
 ### Live style editing
 
-The panel is split into two tabs: **Design** and **Issues**. Write the report on
-the Issues tab; restyle elements on the Design tab. Both tabs keep their state
-while you switch.
+The panel shows only the **Design** editor (the former Design/Issues tabs are
+gone). Writing the report and viewing the captured context/HTML happen in the
+issue submission modal (see [Feedback dialog](#feedback-dialog)), not in the
+panel header.
 
 With the panel open, click additional elements to add them to the selection (a
 click on an already-selected element toggles it off, and **Add element** enters a
-pick mode). When more than one element is selected, the Design tab shows them as
-**per-element tabs**: pick a tab to edit that element on its own. Each edit is
+pick mode). When more than one element is selected, the Design editor shows them
+as **per-element tabs**: pick a tab to edit that element on its own. Each edit is
 bounded to the active element — nothing is applied globally.
 
 Properties are grouped into collapsible sections — **Spacing**, **Layout**,
@@ -146,12 +153,15 @@ Every dropdown ends with a **Custom class…** item (chip groups expose a
 **+ Custom** toggle) — type any Tailwind/daisyUI class (e.g. `max-w-6xl`) and
 press Enter to apply it. Choosing a token applies it live to the active element as
 a CSS class (or inline style, per token); applied edits are recorded per element
-and shown in the Design tab's **Changes** list.
+and shown in the **Changes** list.
 
-Edits are reverted when the panel is cancelled or the editing session ends; they
-are kept and included in the feedback when you Save or Send to GitHub. The GitHub
-issue and the panel preview render a **Requested changes** list
-(`target — group: before → after`).
+Edits start **pending**: they apply live to the page but are reverted when the
+panel is cancelled or the editing session ends. Press **Commit** to freeze the
+pending edits — committed edits are written to localStorage and persist across
+closing/reopening the panel and page reloads. Manage them from the global
+**Committed changes** list (per-entry **Remove** plus **Remove all**); they are
+cleared only by explicit removal. The issue submission modal and the panel
+preview render a **Requested changes** list (`target — group: before → after`).
 
 Tokens come from the project via `data-theme-url` (below). Placeholder choices
 are used when it is absent.

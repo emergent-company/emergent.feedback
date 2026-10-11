@@ -31,10 +31,12 @@ import {
   toggleTarget as toggleSelectionTarget,
   pickTarget as pickSelectionTarget,
   getTargets as getSelectionTargets,
-  getChanges as getSelectionChanges,
+  getAllChanges as getAllSelectionChanges,
   clear as clearSelection,
-  revertAll as revertSelection,
-  commit as commitSelection,
+  revertPending,
+  markSent,
+  loadCommitted,
+  reapplyCommitted,
   handleHover as handleSelectionHover,
   isPickMode,
 } from "./selection";
@@ -53,6 +55,14 @@ import { initTheme, onThemeChange, applyTheme } from "./theme";
   startConsoleCapture();
 
   const config = readConfig();
+
+  // Re-apply any previously committed style edits (persist across reload).
+  // Retry once the DOM is parsed — the async script can run before the target
+  // elements exist, and SPA routes may mount them later (see openEditor).
+  loadCommitted();
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => reapplyCommitted(), { once: true });
+  }
 
   // Resolve + apply the overlay theme before any UI is shown, and keep it in
   // sync when the OS preference or the host page theme flips.
@@ -116,9 +126,9 @@ import { initTheme, onThemeChange, applyTheme } from "./theme";
     document.removeEventListener("click", onElementClick, true);
     clearHighlight();
     clearBadges();
-    // Undo live edits unless they were already committed via save/export
-    // (commitSelection clears the applied list, so this becomes a no-op).
-    revertSelection();
+    // Undo only the uncommitted (pending) edits; committed edits stay on the
+    // page AND in storage when the sidebar closes.
+    revertPending();
     clearSelection();
     closeDialog();
   }
@@ -184,10 +194,14 @@ import { initTheme, onThemeChange, applyTheme } from "./theme";
 
     const tokens = await loadTokens(config);
 
-    // Seed the multi-select set with the clicked element (revert any edits
-    // left over from a previous target so the page is clean).
-    revertSelection();
+    // Seed the multi-select set with the clicked element (revert any pending
+    // edits left over from a previous target so the page is clean; committed
+    // edits are preserved).
+    revertPending();
     clearSelection();
+    // The panel is open with the DOM fully mounted — retry any committed
+    // entries that were stale when the overlay first booted.
+    reapplyCommitted();
     addSelectionTarget(target, selector, nearestComponentName(target));
 
     forceMode("editing");
@@ -224,7 +238,7 @@ import { initTheme, onThemeChange, applyTheme } from "./theme";
       },
       tokens,
       getTargets: getSelectionTargets,
-      getChanges: () => getSelectionChanges(),
+      getChanges: () => getAllSelectionChanges(),
       onSubmit: async (comment, type: FeedbackType, intent: FeedbackIntent) => {
         const screenshot = await captureElement(target);
         const snapshot = captureSnapshot();
@@ -266,8 +280,8 @@ import { initTheme, onThemeChange, applyTheme } from "./theme";
           snapshot,
           ...(replay ? { replay } : {}),
         });
-        // Keep the applied edits on the page; stop tracking them.
-        commitSelection();
+        // Promote the applied edits to committed; stop tracking them as pending.
+        markSent();
         await refreshBadges();
         forceMode("active");
         return result.id;
@@ -280,13 +294,14 @@ import { initTheme, onThemeChange, applyTheme } from "./theme";
           title: issueTopic,
         });
         showToast("Issue created successfully!");
-        commitSelection();
+        markSent();
         await refreshBadges();
         forceMode("active");
       },
       onCancel: () => {
-        // Drop live edits + selection, then return to comment mode.
-        revertSelection();
+        // Drop pending edits + selection (committed edits survive), then return
+        // to comment mode.
+        revertPending();
         clearSelection();
         forceMode("active");
       },

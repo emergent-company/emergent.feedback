@@ -15,7 +15,7 @@ export interface TargetEntry {
 }
 
 interface AppliedRecord {
-  el: Element;
+  el: Element | null;
   group: TokenGroup;
   token: Token;
   before: string;
@@ -31,6 +31,7 @@ const COLOR_PICK = "#4f86f7"; // blue — pick-mode hover
 
 let targets: TargetEntry[] = [];
 let applied: AppliedRecord[] = [];
+let committed: AppliedRecord[] = [];
 let listeners: Array<() => void> = [];
 let pickMode = false;
 let hoverEl: Element | null = null;
@@ -43,6 +44,16 @@ function emit(): void {
     } catch {
       // A misbehaving subscriber must never break the overlay.
     }
+  }
+}
+
+/** Revert one record's DOM edit, tolerating stale (null) elements. */
+function revertRecord(r: AppliedRecord): void {
+  if (!r.el) return; // stale entry — nothing in the DOM to restore
+  try {
+    revertToken(r.el, r.group, { before: r.before, after: r.after });
+  } catch {
+    // Element may have left the DOM — nothing to restore.
   }
 }
 
@@ -98,11 +109,7 @@ export function removeTarget(el: Element): boolean {
   // the class/style stays on the host page but is untracked, so Cancel / idle
   // teardown could never undo it.
   for (const r of applied.filter((rec) => rec.el === el)) {
-    try {
-      revertToken(r.el, r.group, { before: r.before, after: r.after });
-    } catch {
-      // Element may have left the DOM — nothing to restore.
-    }
+    revertRecord(r);
   }
   targets = targets.filter((t) => t.el !== el);
   applied = applied.filter((r) => r.el !== el);
@@ -194,34 +201,36 @@ export function getChangeCountFor(el: Element): number {
 /** Revert only the applied changes belonging to `el`, keeping other targets. */
 export function revertChangesFor(el: Element): void {
   for (const r of applied.filter((rec) => rec.el === el)) {
-    try {
-      revertToken(r.el, r.group, { before: r.before, after: r.after });
-    } catch {
-      // Element may have left the DOM — nothing to restore.
-    }
+    revertRecord(r);
+  }
+  for (const r of committed.filter((rec) => rec.el === el)) {
+    revertRecord(r);
   }
   applied = applied.filter((r) => r.el !== el);
+  committed = committed.filter((r) => r.el !== el);
   renderOutlines();
+  persist();
   emit();
 }
 
-/** Revert every applied token change on the host page. Selection is kept. */
+/** Revert every applied AND committed token change on the host page. Selection kept. */
 export function revertAll(): void {
   for (const r of applied) {
-    try {
-      revertToken(r.el, r.group, { before: r.before, after: r.after });
-    } catch {
-      // Ignore elements that vanished from the DOM.
-    }
+    revertRecord(r);
+  }
+  for (const r of committed) {
+    revertRecord(r);
   }
   applied = [];
+  committed = [];
   renderOutlines();
+  persist();
   emit();
 }
 
 /**
- * Keep the applied DOM changes but stop tracking them (used after save/export
- * so the host page keeps the edits and later teardown won't undo them).
+ * Teardown: keep the DOM edits but stop tracking pending edits + targets.
+ * Does NOT touch the committed store — committed edits survive teardown.
  */
 export function commit(): void {
   applied = [];
@@ -231,6 +240,252 @@ export function commit(): void {
   dropListeners();
   removeOverlays();
   emit();
+}
+
+// ── Committed changes (persist across close / reload) ─────────────────────────
+
+/** One committed edit, as shown in the panel's "committed" list. */
+export interface CommittedEntry {
+  selector: string;
+  group: string;
+  groupLabel: string;
+  before: string;
+  after: string;
+  stale: boolean;
+}
+
+const COMMITTED_KEY = "__ef_committed__";
+
+/** Storage key — scoped per path so edits don't leak across pages. */
+function storageKey(): string {
+  if (typeof location !== "undefined" && location.pathname) {
+    return `${COMMITTED_KEY}:${location.pathname}`;
+  }
+  return COMMITTED_KEY;
+}
+
+/** Write the committed store to localStorage (guarded for Node/private mode). */
+function persist(): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    const data = committed.map((r) => ({
+      selector: r.selector,
+      group: r.group,
+      token: r.token,
+      before: r.before,
+      after: r.after,
+    }));
+    localStorage.setItem(storageKey(), JSON.stringify(data));
+  } catch {
+    // Private mode / sandboxed iframe / absent localStorage — ignore.
+  }
+}
+
+/** True when two records cover the same element (or selector) + group. */
+function sameRecord(a: AppliedRecord, b: AppliedRecord): boolean {
+  if (a.group.id !== b.group.id) return false;
+  if (a.el && b.el) return a.el === b.el;
+  return a.selector === b.selector;
+}
+
+/**
+ * Promote pending edits to committed: merge into the committed store (dedupe
+ * by element+group, keeping the latest while preserving the ORIGINAL before),
+ * drop the pending list, keep the DOM edits, persist, and notify.
+ */
+export function commitChanges(): void {
+  const merged = committed.slice();
+  for (const r of applied) {
+    const idx = merged.findIndex((c) => sameRecord(c, r));
+    if (idx >= 0) {
+      merged[idx] = { ...r, before: merged[idx].before };
+    } else {
+      merged.push(r);
+    }
+  }
+  committed = merged;
+  applied = [];
+  renderOutlines();
+  persist();
+  emit();
+}
+
+/** Alias for `commitChanges` — called after a successful Save / issue send. */
+export function markSent(): void {
+  commitChanges();
+}
+
+/** Revert + drop ONLY pending edits; committed entries are left untouched. */
+export function revertPending(): void {
+  for (const r of applied) {
+    revertRecord(r);
+  }
+  applied = [];
+  renderOutlines();
+  emit();
+}
+
+/**
+ * Read the committed store from storage and re-apply onto matched elements.
+ * Entries whose selector no longer resolves become stale (el: null) and are
+ * kept in memory + storage. Safe to call once at boot.
+ */
+export function loadCommitted(): void {
+  committed = [];
+  if (typeof localStorage === "undefined") {
+    emit();
+    return;
+  }
+  let raw: string | null = null;
+  try {
+    raw = localStorage.getItem(storageKey());
+  } catch {
+    raw = null;
+  }
+  if (!raw) {
+    emit();
+    return;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    parsed = null;
+  }
+  if (!Array.isArray(parsed)) {
+    emit();
+    return;
+  }
+
+  const records: AppliedRecord[] = [];
+  for (const item of parsed) {
+    if (!item || typeof item !== "object") continue;
+    const rec = item as Record<string, unknown>;
+    const selector = typeof rec.selector === "string" ? rec.selector : "";
+    const group = (rec.group ?? null) as TokenGroup | null;
+    const token = (rec.token ?? null) as Token | null;
+    const before = typeof rec.before === "string" ? rec.before : "";
+    const after = typeof rec.after === "string" ? rec.after : "";
+    if (!group || !token || !selector) continue;
+
+    let el: Element | null = null;
+    if (typeof document !== "undefined" && typeof document.querySelector === "function") {
+      try {
+        el = document.querySelector(selector);
+      } catch {
+        el = null;
+      }
+    }
+    if (el) {
+      try {
+        applyToken(el, group, token);
+      } catch {
+        // ignore — element apply failed, treat as stale-but-present
+      }
+    }
+    records.push({ el: el ?? null, group, token, before, after, selector });
+  }
+  committed = records;
+  emit();
+}
+
+/**
+ * Retry resolving committed entries that were stale at load time — the async
+ * overlay script can run before the target elements are parsed, and SPA routes
+ * may mount them later. Only touches entries with no resolved element.
+ */
+export function reapplyCommitted(): void {
+  if (typeof document === "undefined" || typeof document.querySelector !== "function") return;
+  let changed = false;
+  for (const r of committed) {
+    if (r.el) continue;
+    let el: Element | null = null;
+    try {
+      el = document.querySelector(r.selector);
+    } catch {
+      el = null;
+    }
+    if (!el) continue;
+    try {
+      applyToken(el, r.group, r.token);
+    } catch {
+      // ignore — keep the entry stale-but-present
+    }
+    r.el = el;
+    changed = true;
+  }
+  if (changed) emit();
+}
+
+/** Committed edits, flattened for the panel's "committed changes" list. */
+export function getCommittedEntries(): CommittedEntry[] {
+  return committed.map((r) => ({
+    selector: r.selector,
+    group: r.group.id,
+    groupLabel: r.group.label,
+    before: r.before,
+    after: r.after,
+    stale: r.el == null,
+  }));
+}
+
+export function getCommittedCount(): number {
+  return committed.length;
+}
+
+/** Revert + drop the committed entry at `index`, then persist. */
+export function removeCommittedAt(index: number): void {
+  const r = committed[index];
+  if (!r) return;
+  revertRecord(r);
+  committed.splice(index, 1);
+  persist();
+  emit();
+}
+
+/** Revert + drop every committed entry, then persist (empty). */
+export function clearCommitted(): void {
+  for (const r of committed) {
+    revertRecord(r);
+  }
+  committed = [];
+  persist();
+  emit();
+}
+
+/** Committed edits as feedback records. */
+export function getCommittedChanges(): StyleChange[] {
+  return committed.map((r) => ({
+    target: r.selector,
+    group: r.group.id,
+    before: r.before,
+    after: r.after,
+  }));
+}
+
+/** Pending + committed edits, as feedback records. */
+export function getAllChanges(): StyleChange[] {
+  return [...getChanges(), ...getCommittedChanges()];
+}
+
+/** Pending + committed edits for a single element. */
+export function getAllChangesFor(el: Element): StyleChange[] {
+  return [...applied, ...committed]
+    .filter((r) => r.el === el)
+    .map((r) => ({
+      target: r.selector,
+      group: r.group.id,
+      before: r.before,
+      after: r.after,
+    }));
+}
+
+/** Number of pending + committed records tracked for a single element. */
+export function getAllChangeCountFor(el: Element): number {
+  return (
+    applied.filter((r) => r.el === el).length +
+    committed.filter((r) => r.el === el).length
+  );
 }
 
 // ── Overlay rendering ─────────────────────────────────────────────────────────
