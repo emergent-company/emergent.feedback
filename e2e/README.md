@@ -39,7 +39,7 @@ offline — no GitHub OAuth popup, fully deterministic and CI-safe.
 | **Own API tests** | Session JWT | Same minted token sent as `Authorization: Bearer <jwt>` on Playwright `request` calls. |
 | **MCP endpoint** | `ef_...` / bootstrap key | `E2E_MCP_API_KEY`, matched to the server's `MCP_API_KEY`. |
 | **Local host fixture** | Session JWT | Same injection; the fixture's `data-api` points at the test API. |
-| **Remote host app** | Host-app login | Playwright `storageState` (`E2E_STORAGE_STATE`, default `e2e/.auth/host.json`). Capture once with `npx playwright codegen --save-storage=...`, or let the `remote-auth` setup project log in from `E2E_HOST_USER` / `E2E_HOST_PASS`. |
+| **Remote host app** | Host-app login | Playwright `storageState` (`E2E_STORAGE_STATE`, default `e2e/.auth/host.json`). Capture with `npm run login` — it drives a hosted OIDC login (Zitadel, Auth0, …) — or `npx playwright codegen --save-storage=...` for a plain in-page form. The `remote-auth` setup project is a fallback for simple email/password hosts. |
 | **Remote overlay auth** | Real GitHub session | For a third-party feedback server you do not control, automate it by capturing that session into the same storageState (never drive the GitHub OAuth popup in automation). For a server you do control, mint a JWT with its `JWT_SECRET` as above. |
 
 ### Why not drive the GitHub OAuth popup?
@@ -50,6 +50,45 @@ that brittle in CI. Minting the JWT directly exercises every code path *after*
 login, which is what the suite is meant to cover. The one real-GitHub edge —
 issue export — is stubbed/mocked; the panel's `api/repos` call is left to the
 server and its GitHub App installation.
+
+## Running against a deployed host app (manual)
+
+The `remote` project is an **ad-hoc, manually run** check — it is deliberately
+**not** wired into CI. It answers one question: *is the overlay installed and
+working on this deployed page?*
+
+```bash
+cd e2e
+npm install
+npx playwright install chromium
+
+# 1. Capture a session for the host app (writes E2E_STORAGE_STATE).
+E2E_HOST_URL=https://admin.dev.emergent-company.ai \
+  E2E_TEST_USER_EMAIL=you@example.com \
+  E2E_TEST_USER_PASSWORD=... \
+  npm run login
+
+# 2. Run the remote project against it (read-only by default).
+E2E_HOST_URL=https://admin.dev.emergent-company.ai npm run test:remote
+```
+
+`npm run login` drives the full OIDC sign-in (identifier → password), settles a
+first-login interstitial such as 2FA enrolment, reports whether
+`window.EmergentFeedback` and the overlay `<script>` are present, and saves the
+session. Use it when the host sits behind a hosted identity provider — `npx
+playwright codegen` needs a display, and `tests/remote/auth.setup.ts` assumes a
+plain email/password form served by the host itself.
+
+Sessions expire: re-run `npm run login` when the remote specs start landing back
+on the login page.
+
+Reading the result:
+
+| Spec | Meaning |
+| --- | --- |
+| `overlay bundle boots and activates` | overlay `<script>` loaded and `window.EmergentFeedback` exists |
+| `dialog opens on the first interactive element` | activate (Alt+Shift) → pick → dialog renders |
+| `submitting feedback is gated by E2E_ALLOW_WRITES` | skipped unless `E2E_ALLOW_WRITES=1`, which posts **real** feedback |
 
 ## Layout
 
