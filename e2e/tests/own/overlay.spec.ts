@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { signIn } from "../../support/auth";
+import { openIssuesTab } from "../../support/dialog";
 
 // End-to-end through the real overlay bundle served on our own landing page:
 // activate → pick an element → submit → reload → badge appears.
@@ -18,6 +19,7 @@ test.describe("overlay on the landing page (own)", () => {
 
     await page.locator("#hero-title").click();
     await expect(page.locator("#__ef_dialog__")).toBeVisible();
+    await openIssuesTab(page);
     await expect(page.locator("#__ef_comment__")).toBeVisible();
 
     await page.fill("#__ef_comment__", "hero heading needs another pass");
