@@ -54,7 +54,10 @@ test.describe("remote host app", () => {
     await page.keyboard.up("Shift");
     await page.keyboard.up("Alt");
 
-    const target = page.locator("a, button, [role=button]").first();
+    // First *visible* interactive element: real apps keep hidden buttons in the
+    // DOM (e.g. a closed modal's "Close"), which a bare `.first()` would pick and
+    // then wait on forever — a hidden element can never become clickable.
+    const target = page.locator("a:visible, button:visible, [role=button]:visible").first();
     await target.click();
     await expect(page.locator("#__ef_dialog__")).toBeVisible();
     await page.click("#__ef_cancel__");
@@ -75,7 +78,7 @@ test.describe("remote host app", () => {
     await page.keyboard.up("Shift");
     await page.keyboard.up("Alt");
 
-    await page.locator("a, button, [role=button]").first().click();
+    await page.locator("a:visible, button:visible, [role=button]:visible").first().click();
     await expect(page.locator("#__ef_dialog__")).toBeVisible();
     await openIssuesTab(page);
     await page.fill("#__ef_comment__", "automated e2e feedback submission");
