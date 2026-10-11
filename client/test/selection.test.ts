@@ -21,6 +21,7 @@ import {
   commit,
   onSelectionChange,
   onHighlightChange,
+  recordMove,
   clearTokenForTarget,
   setHighlight,
   getHighlight,
@@ -700,4 +701,124 @@ test("clearTokenForTarget: unsetting one group leaves the other groups' edits in
   assert.equal(a.classList.contains("p-4"), false);
   assert.equal(a.classList.contains("text-primary"), true);
   assert.deepEqual(getChanges().map((c) => c.group), ["textColor"]);
+});
+
+// ── Moves (position records) ──────────────────────────────────────────────────
+
+const anchor = (container: string, before: string | null, index: number, label: string) => ({
+  container,
+  before,
+  index,
+  label,
+});
+
+test("recordMove: a move is a position change carrying its replayable anchors", () => {
+  const a = el();
+  addTarget(a, "#a");
+  recordMove(a, {
+    from: anchor("#toolbar", "#b", 0, "1st of 3 in #toolbar"),
+    to: anchor("#toolbar", null, 2, "3rd of 3 in #toolbar"),
+  });
+
+  const changes = getChanges();
+  assert.equal(changes.length, 1);
+  assert.equal(changes[0].target, "#a");
+  assert.equal(changes[0].group, "position");
+  assert.equal(changes[0].before, "1st of 3 in #toolbar");
+  assert.equal(changes[0].after, "3rd of 3 in #toolbar");
+  assert.equal(changes[0].move?.from.container, "#toolbar");
+  assert.equal(changes[0].move?.to.before, null);
+  assert.equal(changes[0].move?.to.index, 2);
+  assert.equal(getChangeCountFor(a), 1);
+});
+
+test("recordMove: repeated moves collapse to one record keeping the original from-position", () => {
+  const a = el();
+  addTarget(a, "#a");
+  recordMove(a, {
+    from: anchor("#toolbar", "#b", 0, "1st of 3 in #toolbar"),
+    to: anchor("#toolbar", "#c", 1, "2nd of 3 in #toolbar"),
+  });
+  recordMove(a, {
+    from: anchor("#toolbar", "#c", 1, "2nd of 3 in #toolbar"),
+    to: anchor("#toolbar", null, 2, "3rd of 3 in #toolbar"),
+  });
+
+  const changes = getChanges();
+  assert.equal(changes.length, 1, "one move per element, not a move history");
+  assert.equal(changes[0].before, "1st of 3 in #toolbar", "first state preserved");
+  assert.equal(changes[0].after, "3rd of 3 in #toolbar", "latest state reported");
+});
+
+test("recordMove + commitChanges: the move joins the committed list and persists", () => {
+  const a = el();
+  addTarget(a, "#a");
+  recordMove(a, {
+    from: anchor("#toolbar", "#b", 0, "1st of 2 in #toolbar"),
+    to: anchor("#toolbar", null, 1, "2nd of 2 in #toolbar"),
+  });
+  commitChanges();
+
+  assert.equal(getChangeCount(), 0, "pending list cleared by commit");
+  const entries = getCommittedEntries();
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].group, "position");
+  assert.equal(entries[0].groupLabel, "Position");
+  assert.equal(entries[0].before, "1st of 2 in #toolbar");
+  assert.equal(entries[0].after, "2nd of 2 in #toolbar");
+  assert.equal(entries[0].stale, false);
+
+  const stored = committedStorage();
+  assert.equal(stored.length, 1);
+  assert.equal(stored[0].kind, "position");
+  assert.equal(stored[0].to.index, 1);
+
+  // The committed move is reported in the payload, and removing it drops it.
+  assert.equal(getCommittedChanges()[0].group, "position");
+  removeCommittedAt(0);
+  assert.equal(getCommittedEntries().length, 0);
+  assert.deepEqual(committedStorage(), []);
+});
+
+test("revertChangesFor: reverting a target drops its move record too", () => {
+  const a = el();
+  addTarget(a, "#a");
+  applyTokenToTarget(a, paddingGroup, paddingGroup.tokens[0]);
+  recordMove(a, {
+    from: anchor("#toolbar", "#b", 0, "1st of 2 in #toolbar"),
+    to: anchor("#toolbar", null, 1, "2nd of 2 in #toolbar"),
+  });
+  assert.equal(getChanges().length, 2);
+
+  revertChangesFor(a);
+
+  assert.deepEqual(getChanges(), []);
+  assert.equal(a.classList.contains("p-0"), false, "the style edit was reverted as well");
+});
+
+test("clearTokenForTarget: Default on a group never touches a recorded move", () => {
+  const a = el();
+  addTarget(a, "#a");
+  recordMove(a, {
+    from: anchor("#toolbar", "#b", 0, "1st of 2 in #toolbar"),
+    to: anchor("#toolbar", null, 1, "2nd of 2 in #toolbar"),
+  });
+
+  assert.equal(clearTokenForTarget(a, paddingGroup), false, "no style record for that group");
+  assert.equal(getChanges()[0].group, "position", "the move survives");
+});
+
+test("getAllChanges: a committed move and a pending style edit are both reported", () => {
+  const a = el();
+  addTarget(a, "#a");
+  recordMove(a, {
+    from: anchor("#toolbar", "#b", 0, "1st of 2 in #toolbar"),
+    to: anchor("#toolbar", null, 1, "2nd of 2 in #toolbar"),
+  });
+  commitChanges();
+  applyTokenToTarget(a, paddingGroup, paddingGroup.tokens[1]);
+
+  const all = getAllChanges();
+  assert.equal(all.length, 2);
+  assert.deepEqual(all.map((c) => c.group).sort(), ["padding", "position"]);
 });

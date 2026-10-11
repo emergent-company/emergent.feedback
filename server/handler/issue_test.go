@@ -154,6 +154,73 @@ func TestBuildIssueContentChanges(t *testing.T) {
 	}
 }
 
+func TestBuildIssueContentMove(t *testing.T) {
+	ctx := map[string]any{
+		"intent": map[string]any{
+			"changes": []any{
+				map[string]any{
+					"target": "main > .toolbar > button.cta",
+					"group":  "position",
+					"before": "1st of 3 in .toolbar",
+					"after":  "3rd of 3 in .toolbar",
+					"move": map[string]any{
+						"from": map[string]any{"container": ".toolbar", "before": nil, "index": 0, "label": "1st of 3 in .toolbar"},
+						"to":   map[string]any{"container": ".toolbar", "before": nil, "index": 2, "label": "3rd of 3 in .toolbar"},
+					},
+				},
+			},
+		},
+	}
+	ctxJSON, _ := json.Marshal(ctx)
+	items := []store.Feedback{{
+		ID:          1,
+		URL:         "https://app.example.com/",
+		Selector:    "main > .toolbar > button.cta",
+		Comment:     "button order is wrong",
+		ContextJSON: string(ctxJSON),
+		GitHubUser:  "alice",
+	}}
+	_, body := buildIssueContent(items, "")
+
+	for _, want := range []string{
+		"## Requested changes",
+		"- `main > .toolbar > button.cta` — move: `1st of 3 in .toolbar` → `3rd of 3 in .toolbar`",
+		"Move 1 element(s) to the recorded position on the selected element(s).",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("body missing %q\n%s", want, body)
+		}
+	}
+	if strings.Contains(body, "live style change") {
+		t.Fatalf("a move must not be described as a style change:\n%s", body)
+	}
+}
+
+func TestBuildIssueContentStyleAndMove(t *testing.T) {
+	ctx := map[string]any{
+		"intent": map[string]any{
+			"changes": []any{
+				map[string]any{"target": "button.cta", "group": "padding", "before": "p-2", "after": "p-4"},
+				map[string]any{"target": "button.cta", "group": "position", "before": "1st of 2 in .toolbar", "after": "2nd of 2 in .toolbar"},
+			},
+		},
+	}
+	ctxJSON, _ := json.Marshal(ctx)
+	items := []store.Feedback{{
+		ID:          1,
+		URL:         "https://app.example.com/",
+		Selector:    "button.cta",
+		Comment:     "spacing + order",
+		ContextJSON: string(ctxJSON),
+		GitHubUser:  "alice",
+	}}
+	_, body := buildIssueContent(items, "")
+
+	if want := "Apply 1 live style change(s) and move 1 element(s) recorded on the selected element(s)."; !strings.Contains(body, want) {
+		t.Fatalf("body missing %q\n%s", want, body)
+	}
+}
+
 func TestBuildIssueContentNoChangesSection(t *testing.T) {
 	ctx := map[string]any{
 		"intent": map[string]any{"kind": "bug", "action": "change", "expected": "be blue", "actual": "is red"},

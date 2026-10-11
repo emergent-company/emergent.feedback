@@ -10,6 +10,7 @@ import type {
 } from "./envelope";
 import { syncThemeTo } from "./theme";
 import { mountStyleEditor } from "./styleEditor";
+import { layoutAxis, type DropTarget } from "./structure";
 import type { ThemeTokens } from "./tokens";
 import {
   applyTokenToTarget,
@@ -26,6 +27,7 @@ import {
   isPickMode,
   onHighlightChange,
   onSelectionChange,
+  POSITION_GROUP,
   refreshOutlines,
   removeCommittedAt,
   removeTarget as removeSelectionTarget,
@@ -815,6 +817,28 @@ function injectStyles(): void {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+    /* Where the element sits in its parent + the "drag to move" affordance. */
+    #__ef_dialog__ .ef-style-structure {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      padding: 8px 0 12px;
+      border-bottom: 1px solid var(--ef-border-subtle);
+    }
+    #__ef_dialog__ .ef-style-position {
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 11px;
+      color: var(--ef-text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #__ef_dialog__ .ef-style-drag-hint {
+      margin-left: auto;
+      font-size: 10px;
+      color: var(--ef-muted);
+      flex-shrink: 0;
     }
     #__ef_dialog__ .ef-prop-row {
       display: flex;
@@ -2169,7 +2193,14 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     bodyEl.scrollTop = bodyScroll;
   };
 
-  let action: IntentAction = inferAction(getType());
+  /**
+   * Default verb: a recorded move wins over the type-derived default, so a
+   * report that is (mostly) a reorder reads as a move.
+   */
+  const defaultAction = (): IntentAction =>
+    getAllChanges().some((c) => c.group === POSITION_GROUP) ? "move" : inferAction(getType());
+
+  let action: IntentAction = defaultAction();
   let actionTouched = false;
   let expected = "";
   let breadth: ScopeBreadth = "element";
@@ -2180,6 +2211,16 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     ).join("");
   };
   renderActions();
+
+  // A move recorded while the modal is open re-seeds the verb, unless the
+  // reporter already chose one.
+  const unsubActionSeed = onSelectionChange(() => {
+    if (actionTouched) return;
+    const next = defaultAction();
+    if (next === action) return;
+    action = next;
+    renderActions();
+  });
 
   actionWrap.addEventListener("click", (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-action]");
@@ -2433,7 +2474,9 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   dialogCleanup = () => {
     unsubSelection();
     unsubHighlight();
+    unsubActionSeed();
     setHighlight(null);
+    endDragVisual();
     window.removeEventListener("resize", onResize);
     document.removeEventListener("keydown", modalKey, true);
   };
@@ -2516,12 +2559,129 @@ export function closeDialog(): void {
     dialogCleanup();
     dialogCleanup = null;
   }
+  endDragVisual();
   dialog.remove();
   // Return focus to the control that opened the dialog, if it still exists.
   const ret = focusReturnEl;
   focusReturnEl = null;
   if (ret && document.contains(ret) && typeof ret.focus === "function") {
     try { ret.focus(); } catch { /* element may have been removed */ }
+  }
+}
+
+// ── Drag visuals (moving an element on the page) ──────────────────────────────
+// index.ts owns the gesture — threshold, gating, click swallowing. This module
+// owns the three transient layers it draws: a chip that follows the cursor and
+// names the element, an insertion line at the drop point, and a dashed box
+// around the container that would receive it. All three are overlay chrome with
+// `pointer-events: none`, so `elementFromPoint` never returns them.
+
+const DRAG_GHOST_ID = "__ef_drag_ghost__";
+const DRAG_LINE_ID = "__ef_drag_line__";
+const DRAG_BOX_ID = "__ef_drag_box__";
+const DRAG_COLOR = "#4f86f7"; // blue — the pick/insert colour
+
+function fixedLayer(id: string, styles: Record<string, string>): HTMLDivElement {
+  const el = document.createElement("div");
+  el.id = id;
+  const base: Record<string, string> = {
+    position: "fixed",
+    pointerEvents: "none",
+    zIndex: "2147483646",
+    boxSizing: "border-box",
+    display: "none",
+  };
+  Object.assign(el.style, base, styles);
+  return el;
+}
+
+/** Create the drag layers. Called once the pointer passes the drag threshold. */
+export function startDragVisual(label: string): void {
+  endDragVisual();
+  const ghost = fixedLayer(DRAG_GHOST_ID, {
+    padding: "3px 8px",
+    borderRadius: "6px",
+    background: "rgba(17, 24, 39, 0.92)",
+    color: "#fff",
+    font: "600 11px/1.4 ui-sans-serif, system-ui, sans-serif",
+    boxShadow: "0 4px 14px rgba(0, 0, 0, 0.28)",
+    whiteSpace: "nowrap",
+  });
+  ghost.textContent = `Moving ${label}`;
+  document.body.appendChild(ghost);
+  document.body.appendChild(
+    fixedLayer(DRAG_BOX_ID, {
+      border: `1px dashed ${DRAG_COLOR}`,
+      borderRadius: "3px",
+    })
+  );
+  document.body.appendChild(
+    fixedLayer(DRAG_LINE_ID, { background: DRAG_COLOR, borderRadius: "1px" })
+  );
+}
+
+/**
+ * Follow the pointer and draw the resolved drop: the ghost at the cursor, the
+ * insertion line where the element would land, and the receiving container.
+ * `drop === null` means the current position is not a legal target.
+ */
+export function updateDragVisual(
+  x: number,
+  y: number,
+  dragged: Element,
+  drop: DropTarget | null
+): void {
+  const ghost = document.getElementById(DRAG_GHOST_ID);
+  const line = document.getElementById(DRAG_LINE_ID);
+  const box = document.getElementById(DRAG_BOX_ID);
+  if (!ghost || !line || !box) return; // the drag ended underneath us
+
+  ghost.style.display = "block";
+  ghost.style.left = `${x + 14}px`;
+  ghost.style.top = `${y + 16}px`;
+
+  if (!drop) {
+    line.style.display = "none";
+    box.style.display = "none";
+    return;
+  }
+
+  const cRect = drop.container.getBoundingClientRect();
+  box.style.display = "block";
+  box.style.left = `${cRect.left}px`;
+  box.style.top = `${cRect.top}px`;
+  box.style.width = `${cRect.width}px`;
+  box.style.height = `${cRect.height}px`;
+
+  // The line sits on the edge the element would be inserted at: before-sibling's
+  // leading edge, or the last child's trailing edge when it would be appended.
+  const ref = drop.before ?? drop.container.lastElementChild;
+  const r = ref && ref !== dragged ? ref.getBoundingClientRect() : null;
+  if (layoutAxis(drop.container) === "x") {
+    const at = r ? (drop.before ? r.left : r.right) : cRect.left;
+    Object.assign(line.style, {
+      display: "block",
+      left: `${at - 1}px`,
+      top: `${cRect.top}px`,
+      width: "2px",
+      height: `${cRect.height}px`,
+    });
+  } else {
+    const at = r ? (drop.before ? r.top : r.bottom) : cRect.top;
+    Object.assign(line.style, {
+      display: "block",
+      left: `${cRect.left}px`,
+      top: `${at - 1}px`,
+      width: `${cRect.width}px`,
+      height: "2px",
+    });
+  }
+}
+
+/** Remove the drag layers (drop, cancel, mode change, dialog close). */
+export function endDragVisual(): void {
+  for (const id of [DRAG_GHOST_ID, DRAG_LINE_ID, DRAG_BOX_ID]) {
+    document.getElementById(id)?.remove();
   }
 }
 

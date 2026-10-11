@@ -173,6 +173,23 @@ selected dropdown option does the same. `Default` (unset) is not `None`
 an element comes from the page's own markup rather than an overlay edit, Default
 leaves it alone and says so.
 
+Selected elements can also be **dragged to move them**. There is no move mode:
+press a selected element on the page, move more than ~5 px and drop it. Inside a
+container the drop reorders siblings (the insertion line follows the row/column
+axis); dropping over a container's own padding/gap area appends into it, so an
+element can be reparented. Below the threshold nothing is intercepted — links,
+buttons and text fields inside the element keep working — and the click after a
+drop is swallowed so it does not also toggle the selection. Illegal drops
+(onto/into itself, onto overlay chrome, onto the page root) are refused.
+
+A move is recorded per element as an anchor pair (container selector + the
+sibling it sits before + index, plus the readable position, e.g.
+`2nd of 3 in .toolbar`). It shows up in the **Changes**/**Committed changes**
+lists as `Position`, is reverted with the element's other pending edits, replays
+after a reload once committed, and rides in the payload as
+`{ target, group: "position", before, after, move: { from, to } }` — the issue
+body renders it as a `move:` line.
+
 Edits start **pending**: they apply live to the page but are reverted when the
 panel is cancelled or the editing session ends. Press **Commit** to freeze the
 pending edits — committed edits are written to localStorage and persist across

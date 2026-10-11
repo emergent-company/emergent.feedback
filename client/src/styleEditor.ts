@@ -20,6 +20,7 @@ import {
   type ThemeTokens,
 } from "./tokens";
 import { setHighlight, type TargetEntry } from "./selection";
+import { describePosition } from "./structure";
 import { ICONS, type GlyphIcon } from "./icons";
 
 export interface StyleEditorCallbacks {
@@ -243,6 +244,11 @@ function renderEditorHTML(
       <div class="ef-style-head">
         <span class="ef-style-target-label">Editing</span>
         <code class="ef-style-target-sel" title="${escapeHtml(target.selector)}">${escapeHtml(label)}</code>
+      </div>
+      <div class="ef-style-structure" title="Drag the element on the page to move it">
+        <span class="ef-style-target-label">Position</span>
+        <span class="ef-style-position">${escapeHtml(describePosition(target.el))}</span>
+        <span class="ef-style-drag-hint" aria-hidden="true">drag to move</span>
       </div>
       ${renderSections(groups, target.el)}
       ${renderClasses(target)}

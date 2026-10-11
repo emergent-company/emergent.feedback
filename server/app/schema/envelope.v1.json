@@ -5,6 +5,18 @@
   "description": "Canonical feedback envelope v1: one truth, three renderings (JSON, Markdown, behavioral preamble). See docs/ai-feedback-strategy.md §2.2.",
   "type": "object",
   "required": ["schema", "version", "id", "created_at", "status", "type", "summary", "actor", "target", "trust_order"],
+  "$defs": {
+    "placementAnchor": {
+      "type": "object",
+      "description": "A recorded DOM position. Selectors, so it survives a page reload.",
+      "properties": {
+        "container": { "type": "string", "description": "Selector of the parent element." },
+        "before": { "type": ["string", "null"], "description": "Selector of the sibling the element sits before; null = last child." },
+        "index": { "type": "integer", "minimum": 0, "description": "Index among the container's children; fallback when a selector drifted." },
+        "label": { "type": "string", "description": "Human-readable position, e.g. \"2nd of 4 in .toolbar\"." }
+      }
+    }
+  },
   "properties": {
     "schema": { "type": "string", "const": "https://feedback.emergent-company.ai/schema/envelope.v1.json" },
     "version": { "type": "string", "const": "1.0.0" },
@@ -86,6 +98,27 @@
           "properties": {
             "breadth": { "type": "string", "enum": ["element", "region", "component", "page", "multi"] },
             "targets": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "changes": {
+          "type": "array",
+          "description": "Live edits applied by the reporter before submitting (style tokens and DOM moves).",
+          "items": {
+            "type": "object",
+            "properties": {
+              "target": { "type": "string", "description": "CSS selector of the element the change was applied to." },
+              "group": { "type": "string", "description": "Token group id; \"position\" for a DOM move." },
+              "before": { "type": "string" },
+              "after": { "type": "string" },
+              "move": {
+                "type": "object",
+                "description": "Present for a move: anchors that replay or verify the reorder.",
+                "properties": {
+                  "from": { "$ref": "#/$defs/placementAnchor" },
+                  "to": { "$ref": "#/$defs/placementAnchor" }
+                }
+              }
+            }
           }
         }
       }

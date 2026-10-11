@@ -6,7 +6,7 @@ import { AuthManager } from "./auth";
 import { startActivationListener, onModeChange, forceMode, getMode } from "./activation";
 import { highlight, clearHighlight } from "./highlighter";
 import { renderBadges, clearBadges } from "./badge";
-import { showSubmitDialog, showLoginDialog, closeDialog, showToast, type FeedbackType } from "./dialog";
+import { showSubmitDialog, showLoginDialog, closeDialog, showToast, startDragVisual, updateDragVisual, endDragVisual, type FeedbackType } from "./dialog";
 import type { IssueBadge } from "./api";
 import { buildSelector } from "./selector";
 import { showIndicator, hideIndicator } from "./indicator";
@@ -40,8 +40,11 @@ import {
   handleHover as handleSelectionHover,
   hasTarget as hasSelectionTarget,
   setHighlight as setSelectionHighlight,
+  flash as flashSelectionTarget,
+  recordMove as recordSelectionMove,
   isPickMode,
 } from "./selection";
+import { computeDrop, moveElement, type DropTarget } from "./structure";
 import { redactText, redactAttributes, redactElementHTML } from "./redact";
 import { startConsoleCapture, getConsoleErrors } from "./console";
 import { startVerifyLoop, stopVerifyLoop } from "./verify";
@@ -118,6 +121,12 @@ let peekedEl: Element | null = null;
     document.addEventListener("mouseover", onMouseOver, true);
     document.addEventListener("mouseout", onMouseOut, true);
     document.addEventListener("click", onElementClick, true);
+    document.addEventListener("pointerdown", onPointerDown, true);
+    document.addEventListener("pointermove", onPointerMove, true);
+    document.addEventListener("pointerup", onPointerUp, true);
+    document.addEventListener("pointercancel", cancelDrag, true);
+    document.addEventListener("dragstart", onDragStart, true);
+    document.addEventListener("keydown", onKeyDown, true);
     refreshBadges();
   }
 
@@ -135,6 +144,13 @@ let peekedEl: Element | null = null;
     document.removeEventListener("mouseover", onMouseOver, true);
     document.removeEventListener("mouseout", onMouseOut, true);
     document.removeEventListener("click", onElementClick, true);
+    document.removeEventListener("pointerdown", onPointerDown, true);
+    document.removeEventListener("pointermove", onPointerMove, true);
+    document.removeEventListener("pointerup", onPointerUp, true);
+    document.removeEventListener("pointercancel", cancelDrag, true);
+    document.removeEventListener("dragstart", onDragStart, true);
+    document.removeEventListener("keydown", onKeyDown, true);
+    cancelDrag();
     peekedEl = null;
     setSelectionHighlight(null);
     clearHighlight();
@@ -186,7 +202,117 @@ let peekedEl: Element | null = null;
     setSelectionHighlight(null);
   }
 
-  /** True for the overlay's own chrome (never a capture target). */
+  // ── Drag to move ────────────────────────────────────────────────────────────
+  // Always available while editing — there is no separate "move" mode. Press on
+  // a selected element, move past the threshold, drop it anywhere. Below the
+  // threshold nothing is prevented, so links, buttons and text fields inside the
+  // element keep working normally; a completed drag swallows the click that
+  // follows so it cannot also toggle the selection.
+  const DRAG_THRESHOLD = 5;
+  let drag: { el: Element; startX: number; startY: number; active: boolean } | null = null;
+  let lastDrop: DropTarget | null = null;
+  let suppressNextClick = false;
+
+  function onPointerDown(e: PointerEvent): void {
+    suppressNextClick = false;
+    if (getMode() !== "editing" || e.button !== 0) return;
+    if (isPickMode()) return;
+    const target = e.target as Element | null;
+    if (!target || isOwnElement(target) || isDragBlocked(target)) return;
+    const el = nearestSelectedAncestor(target);
+    if (!el) return;
+    drag = { el, startX: e.clientX, startY: e.clientY, active: false };
+  }
+
+  function onPointerMove(e: PointerEvent): void {
+    if (!drag) return;
+    if (!drag.active) {
+      const dx = e.clientX - drag.startX;
+      const dy = e.clientY - drag.startY;
+      if (dx * dx + dy * dy < DRAG_THRESHOLD * DRAG_THRESHOLD) return;
+      drag.active = true;
+      startDragVisual(elementLabel(drag.el));
+    }
+    // From here the overlay owns the gesture: stop text selection and any
+    // scroll/zoom default the browser would otherwise apply.
+    e.preventDefault();
+    document.body.style.userSelect = "none";
+    const hit = document.elementFromPoint(e.clientX, e.clientY);
+    lastDrop = computeDrop(hit, drag.el, e.clientX, e.clientY);
+    updateDragVisual(e.clientX, e.clientY, drag.el, lastDrop);
+  }
+
+  function onPointerUp(): void {
+    if (!drag) return;
+    const d = drag;
+    const drop = lastDrop;
+    drag = null;
+    lastDrop = null;
+    document.body.style.userSelect = "";
+    endDragVisual();
+    if (!d.active) return;
+    // The pointerup is followed by a click; it must not toggle the selection.
+    suppressNextClick = true;
+    if (!drop) return;
+    const placement = moveElement(d.el, drop);
+    if (!placement) return;
+    recordSelectionMove(d.el, placement);
+    flashSelectionTarget(d.el);
+  }
+
+  /** Abort a drag (Escape / pointer cancel) without moving anything. */
+  function cancelDrag(): void {
+    if (!drag) return;
+    drag = null;
+    lastDrop = null;
+    document.body.style.userSelect = "";
+    endDragVisual();
+  }
+
+  /**
+   * Form fields and editable regions keep their own pointer behaviour: dragging
+   * inside a text field must select text, not reparent the field.
+   */
+  function isDragBlocked(el: Element): boolean {
+    const tag = el.tagName?.toLowerCase();
+    if (tag === "input" || tag === "textarea" || tag === "select" || tag === "option") return true;
+    return !!el.closest?.("input, textarea, select, [contenteditable]:not([contenteditable='false'])");
+  }
+
+  /** Nearest ancestor that is a selection target — the thing we are moving. */
+  function nearestSelectedAncestor(el: Element): Element | null {
+    let node: Element | null = el;
+    while (node) {
+      if (hasSelectionTarget(node)) return node;
+      if (node === document.body || node === document.documentElement) return null;
+      node = node.parentElement;
+    }
+    return null;
+  }
+
+  /** Native drag must not hijack the gesture while editing. */
+  function onDragStart(e: DragEvent): void {
+    const target = e.target as Element | null;
+    if (target && nearestSelectedAncestor(target)) e.preventDefault();
+  }
+
+  function onKeyDown(e: KeyboardEvent): void {
+    if (e.key === "Escape" && drag) {
+      e.stopPropagation();
+      cancelDrag();
+    }
+  }
+
+  /** Container name for a drop, for the ghost chip during a drag. */
+function elementLabel(el: Element): string {
+  const comp = el.getAttribute?.("data-component");
+  if (comp) return comp;
+  if (el.id) return `#${el.id}`;
+  const cls = Array.from(el.classList ?? []).slice(0, 1).join("");
+  return `${el.tagName.toLowerCase()}${cls ? `.${cls}` : ""}`;
+}
+
+/** True for the overlay's own chrome (never a capture target). */
   function isOwnElement(el: Element): boolean {
     if (el.id && el.id.startsWith("__ef_")) return true;
     return !!el.closest?.(
@@ -353,6 +479,15 @@ let peekedEl: Element | null = null;
   async function onElementClick(e: MouseEvent): Promise<void> {
     const target = e.target as Element;
     if (!target || isOwnElement(target)) return;
+
+    // A completed drag is followed by a click; that click is part of the drag,
+    // not a selection change.
+    if (suppressNextClick) {
+      suppressNextClick = false;
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
 
     e.preventDefault();
     e.stopPropagation();

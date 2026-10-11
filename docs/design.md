@@ -329,6 +329,24 @@ tokens (`p-0`, `m-0`, `gap-0`), which apply an explicit zero value. A group whos
 value comes from the host markup has no recorded edit, so Default is reported as
 a no-op instead of stripping the page's class.
 
+**Moving elements.** While editing, a selected element can be dragged anywhere on
+the page — there is no separate move mode. The gesture only owns the pointer past
+a 5 px threshold (below it, links, buttons and text fields inside the element
+keep working, and the click that follows a drop is swallowed so it cannot also
+toggle the selection). Dragging inside a container reorders siblings (the
+insertion line follows the container's flex/grid axis); dragging over a
+container's own padding/gap area appends into it, which is how an element is
+reparented. Drops that would put an element inside itself (or its own subtree),
+onto overlay chrome, or onto the page root are refused.
+
+Each move is recorded per element as an anchor pair (`from` → `to`) rather than a
+node reference, so it survives a page reload and is replayed on boot alongside
+committed style edits; repeated moves of one element collapse into a single
+record that keeps the original from-position. Moves join the same pending /
+Commit / Committed-changes lifecycle as style edits (Default does not touch them —
+they are undone with Remove or revert), and the editor's **Position** row shows
+where the active element currently sits (`2nd of 3 in .toolbar`).
+
 When more than one element is selected they are presented as **per-element tabs**
 in the Design editor; the editor configures only the active element, so edits are
 bounded to that component instead of applying globally. A scope hint notes when
@@ -364,6 +382,11 @@ click-to-pick and restores it when the pick completes (Escape cancels the pick).
   be empty). Even though editing is per element, the payload aggregates every
   target's changes and each record carries its `target` selector. Scope breadth
   becomes `multi` when more than one target is selected.
+- A DOM move is the same record with `group: "position"` and a `move` field:
+  `{ from, to }`, each anchor `{ container, before, index, label }` (`before:
+  null` = last child; selectors, so a reload can replay). `before`/`after` carry
+  the human position text (`2nd of 3 in .toolbar`). `intent.action` defaults to
+  `move` when the recorded edits include a move.
 - Provenance: `intent.changes` is `stated` when non-empty, else `absent`.
 
 No storage schema change — everything rides inside `context_json`.
@@ -372,11 +395,12 @@ No storage schema change — everything rides inside `context_json`.
 
 | Surface | Change |
 |---|---|
-| `client/src/dialog.ts` | Design editor (no Issues tab), Commit + persistent Committed-changes list (localStorage, per-entry Remove / Remove all), issue submission modal (context/HTML rendered here only), docked rail + dock toggle, per-element target tabs, token palette, per-target changes summary |
-| `client/src/styleEditor.ts` | single-target Figma-like property rows, dropdown/chip controls, custom-class affordance |
-| `client/src/selection.ts` | per-target apply/change/revert API (`applyTokenToTarget`, `getChangesFor`, `getChangeCountFor`, `revertChangesFor`) |
-| `client/src/index.ts` | `editing` mode; picking stays live; pending edits revert on cancel/close; Commit freezes + persists in localStorage until removed |
-| `server/handler/issue.go` | `## Requested changes` (`buildSingleItem`) / `### Requested changes` (`buildMultiItem`); `whatToDo` clause |
+| `client/src/dialog.ts` | Design editor (no Issues tab), Commit + persistent Committed-changes list (localStorage, per-entry Remove / Remove all), issue submission modal (context/HTML rendered here only), docked rail + dock toggle, per-element target tabs, token palette, per-target changes summary, drag ghost/insertion-line/container layers |
+| `client/src/styleEditor.ts` | single-target Figma-like property rows, dropdown/chip/icon controls, Default (unset) control, custom-class affordance, Position row |
+| `client/src/selection.ts` | per-target apply/change/revert API (`applyTokenToTarget`, `recordMove`, `getChangesFor`, `getChangeCountFor`, `revertChangesFor`, `clearTokenForTarget`), hover-driven highlight, `position` records |
+| `client/src/structure.ts` | drop resolution (`computeDrop`), `moveElement`, replay (`placeAt`), `describePosition`/`ordinal` |
+| `client/src/index.ts` | `editing` mode; picking stays live; always-on drag to move (5px threshold, click swallowed after a drop); pending edits revert on cancel/close; Commit freezes + persists in localStorage until removed |
+| `server/handler/issue.go` | `## Requested changes` (`buildSingleItem`) / `### Requested changes` (`buildMultiItem`) incl. `move:` lines; `whatToDo` clause distinguishes style edits from moves |
 | `server/handler/envelope.go` | `buildIntent` surfaces `changes`; `buildTarget` surfaces `targets` |
 | `server/panel/panel.templ` | "Requested changes" list + `Targets (N)` row in `contextSection` |
 
