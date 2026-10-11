@@ -2090,7 +2090,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
       pendingCount === 0
         ? `<div class="ef-changes-empty">No pending edits on this element. Commit to freeze them.</div>`
         : `<ul class="ef-changes-list">
-            ${pending.map((c) => `<li><span class="ef-change-group">${escapeHtml(c.group)}</span><span class="ef-change-before">${escapeHtml(c.before || "—")}</span><span class="ef-arrow">→</span><span class="ef-change-after">${escapeHtml(c.after)}</span></li>`).join("")}
+            ${pending.map((c) => `<li><span class="ef-change-group">${escapeHtml(c.group === POSITION_GROUP ? "Position" : c.group)}</span><span class="ef-change-before">${escapeHtml(c.before || "—")}</span><span class="ef-arrow">→</span><span class="ef-change-after">${escapeHtml(c.after)}</span></li>`).join("")}
           </ul>`;
 
     const committedList =

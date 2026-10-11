@@ -259,6 +259,7 @@ function renderEditorHTML(
 function wireDropdowns(
   root: HTMLElement,
   groups: TokenGroup[],
+  el: Element,
   cb: StyleEditorCallbacks
 ): void {
   let openMenu: HTMLElement | null = null;
@@ -347,7 +348,11 @@ function wireDropdowns(
         const tid = opt.dataset.token ?? "";
         const token = group?.tokens.find((t) => t.id === tid);
         close(menu);
-        if (group && token) cb.onApply(group, token);
+        if (!group || !token) return;
+        // Choosing the option that is already applied unsets the group, exactly
+        // like clicking an active chip (and like the Default item).
+        if (tokenActive(token, group, el)) cb.onClear(group);
+        else cb.onApply(group, token);
       });
       opt.addEventListener("keydown", (e) => {
         const opts = items();
@@ -479,7 +484,7 @@ export function mountStyleEditor(
       });
     });
 
-  wireDropdowns(root, groups, cb);
+  wireDropdowns(root, groups, target.el, cb);
   wireCustomToggles(root);
   wireCustomInputs(root, tokens, cb);
 
