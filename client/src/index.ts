@@ -38,6 +38,8 @@ import {
   loadCommitted,
   reapplyCommitted,
   handleHover as handleSelectionHover,
+  hasTarget as hasSelectionTarget,
+  setHighlight as setSelectionHighlight,
   isPickMode,
 } from "./selection";
 import { redactText, redactAttributes, redactElementHTML } from "./redact";
@@ -46,6 +48,13 @@ import { startVerifyLoop, stopVerifyLoop } from "./verify";
 import { startReplay, getReplayPayloadAsync } from "./replay";
 import { startReporterNotify, stopReporterNotify } from "./notify";
 import { initTheme, onThemeChange, applyTheme } from "./theme";
+
+/**
+ * Element currently peeked via page hover (see `peekTarget`): keeps the
+ * reverse-hover path from re-running for every nested element the pointer
+ * crosses inside the same target.
+ */
+let peekedEl: Element | null = null;
 
 (function bootstrap() {
   if ((window as any).__feedbackOverlayLoaded) return;
@@ -107,6 +116,7 @@ import { initTheme, onThemeChange, applyTheme } from "./theme";
   function activateOverlay(): void {
     document.body.style.cursor = "crosshair";
     document.addEventListener("mouseover", onMouseOver, true);
+    document.addEventListener("mouseout", onMouseOut, true);
     document.addEventListener("click", onElementClick, true);
     refreshBadges();
   }
@@ -123,7 +133,10 @@ import { initTheme, onThemeChange, applyTheme } from "./theme";
   function deactivateOverlay(): void {
     document.body.style.cursor = "";
     document.removeEventListener("mouseover", onMouseOver, true);
+    document.removeEventListener("mouseout", onMouseOut, true);
     document.removeEventListener("click", onElementClick, true);
+    peekedEl = null;
+    setSelectionHighlight(null);
     clearHighlight();
     clearBadges();
     // Undo only the uncommitted (pending) edits; committed edits stay on the
@@ -140,9 +153,37 @@ import { initTheme, onThemeChange, applyTheme } from "./theme";
     if (isOwnElement(target)) return;
     if (getMode() === "editing") {
       handleSelectionHover(target);
+      peekTarget(target);
     } else {
       highlight(target);
     }
+  }
+
+  /**
+   * Reverse hover: hovering a selected element on the page highlights its tab
+   * in the panel (the panel→page direction lives in dialog.ts). The element
+   * itself is outlined from the same hover, so a target can be identified
+   * without any permanent box sitting on top of the style being previewed.
+   */
+  function peekTarget(target: Element | null): void {
+    let node: Element | null = target;
+    while (node && !hasSelectionTarget(node)) node = node.parentElement;
+    const nearest = node;
+    if (nearest === peekedEl) return;
+    peekedEl = nearest;
+    setSelectionHighlight(nearest);
+  }
+
+  /**
+   * Clear the peek when the pointer leaves the peeked target — or the window
+   * entirely, which `mouseover` alone never reports (relatedTarget is null).
+   */
+  function onMouseOut(e: MouseEvent): void {
+    if (!peekedEl) return;
+    const to = e.relatedTarget as Element | null;
+    if (to && (to === peekedEl || peekedEl.contains?.(to))) return;
+    peekedEl = null;
+    setSelectionHighlight(null);
   }
 
   /** True for the overlay's own chrome (never a capture target). */

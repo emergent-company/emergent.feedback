@@ -37,6 +37,20 @@ let pickMode = false;
 let hoverEl: Element | null = null;
 let listening = false;
 
+/**
+ * The element currently outlined on the page, if any.
+ *
+ * Outlines are deliberately NOT persistent: with the panel open the page must
+ * stay clean, otherwise a border/background/shadow edit can never be judged
+ * because the overlay's own 2px box sits on top of it. The highlight is shown
+ * only while the reporter hovers/focuses a target label in the panel (or hovers
+ * the element whose tab lights up), plus a short `flash()` on select.
+ */
+let highlightEl: Element | null = null;
+let flashEl: Element | null = null;
+let flashTimer: ReturnType<typeof setTimeout> | null = null;
+let highlightListeners: Array<(el: Element | null) => void> = [];
+
 function emit(): void {
   for (const fn of listeners.slice()) {
     try {
@@ -88,7 +102,7 @@ export function setPickMode(on: boolean): void {
   pickMode = on;
   if (!on) hoverEl = null;
   renderHover();
-  renderOutlines();
+  renderHighlight();
   emit();
 }
 
@@ -97,7 +111,7 @@ export function addTarget(el: Element, selector: string, dataComponent?: string)
   if (targets.some((t) => t.el === el)) return false;
   targets.push({ el, selector, ...(dataComponent ? { dataComponent } : {}) });
   ensureListeners();
-  renderOutlines();
+  renderHighlight();
   emit();
   return true;
 }
@@ -105,6 +119,8 @@ export function addTarget(el: Element, selector: string, dataComponent?: string)
 /** Remove an element from the target set, reverting its applied live edits. */
 export function removeTarget(el: Element): boolean {
   const before = targets.length;
+  if (highlightEl === el) highlightEl = null;
+  if (flashEl === el) flashEl = null;
   // Revert edits made to this element BEFORE dropping its records — otherwise
   // the class/style stays on the host page but is untracked, so Cancel / idle
   // teardown could never undo it.
@@ -114,7 +130,7 @@ export function removeTarget(el: Element): boolean {
   targets = targets.filter((t) => t.el !== el);
   applied = applied.filter((r) => r.el !== el);
   if (targets.length === 0) dropListeners();
-  renderOutlines();
+  renderHighlight();
   emit();
   return targets.length !== before;
 }
@@ -141,6 +157,7 @@ export function clear(): void {
   applied = [];
   pickMode = false;
   hoverEl = null;
+  resetHighlight();
   dropListeners();
   removeOverlays();
   emit();
@@ -158,7 +175,7 @@ export function applyTokenToTarget(el: Element, group: TokenGroup, token: Token)
   const selector = targets.find((t) => t.el === el)?.selector ?? "";
   applied = applied.filter((r) => !(r.el === el && r.group.id === group.id));
   applied.push({ el, group, token, before: effectiveBefore, after, selector });
-  renderOutlines();
+  renderHighlight();
   emit();
 }
 
@@ -208,7 +225,7 @@ export function revertChangesFor(el: Element): void {
   }
   applied = applied.filter((r) => r.el !== el);
   committed = committed.filter((r) => r.el !== el);
-  renderOutlines();
+  renderHighlight();
   persist();
   emit();
 }
@@ -223,7 +240,7 @@ export function revertAll(): void {
   }
   applied = [];
   committed = [];
-  renderOutlines();
+  renderHighlight();
   persist();
   emit();
 }
@@ -237,6 +254,7 @@ export function commit(): void {
   targets = [];
   pickMode = false;
   hoverEl = null;
+  resetHighlight();
   dropListeners();
   removeOverlays();
   emit();
@@ -305,7 +323,7 @@ export function commitChanges(): void {
   }
   committed = merged;
   applied = [];
-  renderOutlines();
+  renderHighlight();
   persist();
   emit();
 }
@@ -321,7 +339,7 @@ export function revertPending(): void {
     revertRecord(r);
   }
   applied = [];
-  renderOutlines();
+  renderHighlight();
   emit();
 }
 
@@ -511,9 +529,83 @@ function numBadge(el: HTMLElement, n: number): void {
   el.textContent = String(n);
 }
 
-function renderOutlines(): void {
-  if (!canRender()) return;
-  // Clear stale outlines/badges (keep the hover layer).
+// ── Highlight (hover-driven, single element) ──────────────────────────────────
+
+const HIGHLIGHT_ID = `${OUTLINE_PREFIX}highlight__`;
+const HIGHLIGHT_BADGE_ID = `${OUTLINE_PREFIX}highlight_badge__`;
+const FLASH_MS = 700;
+
+function emitHighlight(): void {
+  for (const fn of highlightListeners.slice()) {
+    try {
+      fn(highlightEl);
+    } catch {
+      // A misbehaving subscriber must never break the overlay.
+    }
+  }
+}
+
+/**
+ * Subscribe to highlight changes so the panel can peek the matching tab.
+ * Returns an unsubscribe fn.
+ */
+export function onHighlightChange(fn: (el: Element | null) => void): () => void {
+  highlightListeners.push(fn);
+  return () => {
+    highlightListeners = highlightListeners.filter((f) => f !== fn);
+  };
+}
+
+/** The element currently outlined on the page (null when nothing is). */
+export function getHighlight(): Element | null {
+  return highlightEl;
+}
+
+/**
+ * Highlight a single target — or clear the highlight with (null). Driven by
+ * hovering/focusing a target label in the panel, and by hovering an element on
+ * the page that is already a target.
+ */
+export function setHighlight(el: Element | null): void {
+  if (highlightEl === el) return;
+  highlightEl = el;
+  renderHighlight();
+  emitHighlight();
+}
+
+/**
+ * Briefly outline a target — click-to-select feedback that does not leave a
+ * permanent box on the page (which would hide the style edits being previewed).
+ */
+export function flash(el: Element, ms: number = FLASH_MS): void {
+  if (flashTimer) {
+    clearTimeout(flashTimer);
+    flashTimer = null;
+  }
+  flashEl = el;
+  renderHighlight();
+  flashTimer = setTimeout(() => {
+    flashTimer = null;
+    if (flashEl === el) {
+      flashEl = null;
+      renderHighlight();
+    }
+  }, ms);
+}
+
+/** Cancel any flash + drop the highlight (teardown paths). */
+function resetHighlight(): void {
+  if (flashTimer) {
+    clearTimeout(flashTimer);
+    flashTimer = null;
+  }
+  highlightEl = null;
+  flashEl = null;
+}
+
+/** Remove the highlight box + badge (keeps the pick-mode hover layer). */
+function clearHighlightNodes(): void {
+  if (typeof document === "undefined" || typeof document.querySelectorAll !== "function") return;
   try {
     document.querySelectorAll(`[id^="${OUTLINE_PREFIX}"]`).forEach((el) => {
       if (el.id !== HOVER_ID) el.remove();
@@ -521,57 +613,75 @@ function renderOutlines(): void {
   } catch {
     // ignore
   }
+}
 
+/**
+ * Draw the highlight box (+ numbered badge for the panel tab order) for the
+ * highlighted element, or the flashing one while a select-flash is running.
+ * No background fill: the outline must not hide the edit being judged.
+ */
+function renderHighlight(): void {
+  if (!canRender()) return;
+  clearHighlightNodes();
+
+  const el = highlightEl ?? flashEl;
+  if (!el) return;
+
+  let rect: { top: number; left: number; width: number; height: number };
+  try {
+    rect = el.getBoundingClientRect();
+  } catch {
+    return;
+  }
   const scrollX = typeof window !== "undefined" ? window.scrollX : 0;
   const scrollY = typeof window !== "undefined" ? window.scrollY : 0;
+  const flashing = !highlightEl && !!flashEl;
 
-  targets.forEach((t, i) => {
-    let rect: { top: number; left: number; width: number; height: number };
-    try {
-      rect = t.el.getBoundingClientRect();
-    } catch {
-      return;
-    }
-    const box = document.createElement("div");
-    box.id = `${OUTLINE_PREFIX}${i + 1}__`;
-    Object.assign(box.style, {
-      position: "absolute",
-      top: `${rect.top + scrollY}px`,
-      left: `${rect.left + scrollX}px`,
-      width: `${rect.width}px`,
-      height: `${rect.height}px`,
-      outline: `2px solid ${COLOR_TARGET}`,
-      backgroundColor: "rgba(245, 158, 11, 0.10)",
-      pointerEvents: "none",
-      zIndex: "2147483644",
-      boxSizing: "border-box",
-      borderRadius: "2px",
-    });
-    document.body.appendChild(box);
-    const badge = document.createElement("span");
-    badge.id = `${OUTLINE_PREFIX}badge_${i + 1}__`;
-    Object.assign(badge.style, {
-      position: "absolute",
-      top: `${rect.top + scrollY - 9}px`,
-      left: `${rect.left + scrollX - 9}px`,
-      minWidth: "18px",
-      height: "18px",
-      lineHeight: "18px",
-      textAlign: "center",
-      fontSize: "11px",
-      fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
-      fontWeight: "700",
-      color: "#fff",
-      background: COLOR_TARGET,
-      borderRadius: "9px",
-      padding: "0 4px",
-      pointerEvents: "none",
-      zIndex: "2147483645",
-      boxSizing: "border-box",
-    });
-    numBadge(badge, i + 1);
-    document.body.appendChild(badge);
+  const box = document.createElement("div");
+  box.id = HIGHLIGHT_ID;
+  Object.assign(box.style, {
+    position: "absolute",
+    top: `${rect.top + scrollY}px`,
+    left: `${rect.left + scrollX}px`,
+    width: `${rect.width}px`,
+    height: `${rect.height}px`,
+    outline: `2px solid ${COLOR_TARGET}`,
+    backgroundColor: flashing ? "rgba(245, 158, 11, 0.08)" : "transparent",
+    pointerEvents: "none",
+    zIndex: "2147483644",
+    boxSizing: "border-box",
+    borderRadius: "2px",
   });
+  document.body.appendChild(box);
+
+  // Badge number matches the target's tab in the panel; only target elements
+  // get one (a hovered non-target has nothing to match).
+  const idx = targets.findIndex((t) => t.el === el);
+  if (idx < 0) return;
+
+  const badge = document.createElement("span");
+  badge.id = HIGHLIGHT_BADGE_ID;
+  Object.assign(badge.style, {
+    position: "absolute",
+    top: `${rect.top + scrollY - 9}px`,
+    left: `${rect.left + scrollX - 9}px`,
+    minWidth: "18px",
+    height: "18px",
+    lineHeight: "18px",
+    textAlign: "center",
+    fontSize: "11px",
+    fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
+    fontWeight: "700",
+    color: "#fff",
+    background: COLOR_TARGET,
+    borderRadius: "9px",
+    padding: "0 4px",
+    pointerEvents: "none",
+    zIndex: "2147483645",
+    boxSizing: "border-box",
+  });
+  numBadge(badge, idx + 1);
+  document.body.appendChild(badge);
 }
 
 function renderHover(): void {
@@ -616,15 +726,15 @@ export function handleHover(el: Element | null): void {
   if (pickMode) renderHover();
 }
 
-/** Repaint outlines (scroll/resize). */
+/** Repaint the current highlight (scroll/resize/docked reflow). */
 export function refreshOutlines(): void {
-  renderOutlines();
+  renderHighlight();
 }
 
 // ── Scroll / resize listener lifecycle ────────────────────────────────────────
 
 function onReflow(): void {
-  renderOutlines();
+  renderHighlight();
 }
 
 function ensureListeners(): void {

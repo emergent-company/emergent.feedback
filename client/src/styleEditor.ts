@@ -19,7 +19,7 @@ import {
   type TokenGroup,
   type ThemeTokens,
 } from "./tokens";
-import type { TargetEntry } from "./selection";
+import { setHighlight, type TargetEntry } from "./selection";
 
 export interface StyleEditorCallbacks {
   onApply: (group: TokenGroup, token: Token) => void;
@@ -409,4 +409,12 @@ export function mountStyleEditor(
   wireDropdowns(root, groups, cb);
   wireCustomToggles(root);
   wireCustomInputs(root, tokens, cb);
+
+  // Hovering the "Editing <target>" label outlines the element, matching the
+  // per-target tab hover in the dialog (there is no permanent outline).
+  const head = root.querySelector<HTMLElement>(".ef-style-target-sel");
+  if (head) {
+    head.addEventListener("mouseenter", () => setHighlight(target.el));
+    head.addEventListener("mouseleave", () => setHighlight(null));
+  }
 }

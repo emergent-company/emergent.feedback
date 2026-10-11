@@ -20,6 +20,11 @@ import {
   revertChangesFor,
   commit,
   onSelectionChange,
+  onHighlightChange,
+  setHighlight,
+  getHighlight,
+  flash,
+  refreshOutlines,
   commitChanges,
   markSent,
   revertPending,
@@ -56,6 +61,10 @@ class FakeEl {
   classList: FakeClassList;
   style = new FakeStyle();
   constructor(classes: string[] = []) { this.classList = new FakeClassList(classes); }
+  /** Only the highlight renderer needs this (zero-size box is fine). */
+  getBoundingClientRect(): { top: number; left: number; width: number; height: number } {
+    return { top: 10, left: 20, width: 100, height: 40 };
+  }
 }
 
 const el = (classes: string[] = []): Element => new FakeEl(classes) as unknown as Element;
@@ -484,4 +493,139 @@ test("getAllChanges / getCommittedChanges: pending + committed are distinguishab
 
   assert.equal(getAllChangeCountFor(a), 2);
   assert.deepEqual(getAllChangesFor(a).map((c) => c.group).sort(), ["padding", "textColor"]);
+});
+
+// ── Highlight: hover-driven outline (no persistent boxes on the page) ─────────
+
+interface FakeNode {
+  id: string;
+  style: Record<string, string>;
+  textContent: string;
+  remove(): void;
+}
+
+/** Minimal document fake so the highlight renderer runs under node --test. */
+function installDom(): { nodes: () => FakeNode[]; restore: () => void } {
+  const g = globalThis as unknown as { document: unknown };
+  const prev = g.document;
+  const live: (FakeNode & { removed: boolean })[] = [];
+
+  const createElement = (): FakeNode & { removed: boolean } => {
+    const node = {
+      id: "",
+      style: {} as Record<string, string>,
+      textContent: "",
+      removed: false,
+      remove(): void {
+        node.removed = true;
+      },
+    };
+    return node;
+  };
+
+  g.document = {
+    body: { appendChild: (n: FakeNode & { removed: boolean }): void => { live.push(n); } },
+    createElement,
+    getElementById: (id: string): FakeNode | null => live.find((n) => !n.removed && n.id === id) ?? null,
+    querySelectorAll: (sel: string): FakeNode[] => {
+      const prefix = /\[id\^="([^"]*)"\]/.exec(sel)?.[1] ?? "";
+      return live.filter((n) => !n.removed && n.id.startsWith(prefix));
+    },
+  };
+
+  return {
+    nodes: () => live.filter((n) => !n.removed),
+    restore: () => {
+      g.document = prev;
+    },
+  };
+}
+
+test("highlight: nothing is drawn until a label is hovered; hover draws one box", () => {
+  const dom = installDom();
+  try {
+    const a = el();
+    const b = el();
+    addTarget(a, "#a");
+    addTarget(b, "#b");
+
+    refreshOutlines();
+    assert.equal(dom.nodes().length, 0, "no permanent outline for selected targets");
+
+    setHighlight(a);
+    const nodes = dom.nodes();
+    assert.equal(nodes.length, 2, "one box + one badge");
+    assert.equal(nodes.filter((n) => n.textContent === "1").length, 1, "badge shows the tab number (1-based)");
+    assert.equal(nodes[0].style.backgroundColor, "transparent", "no fill: it would hide the style edit");
+
+    setHighlight(a);
+    assert.equal(dom.nodes().length, 2, "re-highlighting the same element does not stack boxes");
+
+    setHighlight(b);
+    assert.equal(dom.nodes().length, 2, "switching target replaces the box, never accumulates");
+    assert.ok(dom.nodes().some((n) => n.textContent === "2"));
+
+    setHighlight(null);
+    assert.equal(dom.nodes().length, 0, "leaving the label clears the outline");
+    assert.equal(getHighlight(), null);
+  } finally {
+    dom.restore();
+  }
+});
+
+test("highlight: a hovered element that is not a target gets a box but no badge", () => {
+  const dom = installDom();
+  try {
+    const a = el();
+    addTarget(a, "#a");
+    const stranger = el();
+    setHighlight(stranger);
+    assert.equal(dom.nodes().length, 1, "box only");
+    assert.equal(dom.nodes()[0].textContent, "");
+  } finally {
+    dom.restore();
+  }
+});
+
+test("flash: outlines briefly then clears itself", async () => {
+  const dom = installDom();
+  try {
+    const a = el();
+    addTarget(a, "#a");
+    flash(a, 5);
+    assert.equal(dom.nodes().length, 2, "flashing target is outlined");
+    await new Promise((r) => setTimeout(r, 25));
+    assert.equal(dom.nodes().length, 0, "flash clears without a hover");
+  } finally {
+    dom.restore();
+  }
+});
+
+test("highlight: hovering wins over a running flash, and removal drops it", () => {
+  const dom = installDom();
+  try {
+    const a = el();
+    addTarget(a, "#a");
+    flash(a, 50);
+    setHighlight(a);
+    assert.ok(dom.nodes()[0].style.backgroundColor === "transparent", "hover box wins");
+
+    removeTarget(a);
+    assert.equal(getHighlight(), null, "removing the target clears the highlight");
+    assert.equal(dom.nodes().length, 0);
+  } finally {
+    dom.restore();
+  }
+});
+
+test("onHighlightChange: notifies subscribers and unsubscribes", () => {
+  const seen: (Element | null)[] = [];
+  const off = onHighlightChange((e) => seen.push(e));
+  const a = el();
+  addTarget(a, "#a");
+  setHighlight(a);
+  setHighlight(null);
+  off();
+  setHighlight(a);
+  assert.deepEqual(seen, [a, null]);
 });

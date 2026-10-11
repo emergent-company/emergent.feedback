@@ -22,11 +22,14 @@ import {
   getCommittedEntries,
   getTargets as getSelectionTargets,
   isPickMode,
+  onHighlightChange,
   onSelectionChange,
+  flash as flashTarget,
   refreshOutlines,
   removeCommittedAt,
   removeTarget as removeSelectionTarget,
   revertPending,
+  setHighlight,
   setPickMode,
   type TargetEntry,
 } from "./selection";
@@ -694,6 +697,8 @@ function injectStyles(): void {
       transition: background 0.12s, border-color 0.12s;
     }
     #__ef_dialog__ .ef-target-tab:hover { border-color: var(--ef-control-border-hover); }
+    /* Reverse hover: the pointer is over this target's element on the page. */
+    #__ef_dialog__ .ef-target-tab--peek { border-color: var(--ef-primary); }
     #__ef_dialog__ .ef-target-tab[aria-selected="true"] {
       background: var(--ef-chip-on-bg);
       border-color: var(--ef-primary);
@@ -1895,6 +1900,8 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
 
   // Active per-element tab (Design panel).
   let activeTargetIdx = 0;
+  /** Last target that received a select-flash — see renderSelection. */
+  let lastFlashedEl: Element | null = null;
   const activeTarget = (): TargetEntry | null => currentTargets()[activeTargetIdx] ?? null;
   const clampActiveTarget = (): void => {
     const n = currentTargets().length;
@@ -1942,8 +1949,9 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
       renderTargets();
     });
     targetsHost.querySelectorAll<HTMLElement>(".ef-target-tab").forEach((tab) => {
+      const idx = parseInt(tab.dataset.idx ?? "-1", 10);
+      const tabTarget = currentTargets()[idx];
       const activate = () => {
-        const idx = parseInt(tab.dataset.idx ?? "-1", 10);
         if (idx < 0 || idx === activeTargetIdx) return;
         activeTargetIdx = idx;
         renderSelection();
@@ -1958,6 +1966,17 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
           activate();
         }
       });
+      // Hovering/focusing a target label is the ONLY thing that outlines the
+      // element on the page (see selection.setHighlight) — a permanent box
+      // would sit on top of the very style the reporter is judging.
+      if (tabTarget) {
+        tab.addEventListener("mouseenter", () => setHighlight(tabTarget.el));
+        tab.addEventListener("mouseleave", () => setHighlight(null));
+        tab.addEventListener("focusin", () => setHighlight(tabTarget.el));
+        tab.addEventListener("focusout", (e) => {
+          if (!tab.contains(e.relatedTarget as Node | null)) setHighlight(null);
+        });
+      }
     });
     targetsHost.querySelectorAll<HTMLButtonElement>(".ef-target-remove").forEach((btn) => {
       btn.addEventListener("click", (e) => {
@@ -2064,6 +2083,12 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
 
   const renderSelection = () => {
     clampActiveTarget();
+    // Click-to-select feedback: briefly outline the newly active target. There
+    // is no permanent outline (it would hide the style being previewed), so the
+    // flash is what tells the reporter which element the editor is bound to.
+    const activeEl = activeTarget()?.el ?? null;
+    if (activeEl && activeEl !== lastFlashedEl) flashTarget(activeEl);
+    lastFlashedEl = activeEl;
     // Re-rendering replaces innerHTML, which would collapse the "Current
     // classes" disclosure and jump scroll positions. Capture + restore them so
     // live edits don't yank the panel around.
@@ -2337,6 +2362,16 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     }
   });
 
+  // Reverse hover: outline the target on the page and peek its tab in the panel.
+  const unsubHighlight = onHighlightChange((el) => {
+    const tabs = targetsHost.querySelectorAll<HTMLElement>(".ef-target-tab");
+    const list = currentTargets();
+    tabs.forEach((tab) => {
+      const t = list[parseInt(tab.dataset.idx ?? "-1", 10)];
+      tab.classList.toggle("ef-target-tab--peek", !!el && !!t && t.el === el);
+    });
+  });
+
   // Keep the reserved dock rail width (and outlines) in step with the viewport.
   const onResize = () => {
     applyDockReflow();
@@ -2346,6 +2381,8 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
 
   dialogCleanup = () => {
     unsubSelection();
+    unsubHighlight();
+    setHighlight(null);
     window.removeEventListener("resize", onResize);
     document.removeEventListener("keydown", modalKey, true);
   };

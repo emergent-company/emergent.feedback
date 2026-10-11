@@ -323,14 +323,22 @@ in the Design editor; the editor configures only the active element, so edits ar
 bounded to that component instead of applying globally. A scope hint notes when
 a selection spans multiple targets.
 
+Selection outlines are **hover-driven, not persistent**: selecting an element
+leaves no box on the page, because a permanent outline sits on top of the very
+border/background/shadow the reporter is judging. Hovering (or focusing) a
+target label in the panel outlines that element — amber box plus the badge
+number matching its tab — and a short **select flash** confirms which element a
+click just bound the editor to. Hovering a selected element on the page outlines
+it too and peeks its tab in the panel (reverse hover).
+
 Edits start **pending** — applied live but reverted on Cancel/close. The
 **Commit** button freezes pending edits and persists them (localStorage) across
 sidebar close, reopen and page reload until explicitly removed from the global
 **Committed changes** list (per-entry Remove + Remove all).
 
 Docked mode reserves the rail width (document-root `margin-right`), so the host
-page reflows alongside the panel instead of being overlaid; selection outlines
-are repainted after the reflow. Modal mode sizes the card to ~50 vw (capped at
+page reflows alongside the panel instead of being overlaid; the hover highlight
+is repainted after the reflow. Modal mode sizes the card to ~50 vw (capped at
 900 px, min 480 px) and, when **Add element** is pressed, hides the dialog for the
 click-to-pick and restores it when the pick completes (Escape cancels the pick).
 

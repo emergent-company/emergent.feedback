@@ -113,7 +113,7 @@ Docked mode sits **alongside** the page rather than over it: the panel reserves
 its rail width (`margin-right` on the document root), so the host content reflows
 and stays fully visible and undimmed — no overlay covering the page. Element
 picking, multi-select and live style editing all continue while the panel is
-open; selection outlines are repainted after the reflow. Toggle dock/undock from
+open; the hover highlight is repainted after the reflow. Toggle dock/undock from
 the panel header; the choice is persisted per browser (localStorage
 `__ef_dialog_docked__`) and docked is the default. On narrow viewports (≤ 520 px)
 the panel takes the full width and the page is not reflowed.
@@ -140,6 +140,11 @@ click on an already-selected element toggles it off, and **Add element** enters 
 pick mode). When more than one element is selected, the Design editor shows them
 as **per-element tabs**: pick a tab to edit that element on its own. Each edit is
 bounded to the active element — nothing is applied globally.
+
+Outlines are hover-driven: a selected element is **not** permanently boxed (that
+would cover the border/background/shadow being judged). Hover or focus a target
+label in the panel to outline that element, or hover the element itself to peek
+its tab — plus a short flash on select.
 
 Properties are grouped into collapsible sections — **Spacing**, **Layout**,
 **Typography**, **Color**, **Borders & Effects** and **daisyUI** — covering
