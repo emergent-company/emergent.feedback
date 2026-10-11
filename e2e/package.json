@@ -10,6 +10,7 @@
     "test:own": "playwright test --project=own",
     "test:host": "playwright test --project=host",
     "test:remote": "playwright test --project=remote",
+    "login": "node scripts/login.mjs",
     "report": "playwright show-report",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "install:browsers": "playwright install chromium"
