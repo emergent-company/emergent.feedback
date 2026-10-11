@@ -539,10 +539,9 @@ func writeChanges(sb *strings.Builder, ctx map[string]any, heading string) {
 		if before == "" {
 			before = "(none)"
 		}
-		group := strVal(c["group"])
-		// A DOM move is a position edit, not a style token: render it with the
-		// position wording so the instruction reads as a reorder.
-		if group == "position" {
+		// A DOM move is identified by its `move` anchors, never by the group id: a
+		// token group could otherwise be mistaken for a reorder.
+		if c["move"] != nil {
 			lines = append(lines, fmt.Sprintf("- `%s` — move: `%s` → `%s`",
 				mdTickSafe(redactSecrets(strVal(c["target"]))),
 				mdTickSafe(redactSecrets(before)),
@@ -552,7 +551,7 @@ func writeChanges(sb *strings.Builder, ctx map[string]any, heading string) {
 		}
 		lines = append(lines, fmt.Sprintf("- `%s` — %s: `%s` → `%s`",
 			mdTickSafe(redactSecrets(strVal(c["target"]))),
-			mdTickSafe(redactSecrets(group)),
+			mdTickSafe(redactSecrets(strVal(c["group"]))),
 			mdTickSafe(redactSecrets(before)),
 			mdTickSafe(redactSecrets(strVal(c["after"]))),
 		))
@@ -577,7 +576,7 @@ func changeCount(intent map[string]any) int {
 }
 
 // changeCounts splits the recorded changes into style edits and DOM moves
-// (group "position"), so the instruction can name both accurately.
+// (those carrying `move` anchors), so the instruction can name both accurately.
 func changeCounts(intent map[string]any) (styles int, moves int) {
 	arr, ok := intent["changes"].([]any)
 	if !ok {
@@ -588,7 +587,7 @@ func changeCounts(intent map[string]any) (styles int, moves int) {
 		if !ok {
 			continue
 		}
-		if strVal(c["group"]) == "position" {
+		if c["move"] != nil {
 			moves++
 			continue
 		}

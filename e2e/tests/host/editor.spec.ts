@@ -90,7 +90,9 @@ test.describe("editor affordances (structure fixture)", () => {
 
   test("layout groups render as icon buttons and apply their Tailwind class", async ({ page }) => {
     await openEditorOn(page, "#btn-a");
-    const row = page.locator('.ef-prop-row[data-group="position"]');
+    // The CSS position group's id is "positioning": "position" is reserved for
+    // recorded DOM moves, so an applied `relative` must not read as a reorder.
+    const row = page.locator('.ef-prop-row[data-group="positioning"]');
 
     // Five options + the Default (unset) glyph, all inline SVG.
     await expect(row.locator("svg")).toHaveCount(6);
@@ -100,6 +102,10 @@ test.describe("editor affordances (structure fixture)", () => {
     await btn.click();
     await expect(page.locator("#btn-a")).toHaveClass(classRe("relative"));
     await expect(btn).toHaveAttribute("aria-pressed", "true");
+
+    // Listed as a plain style change — not as a Position (move) record.
+    await expect(page.locator(".ef-changes-list")).toContainText("positioning");
+    await expect(page.locator(".ef-changes-list")).not.toContainText("Position");
 
     await btn.click();
     await expect(page.locator("#btn-a")).not.toHaveClass(classRe("relative"));

@@ -229,8 +229,11 @@ export function recordMove(el: Element, placement: Placement): void {
   const selector = targets.find((t) => t.el === el)?.selector ?? buildSelector(el);
   const existing = applied.find((r): r is PlacementRecord => isPlacement(r) && r.el === el);
   if (existing) {
+    // Only the destination moves forward. `from` AND `selector` both describe the
+    // ORIGINAL position: on reload the page is back in its original order, so a
+    // selector captured after an earlier move would resolve to the wrong element
+    // (or to nothing).
     existing.to = placement.to;
-    existing.selector = selector;
   } else {
     applied.push({ kind: "position", el, selector, from: placement.from, to: placement.to });
   }

@@ -732,13 +732,17 @@ test("recordMove: a move is a position change carrying its replayable anchors", 
   assert.equal(getChangeCountFor(a), 1);
 });
 
-test("recordMove: repeated moves collapse to one record keeping the original from-position", () => {
+test("recordMove: repeated moves collapse to one record keeping the original anchor", () => {
   const a = el();
   addTarget(a, "#a");
   recordMove(a, {
     from: anchor("#toolbar", "#b", 0, "1st of 3 in #toolbar"),
     to: anchor("#toolbar", "#c", 1, "2nd of 3 in #toolbar"),
   });
+  // The post-move recompute can drift the TARGET's selector. The record must keep
+  // the original one: a reload starts from the original DOM order, so a selector
+  // captured mid-session would resolve the wrong element (or nothing).
+  getTargets()[0].selector = "#a-moved";
   recordMove(a, {
     from: anchor("#toolbar", "#c", 1, "2nd of 3 in #toolbar"),
     to: anchor("#toolbar", null, 2, "3rd of 3 in #toolbar"),
@@ -746,8 +750,11 @@ test("recordMove: repeated moves collapse to one record keeping the original fro
 
   const changes = getChanges();
   assert.equal(changes.length, 1, "one move per element, not a move history");
+  assert.equal(changes[0].target, "#a", "selector stays anchored to the original position");
   assert.equal(changes[0].before, "1st of 3 in #toolbar", "first state preserved");
   assert.equal(changes[0].after, "3rd of 3 in #toolbar", "latest state reported");
+  assert.equal(changes[0].move?.from.label, "1st of 3 in #toolbar");
+  assert.equal(changes[0].move?.to.label, "3rd of 3 in #toolbar");
 });
 
 test("recordMove + commitChanges: the move joins the committed list and persists", () => {
@@ -794,6 +801,32 @@ test("revertChangesFor: reverting a target drops its move record too", () => {
 
   assert.deepEqual(getChanges(), []);
   assert.equal(a.classList.contains("p-0"), false, "the style edit was reverted as well");
+});
+
+/** The CSS position group (id deliberately not POSITION_GROUP — see tokens.ts). */
+const positioningGroup: TokenGroup = {
+  id: "positioning",
+  label: "Position",
+  applyType: "class",
+  render: "icons",
+  tokens: [
+    { id: "static", label: "Static", className: "static" },
+    { id: "relative", label: "Relative", className: "relative" },
+    { id: "absolute", label: "Absolute", className: "absolute" },
+  ],
+};
+
+test("a CSS position token records a style change, never a move", () => {
+  const a = el();
+  addTarget(a, "#a");
+  applyTokenToTarget(a, positioningGroup, positioningGroup.tokens[1]); // relative
+
+  const change = getChanges()[0];
+  assert.equal(change.group, "positioning");
+  assert.equal(change.after, "relative");
+  // Moves are identified by their anchors, never by the group id: the server
+  // renders and counts a move only when this field is present.
+  assert.equal(change.move, undefined);
 });
 
 test("clearTokenForTarget: Default on a group never touches a recorded move", () => {

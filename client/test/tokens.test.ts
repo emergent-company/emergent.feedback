@@ -10,6 +10,7 @@ import {
   revertToken,
   type TokenGroup,
 } from "../src/tokens";
+import { POSITION_GROUP } from "../src/selection";
 
 // ── Minimal DOM fakes (hermetic; no jsdom) ────────────────────────────────────
 
@@ -211,6 +212,22 @@ test("buildFallbackTokens: extended groups, sections, and renders", () => {
 
   assert.equal(byId("padding").removePattern, "^p[xytrbl]?-");
   assert.equal(byId("margin").removePattern, "^m[xytrbl]?-");
+});
+
+test("buildFallbackTokens: no group id collides with the recorded-move group", () => {
+  const theme = buildFallbackTokens();
+  const ids = theme.groups.map((g) => g.id);
+
+  // `POSITION_GROUP` is the payload marker for a DOM move (styleEditor can never
+  // apply it), so no CSS token group may share the id — otherwise a recorded
+  // `relative`/`absolute` change would be reported as a reorder.
+  assert.equal(
+    ids.includes(POSITION_GROUP),
+    false,
+    `token group id "${POSITION_GROUP}" is reserved for recorded DOM moves`
+  );
+  assert.ok(ids.includes("positioning"), "the CSS position group keeps its own id");
+  assert.equal(theme.groups.find((g) => g.id === "positioning")!.label, "Position");
 });
 
 test("buildFallbackTokens: every icons group has a glyph for every token", () => {

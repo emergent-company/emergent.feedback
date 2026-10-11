@@ -27,7 +27,6 @@ import {
   isPickMode,
   onHighlightChange,
   onSelectionChange,
-  POSITION_GROUP,
   refreshOutlines,
   removeCommittedAt,
   removeTarget as removeSelectionTarget,
@@ -2090,7 +2089,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
       pendingCount === 0
         ? `<div class="ef-changes-empty">No pending edits on this element. Commit to freeze them.</div>`
         : `<ul class="ef-changes-list">
-            ${pending.map((c) => `<li><span class="ef-change-group">${escapeHtml(c.group === POSITION_GROUP ? "Position" : c.group)}</span><span class="ef-change-before">${escapeHtml(c.before || "—")}</span><span class="ef-arrow">→</span><span class="ef-change-after">${escapeHtml(c.after)}</span></li>`).join("")}
+            ${pending.map((c) => `<li><span class="ef-change-group">${escapeHtml(c.move != null ? "Position" : c.group)}</span><span class="ef-change-before">${escapeHtml(c.before || "—")}</span><span class="ef-arrow">→</span><span class="ef-change-after">${escapeHtml(c.after)}</span></li>`).join("")}
           </ul>`;
 
     const committedList =
@@ -2198,7 +2197,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
    * report that is (mostly) a reorder reads as a move.
    */
   const defaultAction = (): IntentAction =>
-    getAllChanges().some((c) => c.group === POSITION_GROUP) ? "move" : inferAction(getType());
+    getAllChanges().some((c) => c.move != null) ? "move" : inferAction(getType());
 
   let action: IntentAction = defaultAction();
   let actionTouched = false;

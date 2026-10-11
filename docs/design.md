@@ -315,7 +315,9 @@ as a horizontal property row (label left, control right). Color groups and the
 sizing groups (padding, margin, gap, max-width, width, height) render as
 dropdowns; layout/position groups render as **icon rows** (inlined SVG glyph
 buttons); other groups render as chips. `render` accepts `chips` (default),
-`dropdown`, or `icons`. Every dropdown ends with a **Custom
+`dropdown`, or `icons`. Group ids must not collide with `position`, which is
+reserved for recorded DOM moves (the CSS position tokens are grouped under
+`positioning`). Every dropdown ends with a **Custom
 class…** item (chip groups expose a **+ Custom** toggle) that reveals an inline
 field for a free-typed class. Applied class/style edits are recorded per element
 and rendered in the issue modal and panel.
@@ -386,7 +388,10 @@ click-to-pick and restores it when the pick completes (Escape cancels the pick).
   `{ from, to }`, each anchor `{ container, before, index, label }` (`before:
   null` = last child; selectors, so a reload can replay). `before`/`after` carry
   the human position text (`2nd of 3 in .toolbar`). `intent.action` defaults to
-  `move` when the recorded edits include a move.
+  `move` when the recorded edits include a move. A move is identified by the
+  presence of `move`, never by the group id — the CSS position tokens live in a
+  group named `positioning`, so `relative`/`absolute` can never be read as a
+  reorder.
 - Provenance: `intent.changes` is `stated` when non-empty, else `absent`.
 
 No storage schema change — everything rides inside `context_json`.

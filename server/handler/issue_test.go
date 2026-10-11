@@ -201,7 +201,16 @@ func TestBuildIssueContentStyleAndMove(t *testing.T) {
 		"intent": map[string]any{
 			"changes": []any{
 				map[string]any{"target": "button.cta", "group": "padding", "before": "p-2", "after": "p-4"},
-				map[string]any{"target": "button.cta", "group": "position", "before": "1st of 2 in .toolbar", "after": "2nd of 2 in .toolbar"},
+				map[string]any{
+					"target": "button.cta",
+					"group":  "position",
+					"before": "1st of 2 in .toolbar",
+					"after":  "2nd of 2 in .toolbar",
+					"move": map[string]any{
+						"from": map[string]any{"container": ".toolbar", "before": nil, "index": 0},
+						"to":   map[string]any{"container": ".toolbar", "before": nil, "index": 1},
+					},
+				},
 			},
 		},
 	}
@@ -218,6 +227,43 @@ func TestBuildIssueContentStyleAndMove(t *testing.T) {
 
 	if want := "Apply 1 live style change(s) and move 1 element(s) recorded on the selected element(s)."; !strings.Contains(body, want) {
 		t.Fatalf("body missing %q\n%s", want, body)
+	}
+}
+
+// A token group whose name mentions position is a style edit, not a reorder. The
+// move/style split keys off the `move` anchors, never the group id — a group id
+// that collided with the move marker used to be misrendered as "move:".
+func TestBuildIssueContentPositionTokenIsNotAMove(t *testing.T) {
+	ctx := map[string]any{
+		"intent": map[string]any{
+			"changes": []any{
+				map[string]any{"target": "button.cta", "group": "positioning", "before": "(none)", "after": "relative"},
+				map[string]any{"target": "button.cta", "group": "position", "before": "(none)", "after": "absolute"},
+			},
+		},
+	}
+	ctxJSON, _ := json.Marshal(ctx)
+	items := []store.Feedback{{
+		ID:          1,
+		URL:         "https://app.example.com/",
+		Selector:    "button.cta",
+		Comment:     "make it relative",
+		ContextJSON: string(ctxJSON),
+		GitHubUser:  "alice",
+	}}
+	_, body := buildIssueContent(items, "")
+
+	for _, want := range []string{
+		"- `button.cta` — positioning: `(none)` → `relative`",
+		"- `button.cta` — position: `(none)` → `absolute`",
+		"Apply 2 live style change(s) recorded on the selected element(s).",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("body missing %q\n%s", want, body)
+		}
+	}
+	if strings.Contains(body, "— move:") {
+		t.Fatalf("a position token must not render as a move:\n%s", body)
 	}
 }
 

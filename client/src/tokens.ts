@@ -509,7 +509,9 @@ export function buildFallbackTokens(): ThemeTokens {
         ],
       },
       {
-        id: "position",
+        // NOT "position": that id is reserved for recorded DOM moves
+        // (selection.ts POSITION_GROUP), and the payload must not be ambiguous.
+        id: "positioning",
         label: "Position",
         section: "Layout",
         applyType: "class",

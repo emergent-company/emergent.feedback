@@ -48,22 +48,28 @@ test.describe("moving elements (structure fixture)", () => {
     await page.mouse.up();
   }
 
-  test("drags a button to the front, records it, and replays it after commit + reload", async ({ page }) => {
+  test("drags a button twice, records one move, and replays it after commit + reload", async ({ page }) => {
     await openEditorOn(page, "#btn-c");
     await expect(page.locator(".ef-style-position")).toHaveText("3rd of 3 in #toolbar");
 
     await drag(page, "#btn-c", "#btn-a");
 
-    // The DOM actually changed: click-drag reorders siblings live.
+    // The DOM actually changed: press-drag reorders siblings live.
     expect(await children(page, "#toolbar")).toEqual(["btn-c", "btn-a", "btn-b"]);
     // The drop is swallowed — it did not also toggle the selection off.
     await expect(page.locator("#__ef_dialog__")).toBeVisible();
     await expect(page.locator(".ef-style-position")).toHaveText("1st of 3 in #toolbar");
 
-    // The move is a recorded change, listed as Position.
+    // A second move of the SAME element: one record, keeping the original anchor.
+    await drag(page, "#btn-c", "#btn-b");
+    expect(await children(page, "#toolbar")).toEqual(["btn-a", "btn-c", "btn-b"]);
+    await expect(page.locator(".ef-style-position")).toHaveText("2nd of 3 in #toolbar");
+
+    // Listed as Position, from the first position to the latest — not a history.
     await expect(page.locator(".ef-changes-list")).toContainText("Position");
     await expect(page.locator(".ef-changes-list")).toContainText("3rd of 3 in #toolbar");
-    await expect(page.locator(".ef-changes-list")).toContainText("1st of 3 in #toolbar");
+    await expect(page.locator(".ef-changes-list")).toContainText("2nd of 3 in #toolbar");
+    await expect(page.locator(".ef-changes-list li")).toHaveCount(1);
 
     // Commit → the anchors are persisted, not just the live DOM order.
     await page.click("#__ef_commit__");
@@ -72,7 +78,7 @@ test.describe("moving elements (structure fixture)", () => {
     // Reload: the committed move replays from localStorage before any clicking.
     await page.reload();
     await page.waitForFunction(() => !!(window as unknown as { EmergentFeedback?: unknown }).EmergentFeedback);
-    expect(await children(page, "#toolbar")).toEqual(["btn-c", "btn-a", "btn-b"]);
+    expect(await children(page, "#toolbar")).toEqual(["btn-a", "btn-c", "btn-b"]);
 
     // Remove the committed move → the original order comes back.
     await activate(page);
