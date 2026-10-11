@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { openIssuesTab } from "../../support/dialog";
 import {
   ALLOW_WRITES,
   E2E_DIR,
@@ -76,6 +77,7 @@ test.describe("remote host app", () => {
 
     await page.locator("a, button, [role=button]").first().click();
     await expect(page.locator("#__ef_dialog__")).toBeVisible();
+    await openIssuesTab(page);
     await page.fill("#__ef_comment__", "automated e2e feedback submission");
     const [response] = await Promise.all([
       page.waitForResponse(
