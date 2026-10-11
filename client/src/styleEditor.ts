@@ -23,6 +23,11 @@ import { setHighlight, type TargetEntry } from "./selection";
 
 export interface StyleEditorCallbacks {
   onApply: (group: TokenGroup, token: Token) => void;
+  /**
+   * Reset the group to the element's own styling ("Default"). Called from the
+   * Default control and from a click on an already-active control.
+   */
+  onClear: (group: TokenGroup) => void;
 }
 
 /**
@@ -105,15 +110,22 @@ function customInputHTML(group: TokenGroup): string {
   return `<input type="text" class="ef-custom-input" data-group="${escapeHtml(group.id)}" placeholder="custom class…" spellcheck="false" aria-label="Custom class for ${escapeHtml(group.label)}">`;
 }
 
+/** The group's Default control, always first in a chip row. */
+function defaultChipHTML(group: TokenGroup, el: Element): string {
+  const atDefault = matchToken(el, group) === null;
+  return `<button type="button" class="ef-token-chip ef-token-default${atDefault ? " ef-token-on" : ""}" data-group="${escapeHtml(group.id)}" data-default="1" aria-pressed="${atDefault}" title="Unset (back to the element's own styling)">Default</button>`;
+}
+
 function renderChips(group: TokenGroup, el: Element): string {
   const chips = group.tokens
     .map((t) => {
       const on = tokenActive(t, group, el);
-      return `<button type="button" class="ef-token-chip${on ? " ef-token-on" : ""}" data-group="${escapeHtml(group.id)}" data-token="${escapeHtml(t.id)}" aria-pressed="${on}" title="${escapeHtml(t.label)}">${swatchHTML(t)}${escapeHtml(t.label)}</button>`;
+      return `<button type="button" class="ef-token-chip${on ? " ef-token-on" : ""}" data-group="${escapeHtml(group.id)}" data-token="${escapeHtml(t.id)}" aria-pressed="${on}" title="${escapeHtml(t.label)}${on ? " — click to unset" : ""}">${swatchHTML(t)}${escapeHtml(t.label)}</button>`;
     })
     .join("");
   return `
       <div class="ef-token-row">
+        ${defaultChipHTML(group, el)}
         ${chips}
         <button type="button" class="ef-custom-toggle" data-group="${escapeHtml(group.id)}" aria-expanded="false" title="Custom class">+ Custom</button>
       </div>
@@ -122,6 +134,7 @@ function renderChips(group: TokenGroup, el: Element): string {
 
 function renderDropdown(group: TokenGroup, el: Element): string {
   const cur = matchToken(el, group);
+  const atDefault = cur === null;
   const headerSwatch = cur ? swatchHTML(cur) : "";
   const options = group.tokens
     .map((t) => {
@@ -136,6 +149,8 @@ function renderDropdown(group: TokenGroup, el: Element): string {
           <span class="ef-select-caret" aria-hidden="true">▾</span>
         </button>
         <ul class="ef-select-menu" role="listbox" hidden>
+          <li role="option" class="ef-select-option ef-select-default${atDefault ? " ef-token-on" : ""}" data-group="${escapeHtml(group.id)}" data-default="1" aria-selected="${atDefault}">Default</li>
+          <li class="ef-select-sep" role="presentation"></li>
           ${options}
           <li class="ef-select-sep" role="presentation"></li>
           <li role="option" class="ef-select-custom" data-group="${escapeHtml(group.id)}" aria-selected="false" tabindex="-1">Custom class…</li>
@@ -273,6 +288,14 @@ function wireDropdowns(
     items().forEach((opt) => {
       opt.tabIndex = -1;
       opt.addEventListener("click", () => {
+        const gid = opt.dataset.group ?? "";
+        const group = groups.find((g) => g.id === gid);
+        // "Default" — back to the element's own styling.
+        if (opt.dataset.default) {
+          close(menu);
+          if (group) cb.onClear(group);
+          return;
+        }
         if (opt.classList.contains("ef-select-custom")) {
           const edit = menu.querySelector<HTMLElement>(".ef-select-custom-edit");
           const input = edit?.querySelector<HTMLInputElement>(".ef-custom-input");
@@ -282,9 +305,7 @@ function wireDropdowns(
           }
           return;
         }
-        const gid = opt.dataset.group ?? "";
         const tid = opt.dataset.token ?? "";
-        const group = groups.find((g) => g.id === gid);
         const token = group?.tokens.find((t) => t.id === tid);
         close(menu);
         if (group && token) cb.onApply(group, token);
@@ -396,15 +417,26 @@ export function mountStyleEditor(
   root.innerHTML = renderEditorHTML(tokens, target, changesCount);
 
   // Chip row wiring (dropdowns have their own handlers below).
-  root.querySelectorAll<HTMLButtonElement>(".ef-token-chip[data-token]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const gid = btn.dataset.group ?? "";
-      const tid = btn.dataset.token ?? "";
-      const group = groups.find((g) => g.id === gid);
-      const token = group?.tokens.find((t) => t.id === tid);
-      if (group && token) cb.onApply(group, token);
+  root
+    .querySelectorAll<HTMLButtonElement>(".ef-token-chip[data-token], .ef-token-chip[data-default]")
+    .forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const gid = btn.dataset.group ?? "";
+        const group = groups.find((g) => g.id === gid);
+        if (!group) return;
+        if (btn.dataset.default) {
+          cb.onClear(group);
+          return;
+        }
+        const tid = btn.dataset.token ?? "";
+        const token = group.tokens.find((t) => t.id === tid);
+        if (!token) return;
+        // Clicking the active control unselects it — back to the element's own
+        // styling, the same thing the Default chip does.
+        if (tokenActive(token, group, target.el)) cb.onClear(group);
+        else cb.onApply(group, token);
+      });
     });
-  });
 
   wireDropdowns(root, groups, cb);
   wireCustomToggles(root);

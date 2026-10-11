@@ -318,6 +318,15 @@ class…** item (chip groups expose a **+ Custom** toggle) that reveals an inlin
 field for a free-typed class. Applied class/style edits are recorded per element
 and rendered in the issue modal and panel.
 
+Every group also carries a **Default** control — the leading chip in a chip row,
+the leading item in a dropdown — which resets the group to the element's own
+styling: the recorded edit (pending or committed) is reverted and dropped, so a
+committed edit stops being replayed too. Clicking an already-active chip (or the
+selected dropdown option) is the same action. `Default` differs from the `None`
+tokens (`p-0`, `m-0`, `gap-0`), which apply an explicit zero value. A group whose
+value comes from the host markup has no recorded edit, so Default is reported as
+a no-op instead of stripping the page's class.
+
 When more than one element is selected they are presented as **per-element tabs**
 in the Design editor; the editor configures only the active element, so edits are
 bounded to that component instead of applying globally. A scope hint notes when

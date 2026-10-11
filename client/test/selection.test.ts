@@ -21,6 +21,7 @@ import {
   commit,
   onSelectionChange,
   onHighlightChange,
+  clearTokenForTarget,
   setHighlight,
   getHighlight,
   flash,
@@ -628,4 +629,75 @@ test("onHighlightChange: notifies subscribers and unsubscribes", () => {
   off();
   setHighlight(a);
   assert.deepEqual(seen, [a, null]);
+});
+
+// ── Default / toggle-off (clearTokenForTarget) ────────────────────────────────
+
+test("clearTokenForTarget: unsetting a pending edit restores the element's own styling", () => {
+  const a = el(["p-2"]);
+  addTarget(a, "#a");
+  applyTokenToTarget(a, paddingGroup, paddingGroup.tokens.find((t) => t.id === "md")!);
+  assert.ok(a.classList.contains("p-4"));
+  assert.equal(getChangeCountFor(a), 1);
+
+  assert.equal(clearTokenForTarget(a, paddingGroup), true);
+
+  assert.ok(!a.classList.contains("p-4"), "applied class removed");
+  assert.ok(a.classList.contains("p-2"), "pre-existing class restored from `before`");
+  assert.equal(getChangeCountFor(a), 0);
+  assert.deepEqual(getChanges(), []);
+});
+
+test("clearTokenForTarget: Default also undoes a committed edit and stops its replay", () => {
+  const a = el(["p-2"]);
+  addTarget(a, "#a");
+  applyTokenToTarget(a, paddingGroup, paddingGroup.tokens.find((t) => t.id === "md")!);
+  commitChanges();
+  assert.equal(getCommittedCount(), 1);
+  assert.equal(committedStorage().length, 1);
+
+  assert.equal(clearTokenForTarget(a, paddingGroup), true);
+
+  assert.equal(getCommittedCount(), 0);
+  assert.deepEqual(committedStorage(), [], "nothing left to replay");
+  assert.ok(a.classList.contains("p-2"));
+  assert.ok(!a.classList.contains("p-4"));
+});
+
+test("clearTokenForTarget: clears the pending edit only, leaving the committed one", () => {
+  const a = el();
+  addTarget(a, "#a");
+  applyTokenToTarget(a, paddingGroup, paddingGroup.tokens.find((t) => t.id === "md")!);
+  commitChanges(); // committed p-4
+  applyTokenToTarget(a, paddingGroup, paddingGroup.tokens.find((t) => t.id === "lg")!); // pending p-6
+  assert.equal(a.classList.contains("p-6"), true);
+
+  assert.equal(clearTokenForTarget(a, paddingGroup), true);
+
+  assert.equal(getCommittedCount(), 1, "committed entry survives");
+  assert.equal(a.classList.contains("p-6"), false);
+  assert.equal(a.classList.contains("p-4"), true, "falls back to the committed value");
+});
+
+test("clearTokenForTarget: no recorded edit → reports false and leaves the DOM alone", () => {
+  const a = el(["p-4"]);
+  addTarget(a, "#a");
+
+  assert.equal(clearTokenForTarget(a, paddingGroup), false);
+
+  assert.ok(a.classList.contains("p-4"), "a class from the host markup is never stripped");
+  assert.equal(getChangeCountFor(a), 0);
+});
+
+test("clearTokenForTarget: unsetting one group leaves the other groups' edits intact", () => {
+  const a = el();
+  addTarget(a, "#a");
+  applyTokenToTarget(a, paddingGroup, paddingGroup.tokens.find((t) => t.id === "md")!);
+  applyTokenToTarget(a, textGroup, textGroup.tokens.find((t) => t.id === "primary")!);
+
+  assert.equal(clearTokenForTarget(a, paddingGroup), true);
+
+  assert.equal(a.classList.contains("p-4"), false);
+  assert.equal(a.classList.contains("text-primary"), true);
+  assert.deepEqual(getChanges().map((c) => c.group), ["textColor"]);
 });

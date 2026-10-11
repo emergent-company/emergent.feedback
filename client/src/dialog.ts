@@ -14,7 +14,9 @@ import type { ThemeTokens } from "./tokens";
 import {
   applyTokenToTarget,
   clearCommitted,
+  clearTokenForTarget,
   commitChanges,
+  flash as flashTarget,
   getAllChanges,
   getChangeCount,
   getChangeCountFor,
@@ -24,7 +26,6 @@ import {
   isPickMode,
   onHighlightChange,
   onSelectionChange,
-  flash as flashTarget,
   refreshOutlines,
   removeCommittedAt,
   removeTarget as removeSelectionTarget,
@@ -699,6 +700,16 @@ function injectStyles(): void {
     #__ef_dialog__ .ef-target-tab:hover { border-color: var(--ef-control-border-hover); }
     /* Reverse hover: the pointer is over this target's element on the page. */
     #__ef_dialog__ .ef-target-tab--peek { border-color: var(--ef-primary); }
+    /* The explicit "unset" control reads as an action, not as a value. */
+    #__ef_dialog__ .ef-token-default,
+    #__ef_dialog__ .ef-select-default {
+      color: var(--ef-muted-strong);
+      font-style: italic;
+    }
+    #__ef_dialog__ .ef-token-default.ef-token-on,
+    #__ef_dialog__ .ef-select-default.ef-token-on {
+      color: var(--ef-primary);
+    }
     #__ef_dialog__ .ef-target-tab[aria-selected="true"] {
       background: var(--ef-chip-on-bg);
       border-color: var(--ef-primary);
@@ -1999,6 +2010,15 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
       onApply: (group, token) => {
         const cur = activeTarget();
         if (cur) applyTokenToTarget(cur.el, group, token);
+      },
+      onClear: (group) => {
+        const cur = activeTarget();
+        if (!cur) return;
+        // Nothing recorded means the value comes from the page's own markup —
+        // say so instead of silently stripping the host's class.
+        if (!clearTokenForTarget(cur.el, group)) {
+          showToast("That value comes from the page markup, not an overlay edit.");
+        }
       },
     });
   };

@@ -160,6 +160,15 @@ press Enter to apply it. Choosing a token applies it live to the active element 
 a CSS class (or inline style, per token); applied edits are recorded per element
 and shown in the **Changes** list.
 
+Every group also has a **Default** control — the first chip in a chip row, the
+first item in a dropdown — which unsets the group: the overlay's edit is reverted
+and dropped, restoring whatever the element had before (a committed edit too, so
+it stops being replayed). Clicking an already-selected chip or choosing the
+selected dropdown option does the same. `Default` (unset) is not `None`
+(`p-0`, `m-0`, `gap-0`), which explicitly applies a zero value. When the value on
+an element comes from the page's own markup rather than an overlay edit, Default
+leaves it alone and says so.
+
 Edits start **pending**: they apply live to the page but are reverted when the
 panel is cancelled or the editing session ends. Press **Commit** to freeze the
 pending edits — committed edits are written to localStorage and persist across

@@ -230,6 +230,33 @@ export function revertChangesFor(el: Element): void {
   emit();
 }
 
+/**
+ * Reset one group to the element's own styling ("Default"): revert + drop the
+ * pending record, else the committed one (so Default also undoes a committed
+ * edit and stops it being replayed). Returns false when the overlay recorded
+ * nothing for this group — a group can read "on" purely because the host markup
+ * carries that class, and that must not be stripped behind the reporter's back.
+ */
+export function clearTokenForTarget(el: Element, group: TokenGroup): boolean {
+  const pending = applied.find((r) => r.el === el && r.group.id === group.id);
+  if (pending) {
+    revertRecord(pending);
+    applied = applied.filter((r) => r !== pending);
+    renderHighlight();
+    emit();
+    return true;
+  }
+
+  const idx = committed.findIndex((r) => r.el === el && r.group.id === group.id);
+  if (idx < 0) return false;
+  revertRecord(committed[idx]);
+  committed.splice(idx, 1);
+  renderHighlight();
+  persist();
+  emit();
+  return true;
+}
+
 /** Revert every applied AND committed token change on the host page. Selection kept. */
 export function revertAll(): void {
   for (const r of applied) {
