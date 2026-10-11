@@ -20,6 +20,19 @@ import {
   revertChangesFor,
   commit,
   onSelectionChange,
+  commitChanges,
+  markSent,
+  revertPending,
+  loadCommitted,
+  reapplyCommitted,
+  getCommittedEntries,
+  getCommittedCount,
+  removeCommittedAt,
+  clearCommitted,
+  getCommittedChanges,
+  getAllChanges,
+  getAllChangesFor,
+  getAllChangeCountFor,
 } from "../src/selection";
 import type { TokenGroup } from "../src/tokens";
 
@@ -70,7 +83,24 @@ const textGroup: TokenGroup = {
   ],
 };
 
-beforeEach(() => clear());
+function makeLocalStorage(): Storage {
+  const map = new Map<string, string>();
+  const storage = {
+    getItem: (k: string): string | null => (map.has(k) ? map.get(k)! : null),
+    setItem: (k: string, v: string): void => { map.set(k, String(v)); },
+    removeItem: (k: string): void => { map.delete(k); },
+    clear: (): void => { map.clear(); },
+    key: (i: number): string | null => Array.from(map.keys())[i] ?? null,
+    get length(): number { return map.size; },
+  };
+  return storage as unknown as Storage;
+}
+
+beforeEach(() => {
+  (globalThis as unknown as { localStorage: Storage }).localStorage = makeLocalStorage();
+  clear();
+  clearCommitted();
+});
 
 test("addTarget: dedupes by element identity", () => {
   const a = el();
@@ -248,4 +278,210 @@ test("getTargets: returns a copy, not internal state", () => {
   const snapshot = getTargets();
   snapshot.pop();
   assert.equal(getTargetCount(), 1);
+});
+
+// ── Committed changes ─────────────────────────────────────────────────────────
+
+const committedStorage = (): unknown[] =>
+  JSON.parse((globalThis as unknown as { localStorage: Storage }).localStorage.getItem("__ef_committed__") ?? "[]");
+
+test("commitChanges: promotes pending to committed, keeps DOM, persists", () => {
+  const a = el(["p-0"]);
+  addTarget(a, "#a");
+  applyTokenToTarget(a, paddingGroup, paddingGroup.tokens.find((t) => t.id === "md")!);
+  assert.equal(getChangeCount(), 1);
+
+  commitChanges();
+
+  assert.equal(getChangeCount(), 0);
+  assert.equal(getCommittedCount(), 1);
+  assert.ok(a.classList.contains("p-4"), "DOM edit kept");
+
+  const stored = committedStorage();
+  assert.equal(stored.length, 1);
+  assert.equal((stored[0] as { selector: string }).selector, "#a");
+  assert.equal((stored[0] as { after: string }).after, "p-4");
+});
+
+test("commitChanges: dedupes by element+group, preserving the ORIGINAL before", () => {
+  const a = el(["p-0"]);
+  addTarget(a, "#a");
+  applyTokenToTarget(a, paddingGroup, paddingGroup.tokens.find((t) => t.id === "md")!); // p-4
+  commitChanges();
+  assert.equal(getCommittedCount(), 1);
+
+  // Re-edit the same group to p-6, then commit again.
+  applyTokenToTarget(a, paddingGroup, paddingGroup.tokens.find((t) => t.id === "lg")!);
+  commitChanges();
+
+  assert.equal(getCommittedCount(), 1, "deduped to a single committed record");
+  const entries = getCommittedEntries();
+  assert.equal(entries[0].before, "p-0", "ORIGINAL before preserved");
+  assert.equal(entries[0].after, "p-6");
+});
+
+test("revertPending: reverts pending only; committed DOM survives", () => {
+  const a = el(["p-0"]);
+  const b = el(["p-0"]);
+  addTarget(a, "#a");
+  addTarget(b, "#b");
+  applyTokenToTargets(paddingGroup, paddingGroup.tokens.find((t) => t.id === "md")!);
+  commitChanges(); // both p-4 become committed
+
+  applyTokenToTarget(a, textGroup, textGroup.tokens.find((t) => t.id === "primary")!);
+  assert.ok(a.classList.contains("text-primary"));
+
+  revertPending();
+
+  assert.ok(!a.classList.contains("text-primary"), "pending edit reverted");
+  assert.ok(a.classList.contains("p-4"), "committed edit survives");
+  assert.ok(b.classList.contains("p-4"), "other committed edit survives");
+  assert.equal(getChangeCount(), 0);
+  assert.equal(getCommittedCount(), 2);
+});
+
+test("revertAll: after commit, reverts committed DOM and clears storage", () => {
+  const a = el(["p-0"]);
+  addTarget(a, "#a");
+  applyTokenToTarget(a, paddingGroup, paddingGroup.tokens.find((t) => t.id === "md")!);
+  commitChanges();
+  assert.ok(a.classList.contains("p-4"));
+
+  revertAll();
+
+  assert.ok(!a.classList.contains("p-4"), "committed edit reverted");
+  assert.ok(a.classList.contains("p-0"));
+  assert.equal(getCommittedCount(), 0);
+  assert.deepEqual(committedStorage(), []);
+});
+
+test("markSent: promotes pending to committed", () => {
+  const a = el(["p-0"]);
+  addTarget(a, "#a");
+  applyTokenToTarget(a, paddingGroup, paddingGroup.tokens.find((t) => t.id === "md")!);
+
+  markSent();
+
+  assert.equal(getChangeCount(), 0);
+  assert.equal(getCommittedCount(), 1);
+  assert.ok(a.classList.contains("p-4"));
+});
+
+test("loadCommitted: re-applies stored records; missing selector is stale", () => {
+  const a = el(["p-0"]);
+  const stored = [
+    { selector: "#a", group: paddingGroup, token: paddingGroup.tokens[1], before: "p-0", after: "p-4" },
+    { selector: "#gone", group: paddingGroup, token: paddingGroup.tokens[1], before: "", after: "p-4" },
+  ];
+  (globalThis as unknown as { localStorage: Storage }).localStorage.setItem(
+    "__ef_committed__",
+    JSON.stringify(stored)
+  );
+
+  const g = globalThis as unknown as { document: unknown };
+  const prevDocument = g.document;
+  g.document = {
+    querySelector: (sel: string): Element | null => (sel === "#a" ? a : null),
+  };
+  try {
+    loadCommitted();
+  } finally {
+    g.document = prevDocument;
+  }
+
+  const entries = getCommittedEntries();
+  assert.equal(entries.length, 2);
+
+  const forA = entries.find((e) => e.selector === "#a")!;
+  assert.equal(forA.stale, false);
+  assert.equal(forA.group, "padding");
+  assert.equal(forA.groupLabel, "Padding");
+  assert.equal(forA.after, "p-4");
+  assert.ok(a.classList.contains("p-4"), "class re-applied on load");
+
+  const gone = entries.find((e) => e.selector === "#gone")!;
+  assert.equal(gone.stale, true);
+});
+
+test("reapplyCommitted: retries stale entries once their element mounts", () => {
+  const stored = [
+    { selector: "#late", group: paddingGroup, token: paddingGroup.tokens[1], before: "p-0", after: "p-4" },
+  ];
+  (globalThis as unknown as { localStorage: Storage }).localStorage.setItem(
+    "__ef_committed__",
+    JSON.stringify(stored)
+  );
+
+  const g = globalThis as unknown as { document: unknown };
+  const prevDocument = g.document;
+
+  // First pass: the target is not in the DOM yet → stale, not applied.
+  g.document = { querySelector: (): Element | null => null };
+  try {
+    loadCommitted();
+  } finally {
+    g.document = prevDocument;
+  }
+  assert.equal(getCommittedEntries()[0].stale, true);
+
+  // The element mounts later; the retry resolves + applies the stored edit.
+  const a = el(["p-0"]);
+  g.document = { querySelector: (sel: string): Element | null => (sel === "#late" ? a : null) };
+  try {
+    reapplyCommitted();
+  } finally {
+    g.document = prevDocument;
+  }
+  assert.equal(getCommittedEntries()[0].stale, false);
+  assert.ok(a.classList.contains("p-4"), "late-mounted element received the committed edit");
+});
+
+test("removeCommittedAt: reverts that entry's DOM and persists", () => {
+  const a = el(["p-0"]);
+  const b = el(["p-0"]);
+  addTarget(a, "#a");
+  addTarget(b, "#b");
+  applyTokenToTargets(paddingGroup, paddingGroup.tokens.find((t) => t.id === "md")!);
+  commitChanges();
+  assert.equal(getCommittedCount(), 2);
+
+  removeCommittedAt(0);
+
+  assert.equal(getCommittedCount(), 1);
+  assert.ok(!a.classList.contains("p-4"), "first entry reverted");
+  assert.ok(b.classList.contains("p-4"), "second entry survives");
+  assert.equal(committedStorage().length, 1);
+});
+
+test("clearCommitted: reverts all committed DOM and clears storage", () => {
+  const a = el(["p-0"]);
+  addTarget(a, "#a");
+  applyTokenToTarget(a, paddingGroup, paddingGroup.tokens.find((t) => t.id === "md")!);
+  commitChanges();
+  assert.ok(a.classList.contains("p-4"));
+
+  clearCommitted();
+
+  assert.equal(getCommittedCount(), 0);
+  assert.ok(!a.classList.contains("p-4"));
+  assert.deepEqual(committedStorage(), []);
+});
+
+test("getAllChanges / getCommittedChanges: pending + committed are distinguishable", () => {
+  const a = el(["p-0"]);
+  addTarget(a, "#a");
+  applyTokenToTarget(a, paddingGroup, paddingGroup.tokens.find((t) => t.id === "md")!); // pending p-4
+  commitChanges(); // committed p-4
+  applyTokenToTarget(a, textGroup, textGroup.tokens.find((t) => t.id === "primary")!); // pending text-primary
+
+  const committed = getCommittedChanges();
+  assert.equal(committed.length, 1);
+  assert.equal(committed[0].group, "padding");
+
+  const all = getAllChanges();
+  assert.equal(all.length, 2, "pending + committed");
+  assert.deepEqual(all.map((c) => c.group).sort(), ["padding", "textColor"]);
+
+  assert.equal(getAllChangeCountFor(a), 2);
+  assert.deepEqual(getAllChangesFor(a).map((c) => c.group).sort(), ["padding", "textColor"]);
 });

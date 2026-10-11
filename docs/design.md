@@ -304,9 +304,10 @@ No storage change: metadata rides in `context_json` under `context.app`.
 
 The overlay can dock to the side of the page (non-modal, page undimmed and
 interactive) and let the reporter restyle one or more selected elements by
-choosing tokens from a project-provided theme. The panel is split into two tabs —
-**Design** and **Issues** — so the property editor and the report form don't
-compete for space. Tokens cover the common Tailwind and daisyUI utilities —
+choosing tokens from a project-provided theme. The panel shows only the
+**Design** editor — the former Design/Issues tabs are gone; the report form and
+the captured context/HTML live in the issue submission modal instead. Tokens
+cover the common Tailwind and daisyUI utilities —
 spacing (padding/margin/gap), layout (max-width, width/height, display, flex),
 typography (text size, font weight), colors, borders/effects and daisyUI
 button/badge modifiers — organised into collapsible sections. Each group renders
@@ -315,12 +316,17 @@ sizing groups (padding, margin, gap, max-width, width, height) render as
 dropdowns; other groups render as chips. Every dropdown ends with a **Custom
 class…** item (chip groups expose a **+ Custom** toggle) that reveals an inline
 field for a free-typed class. Applied class/style edits are recorded per element
-and rendered in the issue and panel.
+and rendered in the issue modal and panel.
 
 When more than one element is selected they are presented as **per-element tabs**
-in the Design tab; the editor configures only the active element, so edits are
+in the Design editor; the editor configures only the active element, so edits are
 bounded to that component instead of applying globally. A scope hint notes when
 a selection spans multiple targets.
+
+Edits start **pending** — applied live but reverted on Cancel/close. The
+**Commit** button freezes pending edits and persists them (localStorage) across
+sidebar close, reopen and page reload until explicitly removed from the global
+**Committed changes** list (per-entry Remove + Remove all).
 
 Docked mode reserves the rail width (document-root `margin-right`), so the host
 page reflows alongside the panel instead of being overlaid; selection outlines
@@ -347,10 +353,10 @@ No storage schema change — everything rides inside `context_json`.
 
 | Surface | Change |
 |---|---|
-| `client/src/dialog.ts` | Design/Issues tabs, docked rail + dock toggle, per-element target tabs, token palette, per-target changes summary |
+| `client/src/dialog.ts` | Design editor (no Issues tab), Commit + persistent Committed-changes list (localStorage, per-entry Remove / Remove all), issue submission modal (context/HTML rendered here only), docked rail + dock toggle, per-element target tabs, token palette, per-target changes summary |
 | `client/src/styleEditor.ts` | single-target Figma-like property rows, dropdown/chip controls, custom-class affordance |
 | `client/src/selection.ts` | per-target apply/change/revert API (`applyTokenToTarget`, `getChangesFor`, `getChangeCountFor`, `revertChangesFor`) |
-| `client/src/index.ts` | `editing` mode; picking stays live; commit on save, revert on cancel |
+| `client/src/index.ts` | `editing` mode; picking stays live; pending edits revert on cancel/close; Commit freezes + persists in localStorage until removed |
 | `server/handler/issue.go` | `## Requested changes` (`buildSingleItem`) / `### Requested changes` (`buildMultiItem`); `whatToDo` clause |
 | `server/handler/envelope.go` | `buildIntent` surfaces `changes`; `buildTarget` surfaces `targets` |
 | `server/panel/panel.templ` | "Requested changes" list + `Targets (N)` row in `contextSection` |
@@ -373,5 +379,6 @@ render as a dropdown rather than chips.
 - Snapshot storage: SQLite BLOB is fine to start; S3 when volume grows.
 - Whether `traceId` should also be sent as a GitHub issue label/tag for
   grouping (likely noise — keep it in context only).
-- Live editing: persist applied edits server-side (currently reverted on cancel /
-  session end and kept only when submitted), and expose theme editing in the panel.
+- Live editing: persist applied edits **server-side** (committed edits now persist
+  client-side via localStorage until removed; nothing is stored server-side yet),
+  and expose theme editing in the panel.
