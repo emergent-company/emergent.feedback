@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -93,20 +94,37 @@ func (c *AppConfig) appJWT() (string, error) {
 	return tok.SignedString(key)
 }
 
-// installationToken caches a short-lived installation access token.
+// cachedInstallationToken is a cached short-lived installation access token.
+type cachedInstallationToken struct {
+	Token     string
+	ExpiresAt time.Time
+}
+
+// installationTokens caches short-lived installation access tokens per
+// installation ID. Each installation has its own token; a single global token
+// is insufficient because an App can be installed on multiple accounts with
+// different installation IDs.
 var (
-	instTokenMu      sync.Mutex
-	instTokenVal     string
-	instTokenExpires time.Time
+	instTokenMu sync.Mutex
+	instTokens  = map[string]cachedInstallationToken{}
 )
 
-// InstallationToken returns a valid installation access token, refreshing if needed.
+// InstallationToken returns a valid installation access token for the
+// configured installation, refreshing if needed.
 func (c *AppConfig) InstallationToken(ctx context.Context) (string, error) {
+	return c.installationToken(ctx, c.InstallationID)
+}
+
+// installationToken returns a valid installation access token for the given
+// installation ID, refreshing if needed. Tokens are cached per installation ID.
+func (c *AppConfig) installationToken(ctx context.Context, installationID string) (string, error) {
 	instTokenMu.Lock()
 	defer instTokenMu.Unlock()
 
-	if instTokenVal != "" && time.Now().Before(instTokenExpires.Add(-2*time.Minute)) {
-		return instTokenVal, nil
+	if cached, ok := instTokens[installationID]; ok &&
+		cached.Token != "" &&
+		time.Now().Before(cached.ExpiresAt.Add(-2*time.Minute)) {
+		return cached.Token, nil
 	}
 
 	appTok, err := c.appJWT()
@@ -114,7 +132,7 @@ func (c *AppConfig) InstallationToken(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	url := fmt.Sprintf("%s/app/installations/%s/access_tokens", apiBase, c.InstallationID)
+	url := fmt.Sprintf("%s/app/installations/%s/access_tokens", apiBase, installationID)
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
 	req.Header.Set("Authorization", "Bearer "+appTok)
 	req.Header.Set("Accept", "application/vnd.github+json")
@@ -141,9 +159,77 @@ func (c *AppConfig) InstallationToken(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("github app: decode installation token: %w", err)
 	}
 
-	instTokenVal = result.Token
-	instTokenExpires = result.ExpiresAt
-	return instTokenVal, nil
+	instTokens[installationID] = cachedInstallationToken{
+		Token:     result.Token,
+		ExpiresAt: result.ExpiresAt,
+	}
+	return result.Token, nil
+}
+
+// ResetInstallationTokenCacheForTesting clears the per-installation token cache.
+func ResetInstallationTokenCacheForTesting() {
+	instTokenMu.Lock()
+	defer instTokenMu.Unlock()
+	instTokens = map[string]cachedInstallationToken{}
+}
+
+// installationIDForRepo resolves the GitHub App installation ID that covers the
+// target repo ("owner/repo") using the App JWT. It returns an actionable
+// *APIError (Status 404) when the App is genuinely not installed on the repo.
+func (c *AppConfig) installationIDForRepo(ctx context.Context, repo string) (string, error) {
+	if c.AppID == "" || c.PrivateKeyPEM == "" {
+		return "", fmt.Errorf("github: no GitHub App configured")
+	}
+	parts := strings.SplitN(repo, "/", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "", fmt.Errorf("github: invalid repo %q (want owner/repo)", repo)
+	}
+
+	appTok, err := c.appJWT()
+	if err != nil {
+		return "", err
+	}
+
+	url := fmt.Sprintf("%s/repos/%s/%s/installation", apiBase, parts[0], parts[1])
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req.Header.Set("Authorization", "Bearer "+appTok)
+	req.Header.Set("Accept", "application/vnd.github+json")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("github: get repo installation: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	var gh struct {
+		ID      int64  `json:"id"`
+		Message string `json:"message"`
+	}
+	switch resp.StatusCode {
+	case http.StatusOK:
+		if err := json.NewDecoder(resp.Body).Decode(&gh); err != nil {
+			return "", fmt.Errorf("github: decode repo installation: %w", err)
+		}
+		return strconv.FormatInt(gh.ID, 10), nil
+	case http.StatusNotFound:
+		return "", &APIError{Op: "get repo installation", Status: http.StatusNotFound, Message: "GitHub App is not installed on " + repo}
+	case http.StatusUnauthorized, http.StatusForbidden:
+		_ = json.NewDecoder(resp.Body).Decode(&gh)
+		return "", &APIError{Op: "get repo installation", Status: resp.StatusCode, Message: gh.Message}
+	default:
+		return "", fmt.Errorf("github: get repo installation: status %d", resp.StatusCode)
+	}
+}
+
+// InstallationTokenForRepo returns a valid installation access token for the
+// installation that covers repo, resolving the installation ID via the App JWT
+// first (rather than trusting a single statically-configured installation).
+func (c *AppConfig) InstallationTokenForRepo(ctx context.Context, repo string) (string, error) {
+	installationID, err := c.installationIDForRepo(ctx, repo)
+	if err != nil {
+		return "", err
+	}
+	return c.installationToken(ctx, installationID)
 }
 
 // HasApp reports whether a complete GitHub App bot is configured.
@@ -178,6 +264,41 @@ func (c *AppConfig) IssueAuthorToken(ctx context.Context, userToken string) (str
 	switch c.issueTokenSource() {
 	case "app":
 		return c.InstallationToken(ctx)
+	case "pat":
+		return strings.TrimSpace(c.BotToken), nil
+	default:
+		if userToken == "" {
+			return "", fmt.Errorf("github: no issue author token available (configure a GitHub App, GH_BOT_TOKEN, or sign in with GitHub)")
+		}
+		return userToken, nil
+	}
+}
+
+// issueTokenSourceForRepo is like issueTokenSource, but for the repo-aware path:
+// "app" whenever a GitHub App is configured (App ID + private key), regardless
+// of the statically-configured InstallationID — the installation covering the
+// target repo is resolved per-repo.
+func (c *AppConfig) issueTokenSourceForRepo() string {
+	if c.AuthorMode == "user" {
+		return "user"
+	}
+	if c.AppID != "" && c.PrivateKeyPEM != "" {
+		return "app"
+	}
+	if c.HasBotToken() {
+		return "pat"
+	}
+	return "user"
+}
+
+// IssueAuthorTokenForRepo returns the token to create issues in repo with,
+// mirroring IssueAuthorToken but resolving the App installation that covers repo
+// in "app" mode. userToken is the reporter's token, used in "user" mode (and as
+// the final fallback).
+func (c *AppConfig) IssueAuthorTokenForRepo(ctx context.Context, userToken, repo string) (string, error) {
+	switch c.issueTokenSourceForRepo() {
+	case "app":
+		return c.InstallationTokenForRepo(ctx, repo)
 	case "pat":
 		return strings.TrimSpace(c.BotToken), nil
 	default:
