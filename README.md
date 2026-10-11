@@ -152,7 +152,11 @@ Tailwind/daisyUI utilities such as padding, margin, gap, max-width, width/height
 display/flex, text size, font weight, rounding, borders, shadow and button/badge
 modifiers. Each group renders as a Figma-like row (label left, control right).
 Color groups and the sizing groups (padding, margin, gap, max-width, width,
-height) render as **dropdowns**; the rest render as chips.
+height) render as **dropdowns**; layout/position groups (display, flex
+direction, alignment, wrap, self/position/inset, object fit, text align, font
+weight, rounding, borders, shadow) render as **icon rows** of glyph buttons
+(inlined SVG, no icon font); the rest render as chips. The `render` field
+accepts `chips` (default), `dropdown`, or `icons`.
 
 Every dropdown ends with a **Custom class…** item (chip groups expose a
 **+ Custom** toggle) — type any Tailwind/daisyUI class (e.g. `max-w-6xl`) and
@@ -220,10 +224,16 @@ Only the following style properties are accepted: `padding`, `padding-top`,
 escaped before rendering.
 
 Each group may also set `"section": "Layout"` to place it under a named
-collapsible heading (default `"Style"`), and `"render": "dropdown"` to render it
-as a dropdown instead of chips (best for color and sizing groups). Both are
-optional and ignored when invalid. Dropdowns always offer a **Custom class…**
-entry for a free-typed class, regardless of `render`.
+collapsible heading (default `"Style"`), and `"render": "dropdown"` or
+`"render": "icons"` to render it as a dropdown (best for color and sizing
+groups) or as an icon row (best for layout/position groups) instead of chips.
+All three are optional and ignored when invalid. Dropdowns always offer a
+**Custom class…** entry for a free-typed class, regardless of `render`.
+
+A token may carry an inline glyph for icon rows via `"icon": { "viewBox":
+"0 0 24 24", "paths": ["M4 5 …"] }`. The `viewBox` and every path `d` are
+validated against a strict charset before rendering; an invalid icon is dropped
+while the token itself is kept (the editor falls back to a text chip).
 
 ### Configuring the activation hotkey
 

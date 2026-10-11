@@ -873,6 +873,37 @@ function injectStyles(): void {
       border-color: var(--ef-primary);
       color: var(--ef-chip-on-text);
     }
+    /* ── Icon rows (glyph buttons) ─────────────────────────────────────────── */
+    #__ef_dialog__ .ef-icon-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+    #__ef_dialog__ .ef-icon-btn {
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      justify-content: center;
+      border-radius: 8px;
+    }
+    #__ef_dialog__ .ef-icon-btn svg {
+      width: 16px;
+      height: 16px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.6;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    #__ef_dialog__ .ef-icon-btn:hover {
+      border-color: var(--ef-control-border-hover);
+      background: var(--ef-hover-bg);
+    }
+    #__ef_dialog__ .ef-icon-btn.ef-token-on {
+      background: var(--ef-chip-on-bg);
+      border-color: var(--ef-primary);
+      color: var(--ef-chip-on-text);
+    }
     #__ef_dialog__ .ef-token-swatch {
       width: 12px;
       height: 12px;

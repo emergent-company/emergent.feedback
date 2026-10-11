@@ -20,6 +20,7 @@ import {
   type ThemeTokens,
 } from "./tokens";
 import { setHighlight, type TargetEntry } from "./selection";
+import { ICONS, type GlyphIcon } from "./icons";
 
 export interface StyleEditorCallbacks {
   onApply: (group: TokenGroup, token: Token) => void;
@@ -106,6 +107,17 @@ function swatchHTML(token: Token): string {
     : "";
 }
 
+/**
+ * Inline `<svg>` for a glyph. `viewBox` and every `d` were already validated in
+ * tokens.ts against a strict charset whitelist (path commands, digits and
+ * whitespace only), so no HTML metacharacter can appear here. This markup must
+ * NEVER be built from unvalidated strings.
+ */
+function iconSVG(icon: GlyphIcon): string {
+  const paths = icon.paths.map((d) => `<path d="${d}"/>`).join("");
+  return `<svg viewBox="${icon.viewBox}" aria-hidden="true" focusable="false">${paths}</svg>`;
+}
+
 function customInputHTML(group: TokenGroup): string {
   return `<input type="text" class="ef-custom-input" data-group="${escapeHtml(group.id)}" placeholder="custom class…" spellcheck="false" aria-label="Custom class for ${escapeHtml(group.label)}">`;
 }
@@ -159,12 +171,33 @@ function renderDropdown(group: TokenGroup, el: Element): string {
       </div>`;
 }
 
+/** Icon-button row: Figma-style glyph buttons, reusing the chip chrome. */
+function renderIcons(group: TokenGroup, el: Element): string {
+  const atDefault = matchToken(el, group) === null;
+  const buttons = group.tokens
+    .map((t) => {
+      const on = tokenActive(t, group, el);
+      const glyph = t.icon ? iconSVG(t.icon) : "";
+      return `<button type="button" class="ef-token-chip ef-icon-btn${on ? " ef-token-on" : ""}" data-group="${escapeHtml(group.id)}" data-token="${escapeHtml(t.id)}" aria-pressed="${on}" title="${escapeHtml(t.label)}${on ? " — click to unset" : ""}" aria-label="${escapeHtml(t.label)}">${glyph}</button>`;
+    })
+    .join("");
+  return `
+      <div class="ef-token-row ef-icon-row">
+        <button type="button" class="ef-token-chip ef-icon-btn ef-token-default${atDefault ? " ef-token-on" : ""}" data-group="${escapeHtml(group.id)}" data-default="1" aria-pressed="${atDefault}" title="Unset (back to the element's own styling)" aria-label="Default">${iconSVG(ICONS.unset)}</button>
+        ${buttons}
+        <button type="button" class="ef-custom-toggle" data-group="${escapeHtml(group.id)}" aria-expanded="false" title="Custom class">+ Custom</button>
+      </div>
+      <div class="ef-custom-field" hidden>${customInputHTML(group)}</div>`;
+}
+
 /** One Figma-like horizontal property row: label left, control right. */
 function renderGroup(group: TokenGroup, el: Element): string {
   const control =
     group.render === "dropdown"
       ? renderDropdown(group, el)
-      : renderChips(group, el);
+      : group.render === "icons"
+        ? renderIcons(group, el)
+        : renderChips(group, el);
   return `
     <div class="ef-prop-row" data-group="${escapeHtml(group.id)}">
       <span class="ef-prop-label" title="${escapeHtml(group.label)}">${escapeHtml(group.label)}</span>
@@ -416,7 +449,9 @@ export function mountStyleEditor(
   const groups = augmentGroups(tokens.groups);
   root.innerHTML = renderEditorHTML(tokens, target, changesCount);
 
-  // Chip row wiring (dropdowns have their own handlers below).
+  // Chip/icon row wiring (dropdowns have their own handlers below). Icon
+  // buttons reuse `.ef-token-chip`, so they share this wiring: an active
+  // control unselects the group, anything else applies it.
   root
     .querySelectorAll<HTMLButtonElement>(".ef-token-chip[data-token], .ef-token-chip[data-default]")
     .forEach((btn) => {

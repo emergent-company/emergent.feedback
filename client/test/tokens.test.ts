@@ -213,6 +213,22 @@ test("buildFallbackTokens: extended groups, sections, and renders", () => {
   assert.equal(byId("margin").removePattern, "^m[xytrbl]?-");
 });
 
+test("buildFallbackTokens: every icons group has a glyph for every token", () => {
+  const theme = buildFallbackTokens();
+  const iconGroups = theme.groups.filter((g) => g.render === "icons");
+  assert.ok(iconGroups.length > 0, "fallback set has icon-rendered groups");
+  for (const g of iconGroups) {
+    for (const t of g.tokens) {
+      assert.ok(t.icon, `${g.id}/${t.id} is missing an icon`);
+      assert.equal(t.icon!.viewBox, "0 0 24 24", `${g.id}/${t.id} viewBox`);
+      assert.ok(
+        Array.isArray(t.icon!.paths) && t.icon!.paths.length > 0,
+        `${g.id}/${t.id} has no paths`
+      );
+    }
+  }
+});
+
 test("collision safety: textSize and textColor do not strip each other", () => {
   const theme = buildFallbackTokens();
   const textSize = theme.groups.find((x) => x.id === "textSize")!;
@@ -323,6 +339,43 @@ test("normalizeTheme: accepts render and section, ignores invalid render", () =>
   assert.ok(out2, "invalid render must not drop the group");
   assert.equal(out2!.groups[0].render, undefined);
   assert.equal(out2!.groups[0].section, undefined);
+});
+
+test("normalizeTheme: accepts render icons and a valid icon", () => {
+  const out = normalizeTheme(payload([
+    {
+      id: "g", label: "G", applyType: "class", render: "icons",
+      tokens: [
+        { id: "a", label: "A", className: "x", icon: { viewBox: "0 0 24 24", paths: ["M4 5 H20 V19 H4 Z"] } },
+      ],
+    },
+  ]));
+  assert.ok(out);
+  assert.equal(out!.groups[0].render, "icons");
+  const t = out!.groups[0].tokens[0];
+  assert.equal(t.icon?.viewBox, "0 0 24 24");
+  assert.deepEqual(t.icon?.paths, ["M4 5 H20 V19 H4 Z"]);
+});
+
+test("normalizeTheme: drops an invalid icon but keeps the token", () => {
+  const cases: unknown[] = [
+    { viewBox: "0 0 24", paths: ["M4 5 H20 V19 H4 Z"] },          // bad viewBox
+    { viewBox: "0 0 24 24", paths: ["M4 5 H20 <script>"] },       // `<` in d
+    { viewBox: "0 0 24 24", paths: ['M4 " onload=1'] },           // `"` in d
+    { viewBox: "0 0 24 24", paths: ["M4 5 (foo) H20"] },          // `(` in d
+    { viewBox: "0 0 24 24", paths: ["M" + "1".repeat(400)] },     // oversized path
+  ];
+  for (const icon of cases) {
+    const out = normalizeTheme(payload([
+      {
+        id: "g", label: "G", applyType: "class",
+        tokens: [{ id: "a", label: "A", className: "x", icon }],
+      },
+    ]));
+    assert.ok(out);
+    assert.equal(out!.groups[0].tokens.length, 1, "token survives a bad icon");
+    assert.equal(out!.groups[0].tokens[0].icon, undefined, "icon dropped");
+  }
 });
 
 // ── match / apply / revert ────────────────────────────────────────────────────

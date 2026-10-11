@@ -313,7 +313,9 @@ typography (text size, font weight), colors, borders/effects and daisyUI
 button/badge modifiers — organised into collapsible sections. Each group renders
 as a horizontal property row (label left, control right). Color groups and the
 sizing groups (padding, margin, gap, max-width, width, height) render as
-dropdowns; other groups render as chips. Every dropdown ends with a **Custom
+dropdowns; layout/position groups render as **icon rows** (inlined SVG glyph
+buttons); other groups render as chips. `render` accepts `chips` (default),
+`dropdown`, or `icons`. Every dropdown ends with a **Custom
 class…** item (chip groups expose a **+ Custom** toggle) that reveals an inline
 field for a free-typed class. Applied class/style edits are recorded per element
 and rendered in the issue modal and panel.
@@ -387,7 +389,12 @@ from the live page plus a built-in spacing scale when absent. See the README
 as a class (default) or an inline style; class names, style properties and style
 values are validated and all token text is escaped before rendering. A group may
 set `render: "dropdown"` (color and sizing groups do in the fallback set) to
-render as a dropdown rather than chips.
+render as a dropdown, or `render: "icons"` to render as a row of glyph buttons
+(layout/position groups do in the fallback set); the default is chips. A token
+may set an inline `icon: { viewBox, paths }` for icon rows; `viewBox` must match
+`0 0 <n> <n>` (1–3 digits each) and every path `d` is held to a strict charset
+(SVG commands, digits and whitespace, ≤ 400 chars, ≤ 12 paths). An invalid icon
+is dropped while the token is kept.
 
 ## Remaining
 
