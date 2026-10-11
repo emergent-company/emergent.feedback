@@ -73,6 +73,9 @@ func TestAPIEndToEnd(t *testing.T) {
 		case r.Method == http.MethodPost && r.URL.Path == "/app/installations/1/access_tokens":
 			w.WriteHeader(http.StatusCreated)
 			_, _ = w.Write([]byte(`{"token":"install-token","expires_at":"2099-01-01T00:00:00Z"}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/repos/owner/repo/installation":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"id":1}`))
 		case r.Method == http.MethodPost && r.URL.Path == "/repos/owner/repo/issues":
 			w.WriteHeader(http.StatusCreated)
 			_, _ = w.Write([]byte(`{"html_url":"https://github.com/owner/repo/issues/1","number":1}`))

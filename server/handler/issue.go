@@ -99,8 +99,12 @@ func (h *Handler) HandleExportIssue(c echo.Context) error {
 		}
 		userToken = t
 	}
-	authorToken, err := h.GHConfig.IssueAuthorToken(ctx, userToken)
+	authorToken, err := h.GHConfig.IssueAuthorTokenForRepo(ctx, userToken, req.Repo)
 	if err != nil {
+		var apiErr *github.APIError
+		if errors.As(err, &apiErr) && apiErr.Status == http.StatusNotFound {
+			return h.repoAccessDenied(c, req.Repo)
+		}
 		c.Logger().Errorf("resolve issue author token: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to resolve GitHub token for issue creation")
 	}
@@ -125,6 +129,11 @@ func (h *Handler) HandleExportIssue(c echo.Context) error {
 		}
 	}
 	if err != nil {
+		var apiErr *github.APIError
+		if errors.As(err, &apiErr) && apiErr.Status == http.StatusNotFound {
+			c.Logger().Warnf("create github issue returned 404 (GitHub App not installed on repo): %v", err)
+			return h.repoAccessDenied(c, req.Repo)
+		}
 		c.Logger().Errorf("create github issue: %v", err)
 		return githubCreateIssueError(err)
 	}

@@ -465,6 +465,11 @@ To resolve it, grant the feedback GitHub App access to the repo:
 If no `authorize_url` is returned, set `GH_APP_SLUG` (the app's URL slug) so the
 server can build the install URL for the client to surface.
 
+When exporting, the server resolves the GitHub App installation that covers the
+target repo (via `GET /repos/{owner}/{repo}/installation`) rather than using a
+single configured installation, and a create-time 404 is surfaced as the same
+actionable `app_access_required` 403 above.
+
 ---
 
 ## opencode AI skill

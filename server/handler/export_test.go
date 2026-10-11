@@ -2,7 +2,11 @@ package handler
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -19,13 +23,18 @@ import (
 // newExportHandler builds an echo server with the export route and a test-login
 // middleware (no GitHub token is stored, so userToken always fails).
 func newExportHandler(t *testing.T) (*Handler, *store.Store, *echo.Echo) {
+	return newExportHandlerWithApp(t, &github.AppConfig{})
+}
+
+// newExportHandlerWithApp is newExportHandler but with an explicit AppConfig.
+func newExportHandlerWithApp(t *testing.T, cfg *github.AppConfig) (*Handler, *store.Store, *echo.Echo) {
 	t.Helper()
 	s, err := store.OpenSQLite(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("store.Open: %v", err)
 	}
 	t.Cleanup(func() { _ = s.Close() })
-	h := New(s, &github.AppConfig{}, "secret")
+	h := New(s, cfg, "secret")
 
 	e := echo.New()
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
@@ -36,6 +45,19 @@ func newExportHandler(t *testing.T) (*Handler, *store.Store, *echo.Echo) {
 	})
 	e.POST("/issue/export", h.HandleExportIssue)
 	return h, s, e
+}
+
+// testAppConfig builds a GitHub AppConfig with a valid in-test PKCS1 RSA private
+// key and no static installation ID (resolved per-repo instead).
+func testAppConfig(t *testing.T) *github.AppConfig {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("rsa.GenerateKey: %v", err)
+	}
+	der := x509.MarshalPKCS1PrivateKey(key)
+	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: der})
+	return &github.AppConfig{AppID: "1", PrivateKeyPEM: string(pemBytes), InstallationID: ""}
 }
 
 // seedUserToken stores an encrypted GitHub token for login.
@@ -372,5 +394,98 @@ func TestExportIssueCreateUpstreamErrorMapsTo502(t *testing.T) {
 
 	if rec.Code != http.StatusBadGateway {
 		t.Fatalf("status = %d, want 502: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestExportIssueUsesRepoInstallation verifies the export resolves the GitHub
+// App installation covering the target repo (via GET /repos/{owner}/{repo}/
+// installation) and authors the issue with that installation's token, not a
+// single static installation token.
+func TestExportIssueUsesRepoInstallation(t *testing.T) {
+	github.ResetInstallationTokenCacheForTesting()
+	defer github.ResetInstallationTokenCacheForTesting()
+
+	h, s, e := newExportHandlerWithApp(t, testAppConfig(t))
+
+	var issueAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/repos/owner/repo":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/repos/owner/repo/installation":
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"id":88}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/app/installations/88/access_tokens":
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"token":"inst-88","expires_at":"2099-01-01T00:00:00Z"}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/repos/owner/repo/issues":
+			issueAuth = r.Header.Get("Authorization")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"html_url":"https://github.com/owner/repo/issues/1","number":1}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	github.SetBaseURLForTesting(srv.URL)
+	defer github.SetBaseURLForTesting("https://api.github.com")
+
+	seedUserToken(t, s, h, "alice", "user-tok")
+	id := newExportFeedback(t, s)
+
+	rec := doExport(e, id, "owner/repo", "alice")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	if issueAuth != "Bearer inst-88" {
+		t.Fatalf("issue Authorization = %q, want %q", issueAuth, "Bearer inst-88")
+	}
+}
+
+// TestExportIssueAppNotInstalledReturns403 verifies that when the GitHub App is
+// not installed on the target repo (GET /repos/{owner}/{repo}/installation →
+// 404), the endpoint surfaces the same actionable app_access_required 403.
+func TestExportIssueAppNotInstalledReturns403(t *testing.T) {
+	github.ResetInstallationTokenCacheForTesting()
+	defer github.ResetInstallationTokenCacheForTesting()
+
+	h, s, e := newExportHandlerWithApp(t, testAppConfig(t))
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/repos/owner/repo":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/repos/owner/repo/installation":
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"message":"Not Found"}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/user/installations":
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"installations":[{"id":1,"app_slug":"flow-feedback","html_url":"https://github.com/settings/installations/1","account":{"login":"owner","type":"Organization"}}]}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	github.SetBaseURLForTesting(srv.URL)
+	defer github.SetBaseURLForTesting("https://api.github.com")
+
+	seedUserToken(t, s, h, "alice", "user-tok")
+	id := newExportFeedback(t, s)
+
+	rec := doExport(e, id, "owner/repo", "alice")
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "app_access_required") {
+		t.Fatalf("body = %q, want app_access_required", rec.Body.String())
 	}
 }
