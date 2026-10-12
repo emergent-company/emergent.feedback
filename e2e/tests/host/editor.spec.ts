@@ -2,9 +2,10 @@ import { test, expect, type Page } from "@playwright/test";
 import { signIn } from "../../support/auth";
 
 // Editor affordances in a real browser, on a fixture host page:
-// hover-driven outlines, Default / click-again-to-unset, and the icon rows.
+// hover-driven outlines, Default / click-again-to-unset, and the dropdown
+// controls every built-in group uses.
 // Uses /fallback.html, which has no data-theme-url, so the BUILT-IN token
-// groups (the ones that carry the icon glyphs) are what renders.
+// groups (the fallback set) are what renders.
 
 test.describe("editor affordances (structure fixture)", () => {
   test.beforeEach(async ({ context }) => {
@@ -88,26 +89,45 @@ test.describe("editor affordances (structure fixture)", () => {
     await expect(page.locator("#markup-btn")).toHaveClass(classRe("p-4"));
   });
 
-  test("layout groups render as icon buttons and apply their Tailwind class", async ({ page }) => {
+  test("layout groups render as dropdowns and apply their Tailwind class", async ({ page }) => {
     await openEditorOn(page, "#btn-a");
     // The CSS position group's id is "positioning": "position" is reserved for
     // recorded DOM moves, so an applied `relative` must not read as a reorder.
     const row = page.locator('.ef-prop-row[data-group="positioning"]');
 
-    // Five options + the Default (unset) glyph, all inline SVG.
-    await expect(row.locator("svg")).toHaveCount(6);
-    const btn = row.locator('[data-token="relative"]');
-    await expect(btn).toHaveAttribute("aria-pressed", "false");
+    // Uniform control chrome: a dropdown, never an icon row.
+    await expect(row.locator(".ef-select-trigger")).toHaveCount(1);
+    await expect(row.locator("svg")).toHaveCount(0);
 
-    await btn.click();
+    await row.locator(".ef-select-trigger").click();
+    const opt = row.locator('[data-token="relative"]');
+    await expect(opt).toHaveAttribute("aria-selected", "false");
+    await opt.click();
+
     await expect(page.locator("#btn-a")).toHaveClass(classRe("relative"));
-    await expect(btn).toHaveAttribute("aria-pressed", "true");
+    await expect(row.locator(".ef-select-label")).toHaveText("Relative");
 
     // Listed as a plain style change — not as a Position (move) record.
     await expect(page.locator(".ef-changes-list")).toContainText("positioning");
     await expect(page.locator(".ef-changes-list")).not.toContainText("Position");
 
-    await btn.click();
+    // Re-opening and re-selecting the active option unsets it.
+    await row.locator(".ef-select-trigger").click();
+    await row.locator('[data-token="relative"]').click();
     await expect(page.locator("#btn-a")).not.toHaveClass(classRe("relative"));
+    await expect(row.locator(".ef-select-label")).toHaveText("Default");
+  });
+
+  test("chip groups render as dropdowns too", async ({ page }) => {
+    await openEditorOn(page, "#btn-a");
+    // textSize used to be a chip row; it is a dropdown now, like everything else.
+    const row = page.locator('.ef-prop-row[data-group="textSize"]');
+    await expect(row.locator(".ef-select-trigger")).toHaveCount(1);
+    await expect(row.locator(".ef-token-chip")).toHaveCount(0);
+
+    await row.locator(".ef-select-trigger").click();
+    await row.locator('[data-token="lg"]').click();
+    await expect(page.locator("#btn-a")).toHaveClass(classRe("text-lg"));
+    await expect(row.locator(".ef-select-label")).toHaveText("Large");
   });
 });

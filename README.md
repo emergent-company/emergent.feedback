@@ -151,12 +151,10 @@ Properties are grouped into collapsible sections — **Spacing**, **Layout**,
 Tailwind/daisyUI utilities such as padding, margin, gap, max-width, width/height,
 display/flex, text size, font weight, rounding, borders, shadow and button/badge
 modifiers. Each group renders as a Figma-like row (label left, control right).
-Color groups and the sizing groups (padding, margin, gap, max-width, width,
-height) render as **dropdowns**; layout/position groups (display, flex
-direction, alignment, wrap, self/position/inset, object fit, text align, font
-weight, rounding, borders, shadow) render as **icon rows** of glyph buttons
-(inlined SVG, no icon font); the rest render as chips. The `render` field
-accepts `chips` (default), `dropdown`, or `icons`.
+Every built-in group renders as a **dropdown** (color groups show a swatch in
+the trigger and next to each option), so the panel has one uniform control. The
+`render` field still accepts `chips` or `icons` (an inline-SVG glyph row) for
+host manifests; the fallback set uses neither.
 
 Every dropdown ends with a **Custom class…** item (chip groups expose a
 **+ Custom** toggle) — type any Tailwind/daisyUI class (e.g. `max-w-6xl`) and
@@ -241,10 +239,10 @@ Only the following style properties are accepted: `padding`, `padding-top`,
 escaped before rendering.
 
 Each group may also set `"section": "Layout"` to place it under a named
-collapsible heading (default `"Style"`), and `"render": "dropdown"` or
-`"render": "icons"` to render it as a dropdown (best for color and sizing
-groups) or as an icon row (best for layout/position groups) instead of chips.
-All three are optional and ignored when invalid. Dropdowns always offer a
+collapsible heading (default `"Style"`), and `"render": "dropdown"`, `"chips"`
+or `"icons"` to pick the control: a dropdown (what every built-in group uses), a
+chip row, or a row of glyph buttons. All three are optional — an unknown value
+is ignored and the group falls back to chips. Dropdowns always offer a
 **Custom class…** entry for a free-typed class, regardless of `render`.
 
 A token may carry an inline glyph for icon rows via `"icon": { "viewBox":
