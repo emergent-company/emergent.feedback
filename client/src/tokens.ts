@@ -427,7 +427,7 @@ export function buildFallbackTokens(): ThemeTokens {
         label: "Display",
         section: "Layout",
         applyType: "class",
-        render: "icons",
+        render: "dropdown",
         tokens: [
           { id: "block", label: "Block", className: "block", icon: iconID("display", "block") },
           { id: "inline", label: "Inline", className: "inline", icon: iconID("display", "inline") },
@@ -443,7 +443,7 @@ export function buildFallbackTokens(): ThemeTokens {
         label: "Align items",
         section: "Layout",
         applyType: "class",
-        render: "icons",
+        render: "dropdown",
         removePattern: "^items-",
         tokens: [
           { id: "start", label: "Start", className: "items-start", icon: iconID("align", "start") },
@@ -458,7 +458,7 @@ export function buildFallbackTokens(): ThemeTokens {
         label: "Justify",
         section: "Layout",
         applyType: "class",
-        render: "icons",
+        render: "dropdown",
         tokens: [
           { id: "start", label: "Start", className: "justify-start", icon: iconID("justify", "start") },
           { id: "center", label: "Center", className: "justify-center", icon: iconID("justify", "center") },
@@ -473,7 +473,7 @@ export function buildFallbackTokens(): ThemeTokens {
         label: "Flex direction",
         section: "Layout",
         applyType: "class",
-        render: "icons",
+        render: "dropdown",
         tokens: [
           { id: "row", label: "Row", className: "flex-row", icon: iconID("flex", "row") },
           { id: "row-reverse", label: "Row reverse", className: "flex-row-reverse", icon: iconID("flex", "row-reverse") },
@@ -486,7 +486,7 @@ export function buildFallbackTokens(): ThemeTokens {
         label: "Wrap",
         section: "Layout",
         applyType: "class",
-        render: "icons",
+        render: "dropdown",
         tokens: [
           { id: "wrap", label: "Wrap", className: "flex-wrap", icon: ICONS["wrap"] },
           { id: "nowrap", label: "No wrap", className: "flex-nowrap", icon: ICONS["nowrap"] },
@@ -498,7 +498,7 @@ export function buildFallbackTokens(): ThemeTokens {
         label: "Align self",
         section: "Layout",
         applyType: "class",
-        render: "icons",
+        render: "dropdown",
         removePattern: "^self-",
         tokens: [
           { id: "auto", label: "Auto", className: "self-auto", icon: iconID("self", "auto") },
@@ -515,7 +515,7 @@ export function buildFallbackTokens(): ThemeTokens {
         label: "Position",
         section: "Layout",
         applyType: "class",
-        render: "icons",
+        render: "dropdown",
         tokens: [
           { id: "static", label: "Static", className: "static", icon: iconID("position", "static") },
           { id: "relative", label: "Relative", className: "relative", icon: iconID("position", "relative") },
@@ -529,7 +529,7 @@ export function buildFallbackTokens(): ThemeTokens {
         label: "Inset",
         section: "Layout",
         applyType: "class",
-        render: "icons",
+        render: "dropdown",
         tokens: [
           { id: "inset", label: "All sides", className: "inset-0", icon: iconID("pin", "inset") },
           { id: "top", label: "Top", className: "top-0", icon: iconID("pin", "top") },
@@ -543,7 +543,7 @@ export function buildFallbackTokens(): ThemeTokens {
         label: "Object fit",
         section: "Layout",
         applyType: "class",
-        render: "icons",
+        render: "dropdown",
         removePattern: "^object-",
         tokens: [
           { id: "cover", label: "Cover", className: "object-cover", icon: iconID("object", "cover") },
@@ -557,6 +557,7 @@ export function buildFallbackTokens(): ThemeTokens {
         id: "textSize",
         label: "Text size",
         section: "Typography",
+        render: "dropdown",
         applyType: "class",
         tokens: [
           { id: "xs", label: "X-Small", className: "text-xs" },
@@ -574,7 +575,7 @@ export function buildFallbackTokens(): ThemeTokens {
         label: "Font weight",
         section: "Typography",
         applyType: "class",
-        render: "icons",
+        render: "dropdown",
         tokens: [
           { id: "thin", label: "Thin", className: "font-thin", icon: iconID("weight", "thin") },
           { id: "extralight", label: "Extra light", className: "font-extralight", icon: iconID("weight", "extralight") },
@@ -592,7 +593,7 @@ export function buildFallbackTokens(): ThemeTokens {
         label: "Text align",
         section: "Typography",
         applyType: "class",
-        render: "icons",
+        render: "dropdown",
         // No removePattern: a `^text-` pattern would also strip the text-size
         // (`text-lg`) and text-color (`text-primary`) classes. Exact-class
         // removal (like textSize/textColor) strips the previous alignment.
@@ -624,7 +625,7 @@ export function buildFallbackTokens(): ThemeTokens {
         label: "Rounded",
         section: "Borders & Effects",
         applyType: "class",
-        render: "icons",
+        render: "dropdown",
         tokens: [
           { id: "none", label: "None", className: "rounded-none", icon: iconID("radius", "none") },
           { id: "sm", label: "Small", className: "rounded-sm", icon: iconID("radius", "sm") },
@@ -641,7 +642,7 @@ export function buildFallbackTokens(): ThemeTokens {
         label: "Border width",
         section: "Borders & Effects",
         applyType: "class",
-        render: "icons",
+        render: "dropdown",
         removePattern: "^border-[0-9]",
         tokens: [
           { id: "none", label: "None", className: "border-0", icon: ICONS["border-0"] },
@@ -655,7 +656,7 @@ export function buildFallbackTokens(): ThemeTokens {
         label: "Border style",
         section: "Borders & Effects",
         applyType: "class",
-        render: "icons",
+        render: "dropdown",
         tokens: [
           { id: "solid", label: "Solid", className: "border-solid", icon: iconID("stroke", "solid") },
           { id: "dashed", label: "Dashed", className: "border-dashed", icon: iconID("stroke", "dashed") },
@@ -667,7 +668,7 @@ export function buildFallbackTokens(): ThemeTokens {
         label: "Shadow",
         section: "Borders & Effects",
         applyType: "class",
-        render: "icons",
+        render: "dropdown",
         tokens: [
           { id: "none", label: "None", className: "shadow-none", icon: iconID("shadow", "none") },
           { id: "sm", label: "Small", className: "shadow-sm", icon: iconID("shadow", "sm") },
@@ -681,6 +682,7 @@ export function buildFallbackTokens(): ThemeTokens {
         id: "btnColor",
         label: "Button color",
         section: "daisyUI",
+        render: "dropdown",
         applyType: "class",
         tokens: [
           { id: "primary", label: "Primary", className: "btn-primary" },
@@ -696,6 +698,7 @@ export function buildFallbackTokens(): ThemeTokens {
         id: "btnModifier",
         label: "Button modifier",
         section: "daisyUI",
+        render: "dropdown",
         applyType: "class",
         tokens: [
           { id: "ghost", label: "Ghost", className: "btn-ghost" },
@@ -707,6 +710,7 @@ export function buildFallbackTokens(): ThemeTokens {
         id: "btnSize",
         label: "Button size",
         section: "daisyUI",
+        render: "dropdown",
         applyType: "class",
         tokens: [
           { id: "xs", label: "X-Small", className: "btn-xs" },
@@ -720,6 +724,7 @@ export function buildFallbackTokens(): ThemeTokens {
         id: "badgeColor",
         label: "Badge color",
         section: "daisyUI",
+        render: "dropdown",
         applyType: "class",
         tokens: [
           { id: "primary", label: "Primary", className: "badge-primary" },
@@ -736,6 +741,7 @@ export function buildFallbackTokens(): ThemeTokens {
         id: "badgeModifier",
         label: "Badge modifier",
         section: "daisyUI",
+        render: "dropdown",
         applyType: "class",
         tokens: [
           { id: "ghost", label: "Ghost", className: "badge-ghost" },
@@ -746,6 +752,7 @@ export function buildFallbackTokens(): ThemeTokens {
         id: "badgeSize",
         label: "Badge size",
         section: "daisyUI",
+        render: "dropdown",
         applyType: "class",
         tokens: [
           { id: "xs", label: "X-Small", className: "badge-xs" },

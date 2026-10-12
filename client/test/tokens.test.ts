@@ -201,6 +201,12 @@ test("buildFallbackTokens: extended groups, sections, and renders", () => {
   assert.equal(byId("textColor").render, "dropdown");
   assert.equal(byId("backgroundColor").render, "dropdown");
 
+  // One uniform control: every built-in group is a dropdown. Chips and icon
+  // rows remain available to host manifests via `render`, but the fallback set
+  // no longer opts into either.
+  for (const g of theme.groups) {
+    assert.equal(g.render, "dropdown", `${g.id} renders as dropdown`);
+  }
   for (const id of ["padding", "margin", "gap", "maxWidth", "width", "height"]) {
     assert.equal(byId(id).render, "dropdown", `${id} renders as dropdown`);
   }
@@ -230,19 +236,26 @@ test("buildFallbackTokens: no group id collides with the recorded-move group", (
   assert.equal(theme.groups.find((g) => g.id === "positioning")!.label, "Position");
 });
 
-test("buildFallbackTokens: every icons group has a glyph for every token", () => {
+test("buildFallbackTokens: no group renders as icon rows, glyphs stay well-formed", () => {
   const theme = buildFallbackTokens();
+
+  // The icon renderer stays available to host manifests (see `normalizeTheme`),
+  // but no built-in group opts in, so the panel never renders a glyph row.
   const iconGroups = theme.groups.filter((g) => g.render === "icons");
-  assert.ok(iconGroups.length > 0, "fallback set has icon-rendered groups");
-  for (const g of iconGroups) {
-    for (const t of g.tokens) {
-      assert.ok(t.icon, `${g.id}/${t.id} is missing an icon`);
-      assert.equal(t.icon!.viewBox, "0 0 24 24", `${g.id}/${t.id} viewBox`);
-      assert.ok(
-        Array.isArray(t.icon!.paths) && t.icon!.paths.length > 0,
-        `${g.id}/${t.id} has no paths`
-      );
-    }
+  assert.equal(iconGroups.length, 0, "the fallback set must not use icon rows");
+
+  // The dormant capability is still well-formed: a token that carries a glyph
+  // (used when a manifest asks for `render: "icons"`) has a valid inline SVG.
+  const glyphs = theme.groups
+    .flatMap((g) => g.tokens.map((t) => ({ id: g.id, t })))
+    .filter((x) => x.t.icon);
+  assert.ok(glyphs.length > 0, "the built-in glyph set is still attached to tokens");
+  for (const { id, t } of glyphs) {
+    assert.equal(t.icon!.viewBox, "0 0 24 24", `${id}/${t.id} viewBox`);
+    assert.ok(
+      Array.isArray(t.icon!.paths) && t.icon!.paths.length > 0,
+      `${id}/${t.id} has no paths`
+    );
   }
 });
 
