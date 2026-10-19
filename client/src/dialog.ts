@@ -1566,9 +1566,9 @@ let issueModalOpen = false;
 // True while an auth (login/grant) layer is shown. The panel and issue modal
 // keyboard traps stand down while the auth layer owns the keyboard.
 let authLayerOpen = false;
-// Resolves the pending prompt layer as cancelled when closeDialog() tears the
-// dialog down underneath it (Escape, mode change, page teardown).
-let authLayerCancel: (() => void) | null = null;
+// Pending prompt layers (bottom → top). closeDialog() resolves every one as
+// cancelled so no caller is left hanging when the dialog is torn down.
+const authLayerCancels: Array<() => void> = [];
 
 function getFocusable(card: HTMLElement): HTMLElement[] {
   return Array.from(card.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
@@ -2075,7 +2075,11 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   };
 
   textarea.addEventListener("input", () => {
+    // Editing after a failed export means the old comment is no longer the
+    // draft: drop both the dedupe marker and its id so a retry exports only
+    // the new text.
     submittedComment = null;
+    submittedId = null;
     scheduleDraftSave();
   });
   if (topicInput) topicInput.addEventListener("input", scheduleDraftSave);
@@ -2676,12 +2680,6 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
 function appendAuthLayer(): HTMLElement {
   injectStyles();
   const dialog = getOrCreateDialog();
-  if (authLayerCancel) {
-    const cancel = authLayerCancel;
-    authLayerCancel = null;
-    cancel();
-  }
-  removeAuthLayer();
   const layer = document.createElement("div");
   layer.className = "ef-auth-layer";
   dialog.appendChild(layer);
@@ -2689,17 +2687,25 @@ function appendAuthLayer(): HTMLElement {
   return layer;
 }
 
-function removeAuthLayer(): void {
-  document.getElementById(DIALOG_ID)
-    ?.querySelector<HTMLElement>(".ef-auth-layer")
-    ?.remove();
-  authLayerOpen = false;
+/** Remove one layer and recompute whether any auth layer is still open. */
+function removeAuthLayer(layer: HTMLElement): void {
+  layer.remove();
+  const dialog = document.getElementById(DIALOG_ID);
+  authLayerOpen = !!dialog?.querySelector(".ef-auth-layer");
 }
 
-/** Tab containment scoped to an auth card; returns the detach function. */
-function trapAuthFocus(card: HTMLElement): () => void {
+function topAuthLayer(): HTMLElement | null {
+  const layers = document.querySelectorAll<HTMLElement>(
+    `#${DIALOG_ID} .ef-auth-layer`
+  );
+  return layers.length ? layers[layers.length - 1] : null;
+}
+
+/** Tab containment scoped to the topmost auth card; returns the detach function. */
+function trapAuthFocus(layer: HTMLElement, card: HTMLElement): () => void {
   const handler = (e: KeyboardEvent) => {
     if (e.key !== "Tab") return;
+    if (topAuthLayer() !== layer) return;
     const items = getFocusable(card);
     if (items.length === 0) { e.preventDefault(); card.focus(); return; }
     const first = items[0];
@@ -2717,10 +2723,11 @@ function trapAuthFocus(card: HTMLElement): () => void {
   return () => document.removeEventListener("keydown", handler, true);
 }
 
-/** Escape-to-cancel listener for the auth layer; returns the detach function. */
-function addAuthEscape(onEsc: () => void): () => void {
+/** Escape-to-cancel listener for the top auth layer; returns the detach function. */
+function addAuthEscape(layer: HTMLElement, onEsc: () => void): () => void {
   const handler = (e: KeyboardEvent) => {
     if (e.key === "Escape") {
+      if (topAuthLayer() !== layer) return;
       e.preventDefault();
       e.stopPropagation();
       onEsc();
@@ -2741,6 +2748,7 @@ export interface PromptLoginOptions {
  * leaving any underlying submit/issue dialog and typed content intact.
  */
 export function promptLogin(opts: PromptLoginOptions): Promise<boolean> {
+  const previousFocus = document.activeElement as HTMLElement | null;
   const layer = appendAuthLayer();
   layer.innerHTML = `
     <div class="ef-login-card" role="dialog" aria-modal="true" aria-labelledby="__ef_login_title__" tabindex="-1">
@@ -2763,18 +2771,34 @@ export function promptLogin(opts: PromptLoginOptions): Promise<boolean> {
     let settled = false;
     let detachTrap: () => void = () => {};
     let detachEsc: () => void = () => {};
+    let cancel = () => {};
     const finish = (ok: boolean) => {
       if (settled) return;
       settled = true;
-      authLayerCancel = null;
+      const idx = authLayerCancels.indexOf(cancel);
+      if (idx >= 0) authLayerCancels.splice(idx, 1);
       detachTrap();
       detachEsc();
-      removeAuthLayer();
+      removeAuthLayer(layer);
+      // Give focus back to the control/dialog under this layer; fall back to
+      // the issue card when that control was disabled for the request.
+      const canRestore =
+        previousFocus !== null &&
+        document.contains(previousFocus) &&
+        !(previousFocus as HTMLButtonElement).disabled;
+      const remainingLayer = topAuthLayer();
+      const target = canRestore
+        ? previousFocus
+        : remainingLayer?.querySelector<HTMLElement>(".ef-login-card") ??
+          document.querySelector<HTMLElement>(".ef-issue-card") ??
+          document.getElementById(DIALOG_ID);
+      target?.focus();
       resolve(ok);
     };
-    authLayerCancel = () => finish(false);
-    detachTrap = trapAuthFocus(card);
-    detachEsc = addAuthEscape(() => finish(false));
+    cancel = () => finish(false);
+    authLayerCancels.push(cancel);
+    detachTrap = trapAuthFocus(layer, card);
+    detachEsc = addAuthEscape(layer, () => finish(false));
 
     loginBtn.addEventListener("click", async () => {
       loginBtn.disabled = true;
@@ -2822,12 +2846,11 @@ export function closeDialog(): void {
   issueModalOpen = false;
   authLayerOpen = false;
 
-  // A prompt layer still waiting for input must resolve rather than leak its
+  // Prompt layers still waiting for input must resolve rather than leak their
   // keyboard handlers and leave callers hanging.
-  if (authLayerCancel) {
-    const cancel = authLayerCancel;
-    authLayerCancel = null;
-    cancel();
+  if (authLayerCancels.length) {
+    const cancels = authLayerCancels.splice(0);
+    for (const cancel of cancels) cancel();
   }
 
   const dialog = document.getElementById(DIALOG_ID);
@@ -2983,6 +3006,7 @@ export interface GrantAccessOptions {
  * preserving the underlying issue modal and its draft either way.
  */
 export function showGrantAccessDialog(opts: GrantAccessOptions): Promise<boolean> {
+  const previousFocus = document.activeElement as HTMLElement | null;
   const layer = appendAuthLayer();
   layer.innerHTML = `
     <div class="ef-login-card" role="dialog" aria-modal="true" aria-labelledby="__ef_grant_title__" tabindex="-1">
@@ -3012,18 +3036,34 @@ export function showGrantAccessDialog(opts: GrantAccessOptions): Promise<boolean
     let settled = false;
     let detachTrap: () => void = () => {};
     let detachEsc: () => void = () => {};
+    let cancel = () => {};
     const finish = (ok: boolean) => {
       if (settled) return;
       settled = true;
-      authLayerCancel = null;
+      const idx = authLayerCancels.indexOf(cancel);
+      if (idx >= 0) authLayerCancels.splice(idx, 1);
       detachTrap();
       detachEsc();
-      removeAuthLayer();
+      removeAuthLayer(layer);
+      // Give focus back to the control/dialog under this layer; fall back to
+      // the issue card when that control was disabled for the request.
+      const canRestore =
+        previousFocus !== null &&
+        document.contains(previousFocus) &&
+        !(previousFocus as HTMLButtonElement).disabled;
+      const remainingLayer = topAuthLayer();
+      const target = canRestore
+        ? previousFocus
+        : remainingLayer?.querySelector<HTMLElement>(".ef-login-card") ??
+          document.querySelector<HTMLElement>(".ef-issue-card") ??
+          document.getElementById(DIALOG_ID);
+      target?.focus();
       resolve(ok);
     };
-    authLayerCancel = () => finish(false);
-    detachTrap = trapAuthFocus(card);
-    detachEsc = addAuthEscape(() => finish(false));
+    cancel = () => finish(false);
+    authLayerCancels.push(cancel);
+    detachTrap = trapAuthFocus(layer, card);
+    detachEsc = addAuthEscape(layer, () => finish(false));
 
     grantBtn.addEventListener("click", () => {
       if (opts.authorizeUrl) window.open(opts.authorizeUrl, "_blank", "noopener");

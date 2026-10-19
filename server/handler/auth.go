@@ -172,27 +172,12 @@ func (h *Handler) HandleGitHubSetup(c echo.Context) error {
 
 // renderSetup renders the "App access updated" confirmation page for a GitHub App
 // install/setup redirect. It never issues a session token and never touches state.
-func (h *Handler) renderSetup(c echo.Context, installationID, setupAction string) error {
-	instJSON, _ := json.Marshal(installationID)
-	actJSON, _ := json.Marshal(setupAction)
+func (h *Handler) renderSetup(c echo.Context, _, _ string) error {
 	page := `<!DOCTYPE html><html><head><meta charset="utf-8"><title>App access updated</title></head>
 <body>
 <h1>App access updated</h1>
 <p>Close this tab, return to the app, and click Retry.</p>
 <button type="button" onclick="window.close()">Close</button>
-<script>
-(function(){
-  var installationId = ` + string(instJSON) + `;
-  var setupAction = ` + string(actJSON) + `;
-  if (window.opener) {
-    window.opener.postMessage({
-      type: 'emergent_feedback_app_setup',
-      installation_id: installationId,
-      setup_action: setupAction
-    }, '*');
-  }
-})();
-</script>
 </body></html>`
 	return c.HTML(http.StatusOK, page)
 }

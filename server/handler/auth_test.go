@@ -136,8 +136,8 @@ func TestHandleGitHubSetupRendersPageWithoutToken(t *testing.T) {
 	if strings.Contains(body, "emergent_feedback_auth") {
 		t.Fatalf("setup page must not issue an auth token/message: %s", body)
 	}
-	if !strings.Contains(body, "emergent_feedback_app_setup") {
-		t.Fatalf("body missing postMessage setup type: %s", body)
+	if strings.Contains(body, "postMessage") {
+		t.Fatalf("setup page should not post to an opener: %s", body)
 	}
 }
 
