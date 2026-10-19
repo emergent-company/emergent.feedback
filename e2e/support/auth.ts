@@ -14,10 +14,18 @@ export interface TestUser {
   avatar?: string;
 }
 
-/** Mints a token and installs it into the given context. Returns the token. */
-export async function signIn(context: BrowserContext, user: TestUser = TEST_USER): Promise<string> {
+/**
+ * Shared installer: mints a token with the given lifetime and installs it into
+ * the context under the same localStorage keys (+ cookie fallback) that both
+ * `signIn` and `signInExpired` rely on. Returns the token.
+ */
+async function installSession(
+  context: BrowserContext,
+  user: TestUser,
+  ttlSeconds: number,
+): Promise<string> {
   const avatar = user.avatar ?? "";
-  const token = mintToken({ login: user.login, avatar, secret: JWT_SECRET });
+  const token = mintToken({ login: user.login, avatar, secret: JWT_SECRET, ttlSeconds });
 
   await context.addInitScript(
     ({ token, login, avatar }) => {
@@ -44,4 +52,9 @@ export async function signIn(context: BrowserContext, user: TestUser = TEST_USER
   }
 
   return token;
+}
+
+/** Mints a token and installs it into the given context. Returns the token. */
+export async function signIn(context: BrowserContext, user: TestUser = TEST_USER): Promise<string> {
+  return installSession(context, user, 86_400);
 }

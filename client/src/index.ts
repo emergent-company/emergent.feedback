@@ -6,7 +6,7 @@ import { AuthManager } from "./auth";
 import { startActivationListener, onModeChange, forceMode, getMode } from "./activation";
 import { highlight, clearHighlight } from "./highlighter";
 import { renderBadges, clearBadges } from "./badge";
-import { showSubmitDialog, showLoginDialog, closeDialog, showToast, startDragVisual, updateDragVisual, endDragVisual, type FeedbackType } from "./dialog";
+import { showSubmitDialog, promptLogin, closeDialog, startDragVisual, updateDragVisual, endDragVisual, type FeedbackType } from "./dialog";
 import type { IssueBadge } from "./api";
 import { buildSelector } from "./selector";
 import { showIndicator, hideIndicator } from "./indicator";
@@ -85,6 +85,27 @@ let peekedEl: Element | null = null;
   const auth = new AuthManager(config, api);
 
   api.setOnUnauthorized(() => auth.logout());
+
+  // ── Auth helpers ──────────────────────────────────────────────────────────────
+  // Re-auth prompt used for 401 retries: shows the login layer over whatever
+  // dialog is open without destroying it.
+  const ensureAuth = async (): Promise<boolean> => {
+    if (auth.isAuthenticated()) return true;
+    return promptLogin({
+      onLogin: async () => { await auth.login(); },
+    });
+  };
+
+  // Initial (pre-dialog) auth gate. Uses the same login layer, but since
+  // nothing sits underneath it also removes the now-empty dialog root.
+  async function ensureAuthenticated(): Promise<boolean> {
+    if (auth.isAuthenticated()) return true;
+    const ok = await promptLogin({
+      onLogin: async () => { await auth.login(); },
+    });
+    closeDialog();
+    return ok;
+  }
 
   // Opt-in session replay: start buffering immediately (pre-bug window) and
   // keep it running across mode transitions — never stopped on idle.
@@ -343,13 +364,9 @@ function elementLabel(el: Element): string {
     clearHighlight();
 
     // Ensure authenticated.
-    if (!auth.isAuthenticated()) {
-      await new Promise<void>((resolve, reject) => {
-        showLoginDialog({
-          onLogin: async () => { await auth.login(); resolve(); },
-          onCancel: () => { forceMode("idle"); reject(new Error("cancelled")); },
-        });
-      }).catch(() => {});
+    if (!(await ensureAuthenticated())) {
+      forceMode("idle");
+      return;
     }
     if (!auth.isAuthenticated()) return;
 
@@ -406,6 +423,7 @@ function elementLabel(el: Element): string {
       tokens,
       getTargets: getSelectionTargets,
       getChanges: () => getAllSelectionChanges(),
+      ensureAuth,
       onSubmit: async (comment, type: FeedbackType, intent: FeedbackIntent) => {
         const screenshot = await captureElement(target);
         const snapshot = captureSnapshot();
@@ -450,7 +468,6 @@ function elementLabel(el: Element): string {
         // Promote the applied edits to committed; stop tracking them as pending.
         markSent();
         await refreshBadges();
-        forceMode("active");
         return result.id;
       },
       onExport: async (ids, type: FeedbackType, issueTopic: string) => {
@@ -460,9 +477,13 @@ function elementLabel(el: Element): string {
           labels: [config.label, type],
           title: issueTopic,
         });
-        showToast("Issue created successfully!");
+        // The dialog closes on success and shows the toast itself; here we only
+        // commit edits and refresh badges.
         markSent();
         await refreshBadges();
+        return result;
+      },
+      onComplete: () => {
         forceMode("active");
       },
       onCancel: () => {

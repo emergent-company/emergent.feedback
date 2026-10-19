@@ -519,6 +519,24 @@ target repo (via `GET /repos/{owner}/{repo}/installation`) rather than using a
 single configured installation, and a create-time 404 is surfaced as the same
 actionable `app_access_required` 403 above.
 
+#### GitHub App setup redirects
+
+When using GitHub App authoring (`ISSUE_AUTHOR_MODE=bot` + `GH_APP_ID`), set the
+GitHub App **Setup URL** to `https://<host>/auth/setup`. The **OAuth callback
+stays `/auth/callback`** — that is still where the user sign-in code is
+exchanged. After an install or config change, GitHub redirects the browser to the
+Setup URL with `installation_id` and `setup_action` parameters; the page that
+renders there is informational only ("App access updated — close this tab, return
+to the app, and click Retry") and never issues a session token.
+
+#### Expired or invalid sign-in link
+
+Sign-in state tokens now expire after 30 minutes. When a link has expired (or is
+otherwise invalid), the callback renders a friendly error page with a **Retry
+sign-in** button instead of a raw JSON 400 — and, when the state was
+signature-valid, the page notifies the opener so the overlay can retry without
+losing the user's draft.
+
 ---
 
 ## opencode AI skill

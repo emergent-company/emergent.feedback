@@ -6,7 +6,9 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"html"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -16,7 +18,19 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-const oauthStateTTL = 10 * time.Minute
+const oauthStateTTL = 30 * time.Minute
+
+// stateReason classifies why an OAuth state token failed validation. An empty
+// value means the state was valid.
+type stateReason string
+
+const (
+	stateValid     stateReason = ""
+	stateMissing   stateReason = "missing"
+	stateMalformed stateReason = "malformed"
+	stateBadSig    stateReason = "bad_signature"
+	stateExpired   stateReason = "expired"
+)
 
 // generateState returns a self-contained, HMAC-signed OAuth state token that
 // embeds an expiry timestamp and the opener origin. It needs no server-side
@@ -30,30 +44,34 @@ func (h *Handler) generateState(origin string) string {
 }
 
 // validateState verifies the signature and expiry of an OAuth state token and
-// returns the embedded opener origin (empty when none was provided).
-func (h *Handler) validateState(s string) (string, bool) {
+// returns the embedded opener origin together with a reason. The origin is
+// populated only when the signature was valid (including for an expired token),
+// since a signature-valid token is the only trustable source of an origin.
+func (h *Handler) validateState(s string) (origin string, reason stateReason) {
+	if s == "" {
+		return "", stateMissing
+	}
 	payload, sig, ok := strings.Cut(s, ".")
 	if !ok {
-		return "", false
+		return "", stateMalformed
 	}
 	if !hmac.Equal([]byte(sig), []byte(signState(payload, h.JWTSecret))) {
-		return "", false
+		return "", stateBadSig
 	}
 	expStr, originEnc, hasOrigin := strings.Cut(payload, ":")
 	exp, err := strconv.ParseInt(expStr, 10, 64)
 	if err != nil {
-		return "", false
+		return "", stateMalformed
 	}
-	if time.Now().Unix() > exp {
-		return "", false
-	}
-	origin := ""
 	if hasOrigin {
 		if b, err := base64.RawURLEncoding.DecodeString(originEnc); err == nil {
 			origin = string(b)
 		}
 	}
-	return origin, true
+	if time.Now().Unix() > exp {
+		return origin, stateExpired
+	}
+	return origin, stateValid
 }
 
 func signState(payload, secret string) string {
@@ -75,9 +93,24 @@ func (h *Handler) HandleGitHubLogin(c echo.Context) error {
 // issues a session JWT, and closes the popup.
 func (h *Handler) HandleGitHubCallback(c echo.Context) error {
 	state := c.QueryParam("state")
-	origin, ok := h.validateState(state)
-	if !ok {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid or expired OAuth state")
+	installationID := c.QueryParam("installation_id")
+	setupAction := c.QueryParam("setup_action")
+	hasSetupParams := installationID != "" || setupAction != ""
+
+	origin, reason := h.validateState(state)
+
+	if reason != stateValid {
+		// Never log the state value or any token — only the failure reason and
+		// enough request context to diagnose setup-redirect vs. genuine failures.
+		c.Logger().Warnf("oauth state invalid: reason=%s host=%s installation_id=%t setup_action=%t",
+			reason, c.Request().Host, installationID != "", setupAction != "")
+
+		// GitHub App install/setup redirects arrive without a state. Treat them as
+		// an informational setup confirmation, not an OAuth failure.
+		if hasSetupParams {
+			return h.renderSetup(c, installationID, setupAction)
+		}
+		return h.renderStateError(c, reason, origin)
 	}
 
 	code := c.QueryParam("code")
@@ -129,6 +162,67 @@ if(window.opener){
 </script></body></html>`
 
 	return c.HTML(http.StatusOK, html)
+}
+
+// HandleGitHubSetup serves the same informational setup-confirmation page as the
+// callback path, so a GitHub App Setup URL can point at /auth/setup directly.
+func (h *Handler) HandleGitHubSetup(c echo.Context) error {
+	return h.renderSetup(c, c.QueryParam("installation_id"), c.QueryParam("setup_action"))
+}
+
+// renderSetup renders the "App access updated" confirmation page for a GitHub App
+// install/setup redirect. It never issues a session token and never touches state.
+func (h *Handler) renderSetup(c echo.Context, _, _ string) error {
+	page := `<!DOCTYPE html><html><head><meta charset="utf-8"><title>App access updated</title></head>
+<body>
+<h1>App access updated</h1>
+<p>Close this tab, return to the app, and click Retry.</p>
+<button type="button" onclick="window.close()">Close</button>
+</body></html>`
+	return c.HTML(http.StatusOK, page)
+}
+
+// renderStateError renders a friendly HTML error page for an invalid or expired
+// OAuth state. It returns HTTP 400 so integrations can still detect the failure,
+// but explains the cause and offers a retry path.
+func (h *Handler) renderStateError(c echo.Context, reason stateReason, origin string) error {
+	// Only a signature-valid expired state carries a trustable origin, so only
+	// then may we offer a targeted retry and message the opener at that origin.
+	retryAllowed := reason == stateExpired && origin != ""
+	targetOrigin := "*"
+	if retryAllowed {
+		targetOrigin = origin
+	}
+
+	actionHTML := `<a href="/panel">Go to the panel</a>`
+	if retryAllowed {
+		retryURL := html.EscapeString("/auth/github?origin=" + url.QueryEscape(origin))
+		actionHTML = `<a href="` + retryURL + `">Retry sign-in</a>`
+	}
+
+	// Tell a popup opener immediately, including for untrusted/malformed states
+	// (the payload carries only a reason code, never a token or origin). Without
+	// this the overlay would sit on its 15-minute popup timeout.
+	reasonCode := "state_invalid"
+	if reason == stateExpired {
+		reasonCode = "state_expired"
+	}
+	reasonJSON, _ := json.Marshal(reasonCode)
+	targetJSON, _ := json.Marshal(targetOrigin)
+	script := `<script>
+if (window.opener) {
+  window.opener.postMessage({type:'emergent_feedback_auth_error', code:` + string(reasonJSON) + `}, ` + string(targetJSON) + `);
+}
+</script>`
+
+	page := `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Sign-in link expired</title></head>
+<body>
+<h1>Sign-in link expired or invalid</h1>
+<p>This sign-in link has expired or is no longer valid. Please start the sign-in again.</p>
+` + actionHTML + `
+` + script + `
+</body></html>`
+	return c.HTML(http.StatusBadRequest, page)
 }
 
 // HandleMe returns the authenticated user's profile.

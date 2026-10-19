@@ -16,6 +16,57 @@ export class APIError extends Error {
   }
 }
 
+/**
+ * Sentinel thrown by `withAuthRetry` when the user declined the re-auth prompt.
+ * Callers keep their dialog open and re-enable their buttons on this error.
+ */
+export class AuthCancelledError extends Error {
+  constructor() {
+    super("Authentication cancelled.");
+    this.name = "AuthCancelledError";
+  }
+}
+
+/**
+ * Human-readable message for an error. Never leaks the raw `"<status>: "`
+ * prefix that `APIClient` prefixes messages with; 401 gets a friendly
+ * session-expired explanation.
+ */
+export function describeAPIError(err: unknown): string {
+  if (!(err instanceof APIError)) return String(err);
+  if (err.status === 401) return "Your session expired. Sign in to continue.";
+  const prefix = `${err.status}: `;
+  return err.message.startsWith(prefix)
+    ? err.message.slice(prefix.length)
+    : err.message;
+}
+
+/**
+ * Wraps an operation so a 401 triggers a single re-auth + retry of the SAME
+ * operation. Returns a thunk so the caller controls when it runs.
+ *
+ * - 401 → call `ensureAuth()`; if it resolves true, retry `fn` exactly once.
+ * - 401 → `ensureAuth()` resolves false → throw `AuthCancelledError`.
+ * - non-401 → rethrow unchanged (including a 401 from the retry itself).
+ */
+export function withAuthRetry<T>(
+  fn: () => Promise<T>,
+  ensureAuth: () => Promise<boolean>
+): () => Promise<T> {
+  return async () => {
+    try {
+      return await fn();
+    } catch (err) {
+      if (err instanceof APIError && err.status === 401) {
+        const ok = await ensureAuth();
+        if (ok) return await fn();
+        throw new AuthCancelledError();
+      }
+      throw err;
+    }
+  };
+}
+
 export type VerifyResult = "green" | "amber" | "red";
 
 export interface VerifyPendingItem {

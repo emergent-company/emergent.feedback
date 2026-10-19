@@ -246,7 +246,7 @@ Public (no auth):
 - `GET /issues?url=` → open GitHub issue badges
 - `GET /schema/envelope.v1.json` → the JSON Schema
 - `GET /health`, `GET /`, `GET /panel`, `GET /auth/github`, `GET /auth/callback`,
-  `GET /emergent-feedback.js`, `GET /static/*`
+  `GET /auth/setup`, `GET /emergent-feedback.js`, `GET /static/*`
 
 Authenticated (Bearer JWT, owner-scoped where noted):
 
@@ -315,8 +315,13 @@ Read from the `<script>` tag (`client/src/config.ts`):
 | `data-replay-src` | explicit URL for the lazy replay bundle (else derived from the main bundle URL) | — |
 | `data-replay-mask-text` | presence masks **all** page text (rrweb `maskTextSelector: "*"`), not just inputs/redacted | off |
 
-Authentication is GitHub OAuth (popup → `POST /auth/callback`); there is **no**
+Authentication is GitHub OAuth (popup → `GET /auth/callback`); there is **no**
 `data-token` attribute — the JWT is stored in `localStorage["__ef_token__"]`.
+The OAuth state is valid for 30 minutes. An expired or invalid state renders a
+friendly HTML page that messages the opener, so the overlay can show a retry
+instead of hanging; re-authentication never destroys an open submit/issue draft.
+GitHub App install/config redirects use the informational `GET /auth/setup` page
+(no session is issued there).
 
 ---
 
