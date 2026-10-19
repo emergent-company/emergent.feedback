@@ -1,7 +1,12 @@
 // dialog.ts — element feedback dialog (existing comments + compose) and login dialog.
 
-import { APIError } from "./api";
-import type { FeedbackComment } from "./api";
+import {
+  APIError,
+  AuthCancelledError,
+  describeAPIError,
+  withAuthRetry,
+} from "./api";
+import type { FeedbackComment, ExportIssueResult } from "./api";
 import type {
   FeedbackIntent,
   IntentAction,
@@ -57,6 +62,50 @@ function writeDockedPref(docked: boolean): void {
   } catch {
     // Storage may be unavailable (private mode / sandboxed iframe).
   }
+}
+
+// ── Draft persistence (in-memory + sessionStorage) ────────────────────────────
+// Persists only the text fields (comment, issue title, type) keyed by page URL
+// + selector. Storage is best-effort: failures never break submission.
+
+interface DraftState {
+  comment: string;
+  title: string;
+  type: FeedbackType;
+}
+
+function draftKey(selector: string): string {
+  try {
+    return `__ef_draft__:${window.location.href}|${selector}`;
+  } catch {
+    return `__ef_draft__:${selector}`;
+  }
+}
+
+function saveDraft(selector: string, draft: DraftState): void {
+  try {
+    sessionStorage.setItem(draftKey(selector), JSON.stringify(draft));
+  } catch { /* storage unavailable */ }
+}
+
+function loadDraft(selector: string): DraftState | null {
+  try {
+    const raw = sessionStorage.getItem(draftKey(selector));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<DraftState> | null;
+    if (!parsed || typeof parsed !== "object") return null;
+    return {
+      comment: typeof parsed.comment === "string" ? parsed.comment : "",
+      title: typeof parsed.title === "string" ? parsed.title : "",
+      type: parsed.type === "bug" ? "bug" : "enhancement",
+    };
+  } catch {
+    return null;
+  }
+}
+
+function clearDraft(selector: string): void {
+  try { sessionStorage.removeItem(draftKey(selector)); } catch { /* ignore */ }
 }
 
 function injectStyles(): void {
@@ -605,6 +654,23 @@ function injectStyles(): void {
       justify-content: flex-end;
       gap: 8px;
     }
+
+    /* ── Auth layer ───────────────────────────────────────────────────────────
+       Login / grant prompts are a fixed overlay appended inside #__ef_dialog__,
+       stacked above the issue modal so re-auth never replaces the dialog's
+       innerHTML (an open draft survives). Removed independently of the rest. */
+    #__ef_dialog__ .ef-auth-layer {
+      position: fixed;
+      inset: 0;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: var(--ef-backdrop);
+      pointer-events: auto;
+    }
+    #__ef_dialog__ .ef-auth-layer[hidden] { display: none; }
 
     /* ── Docked rail ───────────────────────────────────────────────────────── */
     #__ef_dialog__.ef-docked {
@@ -1497,6 +1563,12 @@ let dialogCleanup: (() => void) | null = null;
 // True while the issue submission modal is layered over the panel. The panel's
 // Tab trap and Escape handler stand down while the modal owns the keyboard.
 let issueModalOpen = false;
+// True while an auth (login/grant) layer is shown. The panel and issue modal
+// keyboard traps stand down while the auth layer owns the keyboard.
+let authLayerOpen = false;
+// Resolves the pending prompt layer as cancelled when closeDialog() tears the
+// dialog down underneath it (Escape, mode change, page teardown).
+let authLayerCancel: (() => void) | null = null;
 
 function getFocusable(card: HTMLElement): HTMLElement[] {
   return Array.from(card.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
@@ -1528,8 +1600,8 @@ function activateDialog(
   }
 
   dialogKeydown = (e: KeyboardEvent) => {
-    // The issue modal owns the keyboard while it is open.
-    if (issueModalOpen) return;
+    // The issue modal (and the auth layer) owns the keyboard while open.
+    if (issueModalOpen || authLayerOpen) return;
     if (e.key !== "Tab") return;
     const items = getFocusable(card);
     if (items.length === 0) { e.preventDefault(); card.focus(); return; }
@@ -1574,8 +1646,15 @@ export interface SubmitFeedbackOptions {
   getChanges?: () => StyleChange[];
   /** Submits a comment; resolves with the new feedback ID when known. */
   onSubmit: (comment: string, type: FeedbackType, intent: FeedbackIntent) => Promise<number | void>;
-  onExport: (ids: number[], type: FeedbackType, issueTopic: string) => Promise<void>;
+  onExport: (ids: number[], type: FeedbackType, issueTopic: string) => Promise<ExportIssueResult>;
+  /**
+   * Called when a submit/export hits 401. Resolves true if the user
+   * re-authenticated (operation retried), false if they declined.
+   */
+  ensureAuth: () => Promise<boolean>;
   onCancel: () => void;
+  /** Called after the dialog closes on a successful submit/export. */
+  onComplete?: () => void;
 }
 
 // ── Intent micro-form helpers ────────────────────────────────────────────────
@@ -1887,6 +1966,8 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   // Tab containment + Escape for the modal layer. Capture phase so it runs
   // ahead of the panel's own handlers and can stand down their Tab trap.
   const modalKey = (e: KeyboardEvent): void => {
+    // The auth layer owns the keyboard while it is up.
+    if (authLayerOpen) return;
     if (e.key === "Escape") {
       e.preventDefault();
       e.stopPropagation();
@@ -1913,6 +1994,8 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     issueModalOpen = true;
     modalReturnFocus = document.activeElement as HTMLElement | null;
     modal.hidden = false;
+    // Restore any persisted draft (comment / title / type) when the modal opens.
+    restoreDraft();
     // Focus the modal before the panel leaves the a11y tree, so focus never
     // sits inside an aria-hidden/inert subtree (which browsers flag).
     modalCard.focus();
@@ -1950,6 +2033,52 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     const input = dialog.querySelector<HTMLInputElement>("#__ef_topic__");
     return input?.value.trim() || opts.defaultIssueTopic;
   };
+
+  // ── Draft persistence wiring ────────────────────────────────────────────────
+  // Debounced save of the text fields (comment / title / type) on input, and
+  // restore when the issue modal opens. Storage is best-effort only.
+  const topicInput = dialog.querySelector<HTMLInputElement>("#__ef_topic__");
+  let draftTimer: number | null = null;
+  // Comment text that was already POSTed by the create-issue flow. Kept across
+  // an export failure so clicking "Create issue" again exports the same item
+  // instead of creating a duplicate comment. Cleared when the text changes.
+  let submittedComment: string | null = null;
+  let submittedId: number | null = null;
+
+  const scheduleDraftSave = (): void => {
+    if (draftTimer !== null) window.clearTimeout(draftTimer);
+    draftTimer = window.setTimeout(() => {
+      draftTimer = null;
+      saveDraft(opts.selector, {
+        comment: textarea.value,
+        title: topicInput?.value ?? "",
+        type: getType(),
+      });
+    }, 300);
+  };
+
+  const restoreDraft = (): void => {
+    const draft = loadDraft(opts.selector);
+    if (!draft) return;
+    if (draft.comment) textarea.value = draft.comment;
+    if (draft.title && topicInput) topicInput.value = draft.title;
+    if (draft.type) {
+      const radio = dialog.querySelector<HTMLInputElement>(
+        `input[name='__ef_type__'][value='${draft.type}']`
+      );
+      if (radio && !radio.checked) {
+        radio.checked = true;
+        // Let the existing change handler re-seed the action verb.
+        radio.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    }
+  };
+
+  textarea.addEventListener("input", () => {
+    submittedComment = null;
+    scheduleDraftSave();
+  });
+  if (topicInput) topicInput.addEventListener("input", scheduleDraftSave);
 
   // ── Intent micro-form state + wiring ───────────────────────────────────────
   const actionWrap = dialog.querySelector<HTMLElement>("#__ef_action__")!;
@@ -2232,6 +2361,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   dialog.querySelectorAll<HTMLInputElement>("input[name='__ef_type__']").forEach((inp) => {
     inp.addEventListener("change", () => {
       if (!actionTouched) { action = inferAction(getType()); renderActions(); }
+      scheduleDraftSave();
     });
   });
 
@@ -2324,8 +2454,9 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
 
   const onKey = (e: KeyboardEvent) => {
     // The issue modal owns Escape while it is up (its capture handler also
-    // stops propagation, but guard here too in case of ordering).
-    if (issueModalOpen) return;
+    // stops propagation, but guard here too in case of ordering). The auth
+    // layer likewise owns Escape.
+    if (issueModalOpen || authLayerOpen) return;
     if (e.key === "Escape") {
       if (awaitingPick) {
         // Cancel the pick but keep the dialog: the selection subscription
@@ -2334,6 +2465,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
         return;
       }
       removeKey();
+      clearDraft(opts.selector);
       closeDialog();
       opts.onCancel();
     }
@@ -2346,6 +2478,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   dialogKeyHandler = onKey;
 
   cancelBtn.addEventListener("click", () => {
+    clearDraft(opts.selector);
     removeKey();
     closeDialog();
     opts.onCancel();
@@ -2372,32 +2505,54 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     submitBtn.textContent = "Saving…";
     errDiv.textContent = "";
     try {
-      await opts.onSubmit(comment, getType(), buildIntent());
+      await withAuthRetry(
+        () => opts.onSubmit(comment, getType(), buildIntent()),
+        opts.ensureAuth
+      )();
+      clearDraft(opts.selector);
       removeKey();
       closeDialog();
+      opts.onComplete?.();
     } catch (err) {
-      errDiv.textContent = String(err);
+      // Declined re-auth: keep the draft, show an inline prompt, re-enable.
+      if (err instanceof AuthCancelledError) {
+        errDiv.textContent = "Sign in to continue";
+      } else {
+        errDiv.textContent = describeAPIError(err);
+      }
       submitBtn.disabled = false;
       submitBtn.textContent = "Save";
     }
   });
 
   // Modal: Create issue runs the current export path — submit a new comment
-  // first (when there is one), then export the parent comment IDs.
+  // first (when there is one), then export the parent comment IDs. Nothing is
+  // closed until the export actually succeeds.
   issueSubmitBtn.addEventListener("click", async () => {
     issueSubmitBtn.disabled = true;
     issueSubmitBtn.textContent = "Creating…";
     submitBtn.disabled = true;
     errDiv.textContent = "";
+
+    const comment = collectComment();
+    const type = getType();
+    const topic = getIssueTopic();
+    let ids = [...existingIds];
+    // A comment created by an earlier attempt (whose export failed) still
+    // belongs in this export.
+    if (submittedId !== null && !ids.includes(submittedId)) ids.push(submittedId);
+
     try {
-      const comment = collectComment();
-      const type = getType();
-      const topic = getIssueTopic();
-      let ids = [...existingIds];
-      if (comment) {
+      if (comment && comment !== submittedComment) {
         // Submit the new comment first, then include its ID in the export.
-        const newId = await opts.onSubmit(comment, type, buildIntent());
+        const newId = await withAuthRetry(
+          () => opts.onSubmit(comment, type, buildIntent()),
+          opts.ensureAuth
+        )();
         if (typeof newId === "number") ids = [...ids, newId];
+        // Remembered so a failed export can be retried without a duplicate.
+        submittedComment = comment;
+        if (typeof newId === "number") submittedId = newId;
       }
       if (ids.length === 0) {
         errDiv.textContent = "Nothing to export — add a note or choose what you expected.";
@@ -2406,27 +2561,49 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
         submitBtn.disabled = false;
         return;
       }
-      // Close immediately — export happens in background.
+      // Await the export before closing: a 401 re-prompts for sign-in and
+      // retries; a 403 app_access_required is handled in the catch below.
+      await withAuthRetry(
+        () => opts.onExport(ids, type, topic),
+        opts.ensureAuth
+      )();
+      clearDraft(opts.selector);
       removeKey();
       closeDialog();
-      const runExport = () => opts.onExport(ids, type, topic);
-      const handleExportError = (err: unknown) => {
-        if (err instanceof APIError && err.code === "app_access_required") {
-          const b = (err.body ?? {}) as { repo?: string; authorize_url?: string };
-          showGrantAccessDialog({
-            repo: b.repo ?? "this repository",
-            authorizeUrl: b.authorize_url ?? "",
-            // Return the promise so the modal awaits the retry: it closes on
-            // success and stays open (button re-enabled) if access is still missing.
-            onRetry: () => runExport(),
-          });
-          return;
-        }
-        showToast(`Failed to create issue: ${String(err)}`);
-      };
-      runExport().catch(handleExportError);
+      showToast("Issue created successfully!");
+      opts.onComplete?.();
     } catch (err) {
-      errDiv.textContent = String(err);
+      if (err instanceof AuthCancelledError) {
+        errDiv.textContent = "Sign in to continue";
+        issueSubmitBtn.disabled = false;
+        issueSubmitBtn.textContent = "Create issue";
+        submitBtn.disabled = false;
+        return;
+      }
+      if (err instanceof APIError && err.code === "app_access_required") {
+        // Keep the modal open and prompt for repo access; retry the export
+        // after access is granted, then close on success.
+        const b = (err.body ?? {}) as { repo?: string; authorize_url?: string };
+        const granted = await showGrantAccessDialog({
+          repo: b.repo ?? "this repository",
+          authorizeUrl: b.authorize_url ?? "",
+          onRetry: () =>
+            withAuthRetry(() => opts.onExport(ids, type, topic), opts.ensureAuth)(),
+        });
+        if (granted) {
+          clearDraft(opts.selector);
+          removeKey();
+          closeDialog();
+          showToast("Issue created successfully!");
+          opts.onComplete?.();
+        } else {
+          issueSubmitBtn.disabled = false;
+          issueSubmitBtn.textContent = "Create issue";
+          submitBtn.disabled = false;
+        }
+        return;
+      }
+      errDiv.textContent = describeAPIError(err);
       issueSubmitBtn.disabled = false;
       issueSubmitBtn.textContent = "Create issue";
       submitBtn.disabled = false;
@@ -2483,7 +2660,139 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   // Backdrop click to cancel — modal only. The docked rail is click-through
   // (pointer-events: none), so this never fires while docked.
   dialog.addEventListener("click", (e) => {
-    if (e.target === dialog && !docked) { removeKey(); closeDialog(); opts.onCancel(); }
+    if (e.target === dialog && !docked) {
+      clearDraft(opts.selector);
+      removeKey();
+      closeDialog();
+      opts.onCancel();
+    }
+  });
+}
+
+// ── Auth layer (overlay, not innerHTML replacement) ──────────────────────────
+// Login/grant prompts append a `.ef-auth-layer` inside #__ef_dialog__ and remove
+// only that layer when done. The submit/issue dialog and any typed draft survive.
+
+function appendAuthLayer(): HTMLElement {
+  injectStyles();
+  const dialog = getOrCreateDialog();
+  if (authLayerCancel) {
+    const cancel = authLayerCancel;
+    authLayerCancel = null;
+    cancel();
+  }
+  removeAuthLayer();
+  const layer = document.createElement("div");
+  layer.className = "ef-auth-layer";
+  dialog.appendChild(layer);
+  authLayerOpen = true;
+  return layer;
+}
+
+function removeAuthLayer(): void {
+  document.getElementById(DIALOG_ID)
+    ?.querySelector<HTMLElement>(".ef-auth-layer")
+    ?.remove();
+  authLayerOpen = false;
+}
+
+/** Tab containment scoped to an auth card; returns the detach function. */
+function trapAuthFocus(card: HTMLElement): () => void {
+  const handler = (e: KeyboardEvent) => {
+    if (e.key !== "Tab") return;
+    const items = getFocusable(card);
+    if (items.length === 0) { e.preventDefault(); card.focus(); return; }
+    const first = items[0];
+    const last = items[items.length - 1];
+    const active = document.activeElement as HTMLElement | null;
+    if (!active || !card.contains(active)) {
+      e.preventDefault();
+      (e.shiftKey ? last : first).focus();
+      return;
+    }
+    if (e.shiftKey && active === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
+  };
+  document.addEventListener("keydown", handler, true);
+  return () => document.removeEventListener("keydown", handler, true);
+}
+
+/** Escape-to-cancel listener for the auth layer; returns the detach function. */
+function addAuthEscape(onEsc: () => void): () => void {
+  const handler = (e: KeyboardEvent) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      onEsc();
+    }
+  };
+  document.addEventListener("keydown", handler, true);
+  return () => document.removeEventListener("keydown", handler, true);
+}
+
+export interface PromptLoginOptions {
+  onLogin: () => Promise<void>;
+  message?: string;
+}
+
+/**
+ * Login prompt as an overlay layer. Resolves `true` after a successful
+ * `onLogin`, `false` on cancel — in both cases removing only the layer and
+ * leaving any underlying submit/issue dialog and typed content intact.
+ */
+export function promptLogin(opts: PromptLoginOptions): Promise<boolean> {
+  const layer = appendAuthLayer();
+  layer.innerHTML = `
+    <div class="ef-login-card" role="dialog" aria-modal="true" aria-labelledby="__ef_login_title__" tabindex="-1">
+      <h2 id="__ef_login_title__">Sign in with GitHub</h2>
+      <p>${escapeHtml(opts.message ?? "Authentication required to submit feedback.")}</p>
+      <div class="ef-login-actions">
+        <button class="ef-btn-secondary" id="__ef_auth_cancel__">Cancel</button>
+        <button class="ef-btn-primary" id="__ef_auth_login__">Sign in with GitHub</button>
+      </div>
+      <div class="ef-error" id="__ef_auth_err__" style="margin-top:8px"></div>
+    </div>
+  `;
+
+  const card = layer.querySelector<HTMLElement>(".ef-login-card")!;
+  const loginBtn = layer.querySelector<HTMLButtonElement>("#__ef_auth_login__")!;
+  const cancelBtn = layer.querySelector<HTMLButtonElement>("#__ef_auth_cancel__")!;
+  const errDiv = layer.querySelector<HTMLElement>("#__ef_auth_err__")!;
+
+  return new Promise<boolean>((resolve) => {
+    let settled = false;
+    let detachTrap: () => void = () => {};
+    let detachEsc: () => void = () => {};
+    const finish = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      authLayerCancel = null;
+      detachTrap();
+      detachEsc();
+      removeAuthLayer();
+      resolve(ok);
+    };
+    authLayerCancel = () => finish(false);
+    detachTrap = trapAuthFocus(card);
+    detachEsc = addAuthEscape(() => finish(false));
+
+    loginBtn.addEventListener("click", async () => {
+      loginBtn.disabled = true;
+      loginBtn.textContent = "Opening…";
+      errDiv.textContent = "";
+      try {
+        await opts.onLogin();
+        finish(true);
+      } catch (err) {
+        loginBtn.disabled = false;
+        loginBtn.textContent = "Sign in with GitHub";
+        errDiv.textContent = err instanceof Error ? err.message : String(err);
+      }
+    });
+
+    cancelBtn.addEventListener("click", () => finish(false));
+    layer.addEventListener("click", (e) => { if (e.target === layer) finish(false); });
+    card.focus();
   });
 }
 
@@ -2492,46 +2801,14 @@ export interface LoginDialogOptions {
   onCancel: () => void;
 }
 
+/**
+ * Initial (pre-dialog) auth gate. Reuses the same layer as `promptLogin`, but
+ * since nothing sits underneath it also removes the now-empty dialog root.
+ */
 export function showLoginDialog(opts: LoginDialogOptions): void {
-  injectStyles();
-  const dialog = getOrCreateDialog();
-
-  dialog.innerHTML = `
-    <div class="ef-login-card" role="dialog" aria-modal="true" aria-labelledby="__ef_login_title__" tabindex="-1">
-      <h2 id="__ef_login_title__">Sign in with GitHub</h2>
-      <p>Authentication required to submit feedback.</p>
-      <div class="ef-login-actions">
-        <button class="ef-btn-secondary" id="__ef_cancel__">Cancel</button>
-        <button class="ef-btn-primary" id="__ef_login__">Sign in with GitHub</button>
-      </div>
-      <div class="ef-error" id="__ef_err__" style="margin-top:8px"></div>
-    </div>
-  `;
-
-  const card = dialog.querySelector<HTMLElement>(".ef-login-card")!;
-  activateDialog(card);
-
-  const loginBtn = dialog.querySelector<HTMLButtonElement>("#__ef_login__")!;
-  const cancelBtn = dialog.querySelector<HTMLButtonElement>("#__ef_cancel__")!;
-  const errDiv = dialog.querySelector<HTMLElement>("#__ef_err__")!;
-
-  loginBtn.addEventListener("click", async () => {
-    loginBtn.disabled = true;
-    loginBtn.textContent = "Opening…";
-    try {
-      await opts.onLogin();
-      closeDialog();
-    } catch (err) {
-      loginBtn.disabled = false;
-      loginBtn.textContent = "Sign in with GitHub";
-      errDiv.textContent = String(err);
-    }
-  });
-
-  cancelBtn.addEventListener("click", () => { closeDialog(); opts.onCancel(); });
-
-  dialog.addEventListener("click", (e) => {
-    if (e.target === dialog) { closeDialog(); opts.onCancel(); }
+  void promptLogin({ onLogin: opts.onLogin }).then((ok) => {
+    closeDialog();
+    if (!ok) opts.onCancel();
   });
 }
 
@@ -2543,6 +2820,15 @@ export function closeDialog(): void {
 
   // Drop the issue-modal keyboard state so a later reopen starts clean.
   issueModalOpen = false;
+  authLayerOpen = false;
+
+  // A prompt layer still waiting for input must resolve rather than leak its
+  // keyboard handlers and leave callers hanging.
+  if (authLayerCancel) {
+    const cancel = authLayerCancel;
+    authLayerCancel = null;
+    cancel();
+  }
 
   const dialog = document.getElementById(DIALOG_ID);
   if (!dialog) return;
@@ -2687,90 +2973,89 @@ export function endDragVisual(): void {
 export interface GrantAccessOptions {
   repo: string;
   authorizeUrl: string;
-  onRetry?: () => void;
+  onRetry?: () => Promise<unknown>;
 }
 
 /**
  * Prompts the user to grant the feedback GitHub App access to the repo.
- * Shown when `POST /issue/export` returns 403 app_access_required.
+ * Shown when `POST /issue/export` returns 403 app_access_required. Returns a
+ * promise resolving `true` when the retry succeeds and `false` on cancel —
+ * preserving the underlying issue modal and its draft either way.
  */
-export function showGrantAccessDialog(opts: GrantAccessOptions): void {
-  injectStyles();
-  const dialog = getOrCreateDialog();
-
-  dialog.innerHTML = `
+export function showGrantAccessDialog(opts: GrantAccessOptions): Promise<boolean> {
+  const layer = appendAuthLayer();
+  layer.innerHTML = `
     <div class="ef-login-card" role="dialog" aria-modal="true" aria-labelledby="__ef_grant_title__" tabindex="-1">
       <h2 id="__ef_grant_title__">App access required</h2>
       <p>The feedback app does not have access to <code>${escapeHtml(opts.repo)}</code>.</p>
       <div class="ef-login-actions">
-        <button class="ef-btn-secondary" id="__ef_cancel__">Cancel</button>
+        <button class="ef-btn-secondary" id="__ef_grant_cancel__">Cancel</button>
         <button class="ef-btn-primary" id="__ef_grant__">Grant access</button>
         <button class="ef-btn-primary" id="__ef_retry__">Retry</button>
       </div>
+      <div class="ef-error" id="__ef_grant_err__" style="margin-top:8px"></div>
     </div>
   `;
 
-  const card = dialog.querySelector<HTMLElement>(".ef-login-card")!;
-  activateDialog(card);
-
-  const grantBtn = dialog.querySelector<HTMLButtonElement>("#__ef_grant__")!;
-  const retryBtn = dialog.querySelector<HTMLButtonElement>("#__ef_retry__")!;
-  const cancelBtn = dialog.querySelector<HTMLButtonElement>("#__ef_cancel__")!;
+  const card = layer.querySelector<HTMLElement>(".ef-login-card")!;
+  const grantBtn = layer.querySelector<HTMLButtonElement>("#__ef_grant__")!;
+  const retryBtn = layer.querySelector<HTMLButtonElement>("#__ef_retry__")!;
+  const cancelBtn = layer.querySelector<HTMLButtonElement>("#__ef_grant_cancel__")!;
+  const errDiv = layer.querySelector<HTMLElement>("#__ef_grant_err__")!;
 
   // With no authorize URL there is nothing to grant — show Retry directly.
   const showGrant = !!opts.authorizeUrl;
   grantBtn.style.display = showGrant ? "" : "none";
   retryBtn.style.display = showGrant ? "none" : "";
 
-  const onKey = (e: KeyboardEvent) => {
-    if (e.key === "Escape") {
-      removeKey();
-      closeDialog();
-    }
-  };
-  const removeKey = () => {
-    document.removeEventListener("keydown", onKey);
-    if (dialogKeyHandler === onKey) dialogKeyHandler = null;
-  };
-  document.addEventListener("keydown", onKey);
-  dialogKeyHandler = onKey;
+  return new Promise<boolean>((resolve) => {
+    let settled = false;
+    let detachTrap: () => void = () => {};
+    let detachEsc: () => void = () => {};
+    const finish = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      authLayerCancel = null;
+      detachTrap();
+      detachEsc();
+      removeAuthLayer();
+      resolve(ok);
+    };
+    authLayerCancel = () => finish(false);
+    detachTrap = trapAuthFocus(card);
+    detachEsc = addAuthEscape(() => finish(false));
 
-  grantBtn.addEventListener("click", () => {
-    if (opts.authorizeUrl) window.open(opts.authorizeUrl, "_blank", "noopener");
-    grantBtn.style.display = "none";
-    retryBtn.style.display = "";
-    retryBtn.focus();
-  });
+    grantBtn.addEventListener("click", () => {
+      if (opts.authorizeUrl) window.open(opts.authorizeUrl, "_blank", "noopener");
+      grantBtn.style.display = "none";
+      retryBtn.style.display = "";
+      errDiv.textContent = "";
+      retryBtn.focus();
+    });
 
-  retryBtn.addEventListener("click", async () => {
-    if (!opts.onRetry) return;
-    retryBtn.disabled = true;
-    retryBtn.textContent = "Retrying…";
-    try {
-      await opts.onRetry();
-      removeKey();
-      closeDialog();
-    } catch (err) {
-      retryBtn.disabled = false;
-      retryBtn.textContent = "Retry";
-      // Still missing access → keep the modal open silently; any other
-      // failure gets the usual toast.
-      if (!(err instanceof APIError && err.code === "app_access_required")) {
-        showToast(`Failed to create issue: ${String(err)}`);
+    retryBtn.addEventListener("click", async () => {
+      if (!opts.onRetry) { finish(false); return; }
+      retryBtn.disabled = true;
+      retryBtn.textContent = "Retrying…";
+      errDiv.textContent = "";
+      try {
+        await opts.onRetry();
+        finish(true);
+      } catch (err) {
+        retryBtn.disabled = false;
+        retryBtn.textContent = "Retry";
+        // Still missing access → keep the layer open silently; the user can
+        // retry again. A declined re-auth keeps it open too. Other failures
+        // surface inline so the draft is never obscured.
+        if (err instanceof APIError && err.code === "app_access_required") return;
+        if (err instanceof AuthCancelledError) return;
+        errDiv.textContent = describeAPIError(err);
       }
-    }
-  });
+    });
 
-  cancelBtn.addEventListener("click", () => {
-    removeKey();
-    closeDialog();
-  });
-
-  dialog.addEventListener("click", (e) => {
-    if (e.target === dialog) {
-      removeKey();
-      closeDialog();
-    }
+    cancelBtn.addEventListener("click", () => finish(false));
+    layer.addEventListener("click", (e) => { if (e.target === layer) finish(false); });
+    card.focus();
   });
 }
 

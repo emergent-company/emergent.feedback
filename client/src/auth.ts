@@ -9,6 +9,7 @@ export interface AuthUser {
 }
 
 const AUTH_MESSAGE_TYPE = "emergent_feedback_auth";
+const AUTH_ERROR_MESSAGE_TYPE = "emergent_feedback_auth_error";
 const USER_KEY = "__ef_user__";
 
 export class AuthManager {
@@ -55,17 +56,33 @@ export class AuthManager {
       const timeout = setTimeout(() => {
         cleanup();
         reject(new Error("Authentication timed out."));
-      }, 5 * 60 * 1000); // 5 minutes
+      }, 15 * 60 * 1000); // 15 minutes
 
       const handler = (e: MessageEvent) => {
-        if (e.data?.type !== AUTH_MESSAGE_TYPE) return;
-        // Only accept the token from our own API origin — reject messages posted
-        // by any other window to prevent login forgery.
+        const data = e.data as { type?: string } | undefined;
+        if (!data || typeof data !== "object") return;
+        // Accept only token + error messages from our own API origin — reject
+        // anything posted by another window to prevent login forgery.
+        if (data.type !== AUTH_MESSAGE_TYPE && data.type !== AUTH_ERROR_MESSAGE_TYPE) return;
         if (apiOrigin && e.origin !== apiOrigin) return;
         clearTimeout(timeout);
         cleanup();
 
-        const { token, login, avatar } = e.data as {
+        // The callback page may report a failure (e.g. an expired OAuth state)
+        // instead of a token — surface a friendly error promptly.
+        if (data.type === AUTH_ERROR_MESSAGE_TYPE) {
+          const { code } = data as { code?: string };
+          reject(
+            new Error(
+              code === "state_expired"
+                ? "Sign-in link expired. Please try again."
+                : "Sign-in failed. Please try again."
+            )
+          );
+          return;
+        }
+
+        const { token, login, avatar } = data as {
           type: string;
           token: string;
           login: string;

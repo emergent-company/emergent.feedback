@@ -136,6 +136,7 @@ func BuildRouter(opts Options) (*echo.Echo, error) {
 	// Auth (public)
 	e.GET("/auth/github", h.HandleGitHubLogin)
 	e.GET("/auth/callback", h.HandleGitHubCallback)
+	e.GET("/auth/setup", h.HandleGitHubSetup)
 
 	// Health (public)
 	e.GET("/health", func(c echo.Context) error {
