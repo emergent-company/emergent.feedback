@@ -109,7 +109,8 @@ Clicking an element opens the **issue submission modal** first — the former
    **Cancel** (`#__ef_cancel__`) throws away the whole report.
 3. In the modal, **Cancel** (`#__ef_issue_cancel__`) discards the report and
    closes the overlay. `Escape` does the same while the modal is up; in the
-   editor it returns to the modal instead.
+   editor it returns to the modal instead. Clicking outside the issue card is
+   deliberately inert so a typed report is never discarded by a stray click.
 
 ### Docked panel
 
