@@ -1,6 +1,5 @@
 import { test, expect } from "@playwright/test";
 import { signIn } from "../../support/auth";
-import { openIssueModal } from "../../support/dialog";
 
 // End-to-end through the real overlay bundle served on our own landing page:
 // activate → pick an element → submit → reload → badge appears.
@@ -19,7 +18,7 @@ test.describe("overlay on the landing page (own)", () => {
 
     await page.locator("#hero-title").click();
     await expect(page.locator("#__ef_dialog__")).toBeVisible();
-    await openIssueModal(page);
+    await expect(page.locator("#__ef_issue_modal__")).toBeVisible();
     await expect(page.locator("#__ef_comment__")).toBeVisible();
 
     await page.fill("#__ef_comment__", "hero heading needs another pass");
@@ -36,5 +35,43 @@ test.describe("overlay on the landing page (own)", () => {
     await page.waitForFunction(() => !!(window as unknown as { EmergentFeedback?: unknown }).EmergentFeedback);
     await page.click("#try-it");
     await expect(page.locator("#__ef_badge__0")).toBeVisible();
+  });
+
+  test("round-trips to the style editor and back without losing the draft", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => !!(window as unknown as { EmergentFeedback?: unknown }).EmergentFeedback);
+
+    await page.click("#try-it");
+    await expect(page.locator("#__ef_indicator__")).toBeVisible();
+
+    // Submission-first: clicking an element opens the issue modal immediately.
+    await page.locator("#hero-title").click();
+    await expect(page.locator("#__ef_issue_modal__")).toBeVisible();
+
+    const draft = `round-trip-${Date.now()}-keep-me`;
+    await page.fill("#__ef_comment__", draft);
+    await page.fill("#__ef_topic__", "Round-trip title");
+    await page.locator('label[for="__ef_type_bug__"]').click();
+    await expect(page.locator("#__ef_type_bug__")).toBeChecked();
+
+    // "Edit element" swaps the modal for the style editor; the modal hides.
+    await page.locator("#__ef_edit_element__").click();
+    await expect(page.locator("#__ef_style_editor__")).toBeVisible();
+    await expect(page.locator("#__ef_issue_modal__")).toBeHidden();
+
+    // "Back to issue" returns to the modal with the draft intact.
+    await page.locator("#__ef_back_to_issue__").click();
+    await expect(page.locator("#__ef_issue_modal__")).toBeVisible();
+    await expect(page.locator("#__ef_comment__")).toHaveValue(draft);
+    await expect(page.locator("#__ef_topic__")).toHaveValue("Round-trip title");
+    await expect(page.locator("#__ef_type_bug__")).toBeChecked();
+
+    // A second round trip must not reset anything either.
+    await page.locator("#__ef_edit_element_foot__").click();
+    await expect(page.locator("#__ef_style_editor__")).toBeVisible();
+    await page.locator("#__ef_back_to_issue__").click();
+    await expect(page.locator("#__ef_issue_modal__")).toBeVisible();
+    await expect(page.locator("#__ef_comment__")).toHaveValue(draft);
+    await expect(page.locator("#__ef_topic__")).toHaveValue("Round-trip title");
   });
 });

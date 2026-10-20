@@ -32,15 +32,15 @@ Zero-config feedback overlay. One `<script>` tag adds element-level commenting +
 |--------|--------|
 | Hold hotkey | Enter selection mode (crosshair + highlights) |
 | Hover element | Tooltip shows tag or `data-component` name |
-| Click element | Opens feedback dialog |
+| Click element | Opens issue submission modal |
 | Release hotkey | Exit selection mode |
 
 ### Feedback dialog
 
-- Panel shows the **Design** editor (restyle the selected element(s))
+- Clicking an element opens the **issue submission modal** immediately (comment / title / type / intent)
+- **Edit element** — opens the style editor (docked sidebar by default, or centered card); **Back to issue** returns to the modal
 - **Commit** — freezes pending edits; committed edits persist (localStorage) across close/reload until removed via the Committed-changes list
-- **Send to GitHub** — opens the issue submission modal (does not create the issue directly)
-- In the modal: fill title/type/intent/note, then **Create issue**; **Save** saves locally without a GitHub issue
+- In the modal: fill comment/title/type/intent, then **Create issue** (GitHub issue) or **Save** (local only, no GitHub issue)
 
 ## `data-component` attribute
 

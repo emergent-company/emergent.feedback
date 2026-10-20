@@ -1,4 +1,6 @@
-// dialog.ts — element feedback dialog (existing comments + compose) and login dialog.
+// dialog.ts — submission-first feedback dialog: the GitHub-issue card is the
+// primary surface, with an optional live style editor sidebar behind it, plus
+// the login/grant dialogs.
 
 import {
   APIError,
@@ -140,10 +142,6 @@ function injectStyles(): void {
       --ef-btn-secondary-bg: oklch(0.975 0.004 274);
       --ef-btn-secondary-hover-bg: oklch(0.93 0.006 274);
       --ef-btn-secondary-text: oklch(0.30 0.018 274);
-      --ef-btn-export-bg: oklch(0.60 0.12 78);
-      --ef-btn-export-hover-bg: oklch(0.56 0.115 78);
-      --ef-btn-export-text: oklch(0.99 0.01 78);
-      --ef-btn-export-disabled-bg: color-mix(in oklab, oklch(0.60 0.12 78) 45%, oklch(1 0 0) 55%);
       --ef-primary: oklch(0.60 0.12 78);
       --ef-primary-hover: oklch(0.56 0.115 78);
       --ef-primary-disabled: color-mix(in oklab, oklch(0.60 0.12 78) 45%, oklch(1 0 0) 55%);
@@ -190,7 +188,18 @@ function injectStyles(): void {
       flex-direction: column;
       overflow: hidden;
     }
-    /* Modal mode steps aside while the user picks an element on the page. */
+    /* Only the card of the active view is visible. Both stay mounted so typed
+       text, chip state and live style edits survive a view swap. */
+    #__ef_dialog__ .ef-card[hidden] { display: none !important; }
+    /* Submit view: the issue card is always centered and the modal layer draws
+       its own backdrop, so the root steps aside (no double dimming) and never
+       docks or reflows the host page. */
+    #__ef_dialog__[data-view="submit"] {
+      background: transparent;
+      pointer-events: none;
+    }
+    #__ef_dialog__[data-view="submit"] .ef-issue-modal { pointer-events: auto; }
+    /* Editor steps aside while the user picks an element on the page. */
     #__ef_dialog__.ef-modal-picking { display: none !important; }
     /* Programmatic focus target — no visible ring on the card itself. */
     #__ef_dialog__ .ef-card:focus,
@@ -232,11 +241,15 @@ function injectStyles(): void {
       font-size: 11px;
       color: var(--ef-muted-strong);
       font-family: ui-monospace, "SF Mono", Menlo, monospace;
-      word-break: break-all;
+      /* Compact single line in the editor header — never grows the header. */
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
-    /* ── Scrollable panel body ─────────────────────────────────────────────── */
-    /* The panel is Design-only now: a single scrolling column under the header. */
+    /* ── Scrollable editor body ───────────────────────────────────────────── */
+    /* The editor is a single scrolling column under its header. */
     #__ef_dialog__ .ef-body {
       flex: 1;
       min-height: 0;
@@ -375,9 +388,6 @@ function injectStyles(): void {
     #__ef_dialog__ .ef-btn-primary:disabled { background: var(--ef-primary-disabled); cursor: default; }
     #__ef_dialog__ .ef-btn-secondary { background: var(--ef-btn-secondary-bg); color: var(--ef-btn-secondary-text); }
     #__ef_dialog__ .ef-btn-secondary:hover { background: var(--ef-btn-secondary-hover-bg); }
-    #__ef_dialog__ .ef-btn-export { background: var(--ef-btn-export-bg); color: var(--ef-btn-export-text); }
-    #__ef_dialog__ .ef-btn-export:hover { background: var(--ef-btn-export-hover-bg); }
-    #__ef_dialog__ .ef-btn-export:disabled { background: var(--ef-btn-export-disabled-bg); cursor: default; }
 
     /* ── Metadata collapsible ──────────────────────────────────────────────── */
     #__ef_dialog__ .ef-meta-toggle {
@@ -1391,9 +1401,9 @@ function injectStyles(): void {
     }
     #__ef_dialog__ .ef-arrow { color: var(--ef-muted); }
 
-    /* ── Issue submission modal ─────────────────────────────────────────────
-       A second, focused layer over the panel. Reuses the card language of the
-       login/grant cards (centered, --ef-card-bg, --ef-card-shadow). */
+    /* ── Issue submission card (primary view) ───────────────────────────────
+       The report opens here first. Reuses the card language of the login/grant
+       cards (centered, --ef-card-bg, --ef-card-shadow). */
     #__ef_dialog__ .ef-issue-modal {
       position: fixed;
       inset: 0;
@@ -1428,6 +1438,27 @@ function injectStyles(): void {
       font-weight: 700;
       color: var(--ef-heading);
     }
+    #__ef_dialog__ .ef-issue-head-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    #__ef_dialog__ .ef-issue-head-row h2 { flex: 1; min-width: 0; }
+    /* Live count of style edits riding along with this report. */
+    #__ef_dialog__ .ef-change-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 9px;
+      border-radius: 20px;
+      border: 1px solid color-mix(in oklab, var(--ef-primary) 45%, transparent);
+      background: var(--ef-chip-on-bg);
+      color: var(--ef-chip-on-text);
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    #__ef_dialog__ .ef-change-chip[hidden] { display: none; }
     #__ef_dialog__ .ef-issue-sub {
       margin: 3px 0 0;
       font-size: 12px;
@@ -1468,6 +1499,18 @@ function injectStyles(): void {
         border-radius: 0;
       }
       #__ef_dialog__ .ef-issue-foot { flex-wrap: wrap; }
+      /* Title takes the full line so the chip + Edit element stay readable. */
+      #__ef_dialog__ .ef-issue-head-row { flex-wrap: wrap; row-gap: 6px; }
+      #__ef_dialog__ .ef-issue-head-row h2 { flex: 1 0 100%; }
+      /* Editor sheet: full-screen while centered. */
+      #__ef_dialog__ .ef-card {
+        width: 100vw;
+        min-width: 0;
+        max-width: 100vw;
+        height: 100vh;
+        max-height: 100vh;
+        border-radius: 0;
+      }
     }
 
     /* ── Dark theme ─────────────────────────────────────────────────────────
@@ -1499,10 +1542,6 @@ function injectStyles(): void {
       --ef-btn-secondary-bg: oklch(0.175 0.014 274);
       --ef-btn-secondary-hover-bg: oklch(0.135 0.012 274);
       --ef-btn-secondary-text: oklch(0.93 0.008 265);
-      --ef-btn-export-bg: oklch(0.74 0.135 78);
-      --ef-btn-export-hover-bg: oklch(0.79 0.14 78);
-      --ef-btn-export-text: oklch(0.2 0.04 78);
-      --ef-btn-export-disabled-bg: color-mix(in oklab, oklch(0.74 0.135 78) 35%, oklch(0.215 0.016 274) 65%);
       --ef-primary: oklch(0.74 0.135 78);
       --ef-primary-hover: oklch(0.79 0.14 78);
       --ef-primary-disabled: color-mix(in oklab, oklch(0.74 0.135 78) 35%, oklch(0.215 0.016 274) 65%);
@@ -1560,8 +1599,8 @@ let dialogKeydown: ((e: KeyboardEvent) => void) | null = null;
 let dialogKeyHandler: ((e: KeyboardEvent) => void) | null = null;
 // Teardown for the live selection subscription owned by the submit dialog.
 let dialogCleanup: (() => void) | null = null;
-// True while the issue submission modal is layered over the panel. The panel's
-// Tab trap and Escape handler stand down while the modal owns the keyboard.
+// True while the issue submission card is the active view. The editor's Tab
+// trap and Escape handler stand down while the card owns the keyboard.
 let issueModalOpen = false;
 // True while an auth (login/grant) layer is shown. The panel and issue modal
 // keyboard traps stand down while the auth layer owns the keyboard.
@@ -1576,6 +1615,17 @@ function getFocusable(card: HTMLElement): HTMLElement[] {
 }
 
 /**
+ * Remove the card Tab trap, if one is installed. Called on every view swap and
+ * by closeDialog() so repeated activateDialog() calls cannot stack capture
+ * listeners (each would trap Tab against a different card).
+ */
+function deactivateFocusTrap(): void {
+  if (!dialogKeydown) return;
+  document.removeEventListener("keydown", dialogKeydown, true);
+  dialogKeydown = null;
+}
+
+/**
  * Wire focus restoration for a dialog card. Captures the element that
  * currently has focus so closeDialog() can restore it and moves focus to the
  * card itself (a stable, non-keyboard-triggering target).
@@ -1585,7 +1635,7 @@ function getFocusable(card: HTMLElement): HTMLElement[] {
  */
 function activateDialog(
   card: HTMLElement,
-  opts?: { modal?: boolean; preserveFocusReturn?: boolean }
+  opts?: { modal?: boolean; preserveFocusReturn?: boolean; focus?: boolean }
 ): void {
   // When re-restoring a modal after an inline pick, keep the original opener as
   // the focus-return target instead of the (now hidden) Add button.
@@ -1593,9 +1643,12 @@ function activateDialog(
     focusReturnEl = (document.activeElement as HTMLElement | null) ?? null;
   }
 
+  // Always drop the previous trap first: one card owns Tab at a time.
+  deactivateFocusTrap();
+
   const modal = opts?.modal !== false;
   if (!modal) {
-    card.focus();
+    if (opts?.focus !== false) card.focus();
     return;
   }
 
@@ -1618,7 +1671,7 @@ function activateDialog(
   };
   document.addEventListener("keydown", dialogKeydown, true);
 
-  card.focus();
+  if (opts?.focus !== false) card.focus();
 }
 
 export type FeedbackType = "bug" | "enhancement";
@@ -1655,6 +1708,11 @@ export interface SubmitFeedbackOptions {
   onCancel: () => void;
   /** Called after the dialog closes on a successful submit/export. */
   onComplete?: () => void;
+  /**
+   * Called on every view change: "submit" (issue/submission card, page is not
+   * pickable) or "edit" (live style editor, page picking is active).
+   */
+  onEditingChange?: (view: "submit" | "edit") => void;
 }
 
 // ── Intent micro-form helpers ────────────────────────────────────────────────
@@ -1711,18 +1769,25 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   injectStyles();
   const dialog = getOrCreateDialog();
 
-  // ── Dock state (default docked; persisted across pages) ────────────────────
+  // ── View + dock state (default docked; persisted across pages) ─────────────
+  // One DOM root holds both surfaces and swaps between them:
+  //   "submit" — the issue/submission card, always centered over the page.
+  //   "edit"   — the live style editor, docked to the side or centered.
+  // Swapping only flips attributes, so typed text and live edits survive.
+  let view: "submit" | "edit" = "submit";
   let docked = readDockedPref();
-  // True between clicking "Add element" in modal mode and the pick finishing.
-  // The dialog hides itself (ef-modal-picking) and suspends its Tab trap so the
-  // host page is clickable; the selection subscription restores the modal.
+  // True between clicking "Add element" in the undocked editor and the pick
+  // finishing. The dialog hides itself (ef-modal-picking) and suspends its Tab
+  // trap so the host page is clickable; the selection subscription restores it.
   let awaitingPick = false;
   const DOCK_MAX = 400;
+  const DOCK_MIN_WIDTH = 520;
   const dockWidth = () => Math.min(DOCK_MAX, window.innerWidth);
+  /** Dock applies to the editor view only — the issue card is always centered. */
+  const effectiveDock = () => view === "edit" && docked && window.innerWidth > DOCK_MIN_WIDTH;
   const applyDockReflow = () => {
     const root = document.documentElement;
-    const active = docked && window.innerWidth > 520;
-    if (active) {
+    if (effectiveDock()) {
       root.classList.add("ef-dock-active");
       root.style.setProperty("--ef-dock-w", `${dockWidth()}px`);
     } else {
@@ -1731,8 +1796,9 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     }
   };
   const applyDockState = (card: HTMLElement | null) => {
-    dialog.classList.toggle("ef-docked", docked);
-    if (card) card.setAttribute("aria-modal", docked ? "false" : "true");
+    const dockedNow = effectiveDock();
+    dialog.classList.toggle("ef-docked", dockedNow);
+    if (card) card.setAttribute("aria-modal", dockedNow ? "false" : "true");
     applyDockReflow();
     // The reserved rail width reflows the host page, so repaint the selection
     // outlines to keep them aligned with their elements.
@@ -1842,7 +1908,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   const issueSub = issueSubParts.join(" · ");
 
   dialog.innerHTML = `
-    <div class="ef-card" role="dialog" aria-modal="true" aria-labelledby="__ef_title__" tabindex="-1">
+    <div class="ef-card" role="dialog" aria-modal="true" aria-labelledby="__ef_title__" tabindex="-1" hidden inert aria-hidden="true">
       <div class="ef-header">
         <div class="ef-header-top">
           <h2 id="__ef_title__">${title}</h2>
@@ -1852,6 +1918,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
           </div>
           <button class="ef-dock-btn" id="__ef_dock__" type="button" title="Dock to the side" aria-label="Dock to the side"></button>
         </div>
+        <div class="ef-selector" id="__ef_editor_selector__" title="${escapeHtml(opts.selector)}">${escapeHtml(opts.selector)}</div>
       </div>
       ${componentPickerHTML}
       ${targetStripHTML}
@@ -1864,14 +1931,18 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
       </div>
       <div class="ef-footer">
         <div class="ef-footer-spacer"></div>
-        <button class="ef-btn-secondary" id="__ef_cancel__">Cancel</button>
-        <button class="ef-btn-primary" id="__ef_export__">Send to GitHub</button>
+        <button type="button" class="ef-btn-secondary" id="__ef_cancel__">Cancel</button>
+        <button type="button" class="ef-btn-primary" id="__ef_back_to_issue__">Back to issue</button>
       </div>
     </div>
     <div class="ef-issue-modal" id="__ef_issue_modal__" hidden>
       <div class="ef-issue-card" role="dialog" aria-modal="true" aria-labelledby="__ef_issue_title__" tabindex="-1">
         <div class="ef-issue-head">
-          <h2 id="__ef_issue_title__">Create GitHub issue</h2>
+          <div class="ef-issue-head-row">
+            <h2 id="__ef_issue_title__">Create GitHub issue</h2>
+            <span class="ef-change-chip" id="__ef_change_count__" hidden></span>
+            <button type="button" class="ef-btn-secondary ef-btn-sm" id="__ef_edit_element__" aria-label="Edit element styles">Edit element</button>
+          </div>
           <p class="ef-issue-sub">${escapeHtml(issueSub)}</p>
         </div>
         <div class="ef-issue-body">
@@ -1921,18 +1992,20 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
           </div>
         </div>
         <div class="ef-issue-foot">
-          <button class="ef-btn-secondary" id="__ef_issue_cancel__">Back</button>
+          <button type="button" class="ef-btn-secondary" id="__ef_issue_cancel__">Cancel</button>
+          <button type="button" class="ef-btn-secondary" id="__ef_edit_element_foot__" aria-label="Edit element styles">Edit element</button>
           <div class="ef-footer-spacer"></div>
-          <button class="ef-btn-secondary" id="__ef_submit__">Save</button>
-          <button class="ef-btn-primary" id="__ef_issue_submit__">Create issue</button>
+          <button type="button" class="ef-btn-secondary" id="__ef_submit__">Save</button>
+          <button type="button" class="ef-btn-primary" id="__ef_issue_submit__">Create issue</button>
         </div>
       </div>
     </div>
   `;
 
   const card = dialog.querySelector<HTMLElement>(".ef-card")!;
-  applyDockState(card);
-  activateDialog(card, { modal: !docked });
+  // Remember where the reporter came from so closeDialog() restores focus.
+  // (View swaps pass preserveFocusReturn so they never overwrite this.)
+  focusReturnEl = (document.activeElement as HTMLElement | null) ?? null;
 
   // ── Dock toggle ─────────────────────────────────────────────────────────────
   const dockBtn = dialog.querySelector<HTMLButtonElement>("#__ef_dock__")!;
@@ -1946,32 +2019,45 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   dockBtn.addEventListener("click", () => {
     docked = !docked;
     writeDockedPref(docked);
-    applyDockState(card);
     renderDockBtn();
+    if (view !== "edit") return;
+    applyDockState(card);
+    // Re-arm the trap to match the new mode (docked = non-modal) but leave
+    // focus on the toggle the user just pressed.
+    activateDialog(card, {
+      modal: !effectiveDock(),
+      preserveFocusReturn: true,
+      focus: false,
+    });
+    dockBtn.focus();
   });
 
   const textarea = dialog.querySelector<HTMLTextAreaElement>("#__ef_comment__")!;
   const submitBtn = dialog.querySelector<HTMLButtonElement>("#__ef_submit__")!;
   const cancelBtn = dialog.querySelector<HTMLButtonElement>("#__ef_cancel__")!;
-  const exportBtn = dialog.querySelector<HTMLButtonElement>("#__ef_export__")!;
+  const backToIssueBtn = dialog.querySelector<HTMLButtonElement>("#__ef_back_to_issue__")!;
   const errDiv = dialog.querySelector<HTMLElement>("#__ef_err__")!;
 
-  // ── Issue submission modal refs + behaviour ─────────────────────────────────
+  // ── Both surfaces live in the same root; only attributes swap ───────────────
   const modal = dialog.querySelector<HTMLElement>("#__ef_issue_modal__")!;
   const modalCard = dialog.querySelector<HTMLElement>(".ef-issue-card")!;
   const issueCancelBtn = dialog.querySelector<HTMLButtonElement>("#__ef_issue_cancel__")!;
   const issueSubmitBtn = dialog.querySelector<HTMLButtonElement>("#__ef_issue_submit__")!;
-  let modalReturnFocus: HTMLElement | null = null;
+  const editBtn = dialog.querySelector<HTMLButtonElement>("#__ef_edit_element__")!;
+  const editFootBtn = dialog.querySelector<HTMLButtonElement>("#__ef_edit_element_foot__")!;
+  const changeChip = dialog.querySelector<HTMLElement>("#__ef_change_count__")!;
+  const editorSelector = dialog.querySelector<HTMLElement>("#__ef_editor_selector__")!;
 
   // Tab containment + Escape for the modal layer. Capture phase so it runs
-  // ahead of the panel's own handlers and can stand down their Tab trap.
+  // ahead of the editor's own handlers. Only bound while the submit view is up.
   const modalKey = (e: KeyboardEvent): void => {
     // The auth layer owns the keyboard while it is up.
     if (authLayerOpen) return;
     if (e.key === "Escape") {
       e.preventDefault();
       e.stopPropagation();
-      closeIssueModal();
+      // The issue card is the whole report: Escape cancels it.
+      cancelReport();
       return;
     }
     if (e.key !== "Tab") return;
@@ -1989,32 +2075,78 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
   };
 
-  const openIssueModal = (): void => {
-    if (issueModalOpen) return;
-    issueModalOpen = true;
-    modalReturnFocus = document.activeElement as HTMLElement | null;
-    modal.hidden = false;
-    // Restore any persisted draft (comment / title / type) when the modal opens.
-    restoreDraft();
-    // Focus the modal before the panel leaves the a11y tree, so focus never
-    // sits inside an aria-hidden/inert subtree (which browsers flag).
-    modalCard.focus();
-    card.setAttribute("aria-hidden", "true");
-    card.toggleAttribute("inert", true);
-    document.addEventListener("keydown", modalKey, true);
+  /** Live count of style edits that will ride along with this report. */
+  const renderChangeCount = (): void => {
+    const n = allChanges().length;
+    const label = n === 1 ? "1 style change" : `${n} style changes`;
+    changeChip.textContent = n === 0 ? "" : label;
+    changeChip.hidden = n === 0;
+    changeChip.title = n === 0 ? "" : `${label} included with this report`;
   };
 
-  const closeIssueModal = (): void => {
-    if (!issueModalOpen) return;
-    issueModalOpen = false;
-    document.removeEventListener("keydown", modalKey, true);
-    modal.hidden = true;
-    card.removeAttribute("aria-hidden");
-    card.toggleAttribute("inert", false);
-    const ret = modalReturnFocus;
-    modalReturnFocus = null;
-    if (ret && document.contains(ret)) ret.focus();
-    else card.focus();
+  /**
+   * Swap between the issue card and the style editor. Nothing inside either
+   * surface is re-rendered, so typed text, chips and live edits survive.
+   */
+  const setView = (next: "submit" | "edit"): void => {
+    view = next;
+    dialog.dataset.view = next;
+
+    if (next === "submit") {
+      // The editor trap goes first: the issue card owns Tab while it is up.
+      deactivateFocusTrap();
+      // Bring the modal online before moving focus into it.
+      modal.hidden = false;
+      modal.removeAttribute("aria-hidden");
+      modal.toggleAttribute("inert", false);
+      issueModalOpen = true;
+      // The issue card is never docked and never reflows the host page.
+      applyDockState(card);
+      modalCard.focus();
+      // Only now take the editor out of the accessibility tree.
+      card.setAttribute("aria-hidden", "true");
+      card.toggleAttribute("inert", true);
+      card.hidden = true;
+      document.addEventListener("keydown", modalKey, true);
+      renderChangeCount();
+    } else {
+      document.removeEventListener("keydown", modalKey, true);
+      issueModalOpen = false;
+      // Bring the editor online before the modal leaves the a11y tree.
+      card.hidden = false;
+      card.removeAttribute("aria-hidden");
+      card.toggleAttribute("inert", false);
+      applyDockState(card);
+      // Docked = non-modal (page stays interactive); centered = modal + trap.
+      activateDialog(card, { modal: !effectiveDock(), preserveFocusReturn: true });
+      modal.setAttribute("aria-hidden", "true");
+      modal.toggleAttribute("inert", true);
+      modal.hidden = true;
+      renderEditorSelector();
+    }
+    opts.onEditingChange?.(next);
+  };
+
+  /** Return to the issue card, keeping every typed field and pending edit. */
+  const backToSubmit = (): void => {
+    if (view !== "edit") return;
+    if (isPickMode()) setPickMode(false);
+    setView("submit");
+    // Round trip: land back on the button that opened the editor.
+    editBtn.focus();
+  };
+
+  /**
+   * Cancel the whole report from either view: drop the persisted draft, undo
+   * uncommitted edits and close. Committed edits stay on the page.
+   */
+  const cancelReport = (): void => {
+    if (draftTimer !== null) { window.clearTimeout(draftTimer); draftTimer = null; }
+    clearDraft(opts.selector);
+    removeKey();
+    revertPending();
+    closeDialog();
+    opts.onCancel();
   };
 
   const componentSelect = dialog.querySelector<HTMLSelectElement>("#__ef_component__");
@@ -2035,8 +2167,10 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   };
 
   // ── Draft persistence wiring ────────────────────────────────────────────────
-  // Debounced save of the text fields (comment / title / type) on input, and
-  // restore when the issue modal opens. Storage is best-effort only.
+  // Debounced save of the text fields (comment / title / type) on input, and a
+  // single restore when the dialog is built. Storage is best-effort only.
+  // Crucially the restore does NOT run on view swaps, so returning from the
+  // editor can never overwrite text typed more recently than the saved draft.
   const topicInput = dialog.querySelector<HTMLInputElement>("#__ef_topic__");
   let draftTimer: number | null = null;
   // Comment text that was already POSTed by the create-issue flow. Kept across
@@ -2096,7 +2230,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   const styleHost = dialog.querySelector<HTMLElement>("#__ef_style_editor__")!;
   const changesHost = dialog.querySelector<HTMLElement>("#__ef_changes__")!;
 
-  // Active per-element tab (Design panel).
+  // Active per-element tab in the editor sidebar.
   let activeTargetIdx = 0;
   /** Last target that received a select-flash — see renderSelection. */
   let lastFlashedEl: Element | null = null;
@@ -2112,6 +2246,14 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     if (t.dataComponent) return t.dataComponent;
     const tail = t.selector.split(">").pop()?.trim();
     return tail || t.selector;
+  };
+
+  /** Compact selector line in the editor header (context for what is edited). */
+  const renderEditorSelector = (): void => {
+    const t = activeTarget();
+    const sel = t?.selector ?? opts.selector;
+    editorSelector.textContent = sel;
+    editorSelector.title = sel;
   };
 
   const renderTargets = () => {
@@ -2131,16 +2273,13 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
         ${addBtn}
       </div>`;
     targetsHost.querySelector<HTMLButtonElement>("#__ef_add_target__")?.addEventListener("click", () => {
-      if (!docked) {
-        // Modal mode: hide the dialog, suspend the Tab trap, and let the user
-        // click an element on the page. The selection subscription restores us.
+      if (!effectiveDock()) {
+        // Centered editor: hide it, suspend the Tab trap, and let the user click
+        // an element on the page. The selection subscription restores us.
         awaitingPick = true;
         setPickMode(true);
         dialog.classList.add("ef-modal-picking");
-        if (dialogKeydown) {
-          document.removeEventListener("keydown", dialogKeydown, true);
-          dialogKeydown = null;
-        }
+        deactivateFocusTrap();
         return;
       }
       setPickMode(!isPickMode());
@@ -2298,7 +2437,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     lastFlashedEl = activeEl;
     // Re-rendering replaces innerHTML, which would collapse the "Current
     // classes" disclosure and jump scroll positions. Capture + restore them so
-    // live edits don't yank the panel around.
+    // live edits don't yank the editor around.
     const bodyScroll = bodyEl.scrollTop;
     const detailsOpen = !!styleHost.querySelector<HTMLDetailsElement>(".ef-style-classes")?.open;
     const classListScroll =
@@ -2323,6 +2462,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     const newCommitted = changesHost.querySelector<HTMLElement>(".ef-committed-list");
     if (newCommitted) newCommitted.scrollTop = committedScroll;
     bodyEl.scrollTop = bodyScroll;
+    renderEditorSelector();
   };
 
   /**
@@ -2456,23 +2596,26 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   // No autofocus: the intent chips are the primary surface, and focusing the
   // (now last) textarea would scroll them out of view and pop the mobile keyboard.
 
+  // Escape follows the current view: the issue card cancels the whole report,
+  // the editor steps back to the card, and an unfinished page pick just ends.
   const onKey = (e: KeyboardEvent) => {
-    // The issue modal owns Escape while it is up (its capture handler also
-    // stops propagation, but guard here too in case of ordering). The auth
-    // layer likewise owns Escape.
+    // The issue card owns Escape while it is up (its capture handler also stops
+    // propagation, but guard here too in case of ordering). The auth layer
+    // likewise owns Escape.
     if (issueModalOpen || authLayerOpen) return;
-    if (e.key === "Escape") {
-      if (awaitingPick) {
-        // Cancel the pick but keep the dialog: the selection subscription
-        // restores the modal once pick mode ends.
-        setPickMode(false);
-        return;
-      }
-      removeKey();
-      clearDraft(opts.selector);
-      closeDialog();
-      opts.onCancel();
+    if (e.key !== "Escape") return;
+    if (awaitingPick) {
+      // Cancel the pick but keep the dialog: the selection subscription
+      // restores the editor once pick mode ends.
+      setPickMode(false);
+      return;
     }
+    if (view === "edit") {
+      // Keep every pending edit; just return to the issue card.
+      backToSubmit();
+      return;
+    }
+    cancelReport();
   };
   const removeKey = () => {
     document.removeEventListener("keydown", onKey);
@@ -2481,24 +2624,27 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   document.addEventListener("keydown", onKey);
   dialogKeyHandler = onKey;
 
+  // Editor: Cancel throws away the whole report (draft + uncommitted edits).
   cancelBtn.addEventListener("click", () => {
-    clearDraft(opts.selector);
-    removeKey();
-    closeDialog();
-    opts.onCancel();
+    cancelReport();
   });
 
-  // Panel primary action now opens the issue modal (it no longer exports).
-  exportBtn.addEventListener("click", () => {
-    openIssueModal();
+  // Editor: back to the issue card, keeping text, chips and pending edits.
+  backToIssueBtn.addEventListener("click", () => {
+    backToSubmit();
   });
 
-  // Modal: Back returns to the Design panel, preserving all state.
+  // Issue card: "Edit element" opens the style editor (header + footer).
+  editBtn.addEventListener("click", () => {
+    setView("edit");
+  });
+  editFootBtn.addEventListener("click", () => {
+    setView("edit");
+  });
+
+  // Issue card: Cancel throws away the whole report, same as the editor's.
   issueCancelBtn.addEventListener("click", () => {
-    closeIssueModal();
-  });
-  modal.addEventListener("click", (e) => {
-    if (e.target === modal) closeIssueModal();
+    cancelReport();
   });
 
   // Modal: Save submits the feedback without creating a GitHub issue.
@@ -2625,12 +2771,14 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     prevTargetCount = count;
     renderSelection();
     renderScopeHint();
-    // A pick just finished: show the dialog again and restore modal focus.
+    // Keep the issue card's edit count live while the editor is open.
+    if (view === "edit") renderChangeCount();
+    // A pick just finished: show the editor again and restore modal focus.
     if (awaitingPick && !isPickMode()) {
       awaitingPick = false;
       dialog.classList.remove("ef-modal-picking");
       applyDockState(card);
-      if (!docked) activateDialog(card, { modal: true, preserveFocusReturn: true });
+      if (!effectiveDock()) activateDialog(card, { modal: true, preserveFocusReturn: true });
     }
   });
 
@@ -2645,7 +2793,18 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   });
 
   // Keep the reserved dock rail width (and outlines) in step with the viewport.
+  // Crossing the 520px breakpoint flips the editor between the docked rail and
+  // the centered sheet, so the Tab trap has to follow.
+  let lastEffectiveDock = effectiveDock();
   const onResize = () => {
+    const dockedNow = effectiveDock();
+    const changed = dockedNow !== lastEffectiveDock;
+    lastEffectiveDock = dockedNow;
+    if (changed && view === "edit" && !awaitingPick) {
+      applyDockState(card);
+      activateDialog(card, { modal: !dockedNow, preserveFocusReturn: true, focus: false });
+      return;
+    }
     applyDockReflow();
     refreshOutlines();
   };
@@ -2659,18 +2818,23 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     endDragVisual();
     window.removeEventListener("resize", onResize);
     document.removeEventListener("keydown", modalKey, true);
+    deactivateFocusTrap();
   };
 
-  // Backdrop click to cancel — modal only. The docked rail is click-through
-  // (pointer-events: none), so this never fires while docked.
+  // Backdrop click cancels the report — centered editor only. The docked rail
+  // and the submit view are click-through at the root (pointer-events: none),
+  // so this never fires while docked.
   dialog.addEventListener("click", (e) => {
-    if (e.target === dialog && !docked) {
-      clearDraft(opts.selector);
-      removeKey();
-      closeDialog();
-      opts.onCancel();
+    if (e.target === dialog && view === "edit" && !effectiveDock() && !awaitingPick) {
+      cancelReport();
     }
   });
+
+  // Restore the persisted draft exactly once per open. Doing it here (instead of
+  // on every view swap) keeps newer text intact when returning from the editor.
+  restoreDraft();
+  renderChangeCount();
+  setView("submit");
 }
 
 // ── Auth layer (overlay, not innerHTML replacement) ──────────────────────────
@@ -2790,7 +2954,10 @@ export function promptLogin(opts: PromptLoginOptions): Promise<boolean> {
       const target = canRestore
         ? previousFocus
         : remainingLayer?.querySelector<HTMLElement>(".ef-login-card") ??
-          document.querySelector<HTMLElement>(".ef-issue-card") ??
+          // Whichever surface the reporter is on (issue card or editor).
+          document.querySelector<HTMLElement>(
+            ".ef-issue-card, .ef-card:not([hidden])"
+          ) ??
           document.getElementById(DIALOG_ID);
       target?.focus();
       resolve(ok);
@@ -3055,7 +3222,10 @@ export function showGrantAccessDialog(opts: GrantAccessOptions): Promise<boolean
       const target = canRestore
         ? previousFocus
         : remainingLayer?.querySelector<HTMLElement>(".ef-login-card") ??
-          document.querySelector<HTMLElement>(".ef-issue-card") ??
+          // Whichever surface the reporter is on (issue card or editor).
+          document.querySelector<HTMLElement>(
+            ".ef-issue-card, .ef-card:not([hidden])"
+          ) ??
           document.getElementById(DIALOG_ID);
       target?.focus();
       resolve(ok);

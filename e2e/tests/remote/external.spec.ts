@@ -60,7 +60,7 @@ test.describe("remote host app", () => {
     const target = page.locator("a:visible, button:visible, [role=button]:visible").first();
     await target.click();
     await expect(page.locator("#__ef_dialog__")).toBeVisible();
-    await page.click("#__ef_cancel__");
+    await page.click("#__ef_issue_cancel__");
   });
 
   test("submitting feedback is gated by E2E_ALLOW_WRITES", async ({ page }) => {
