@@ -209,7 +209,7 @@ let peekedEl: Element | null = null;
 
   /**
    * Reverse hover: hovering a selected element on the page highlights its tab
-   * in the panel (the panel→page direction lives in dialog.ts). The element
+   * in the editor (the editor→page direction lives in dialog.ts). The element
    * itself is outlined from the same hover, so a target can be identified
    * without any permanent box sitting on top of the style being previewed.
    */

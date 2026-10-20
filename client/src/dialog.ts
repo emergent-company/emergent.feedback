@@ -1671,7 +1671,7 @@ function activateDialog(
   };
   document.addEventListener("keydown", dialogKeydown, true);
 
-  card.focus();
+  if (opts?.focus !== false) card.focus();
 }
 
 export type FeedbackType = "bug" | "enhancement";
@@ -2437,7 +2437,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     lastFlashedEl = activeEl;
     // Re-rendering replaces innerHTML, which would collapse the "Current
     // classes" disclosure and jump scroll positions. Capture + restore them so
-    // live edits don't yank the panel around.
+    // live edits don't yank the editor around.
     const bodyScroll = bodyEl.scrollTop;
     const detailsOpen = !!styleHost.querySelector<HTMLDetailsElement>(".ef-style-classes")?.open;
     const classListScroll =
