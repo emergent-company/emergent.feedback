@@ -33,6 +33,9 @@ test.describe("moving elements (structure fixture)", () => {
     await activate(page);
     await page.locator(selector).click();
     await expect(page.locator("#__ef_dialog__")).toBeVisible();
+    // Submission-first: "Edit element" swaps the issue modal for the editor.
+    await page.locator("#__ef_edit_element__").click();
+    await expect(page.locator("#__ef_style_editor__")).toBeVisible();
   }
 
   /** Press on `from`, drag past the threshold, drop on `to` (offset from its left edge). */
@@ -84,6 +87,10 @@ test.describe("moving elements (structure fixture)", () => {
     await activate(page);
     await page.locator("#btn-a").click();
     await expect(page.locator("#__ef_dialog__")).toBeVisible();
+    // Reopening lands on the issue modal; swap to the editor to reach the
+    // Committed-changes list.
+    await page.locator("#__ef_edit_element__").click();
+    await expect(page.locator("#__ef_style_editor__")).toBeVisible();
     await page.click(".ef-committed-remove");
     expect(await children(page, "#toolbar")).toEqual(["btn-a", "btn-b", "btn-c"]);
   });

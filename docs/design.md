@@ -302,18 +302,21 @@ No storage change: metadata rides in `context_json` under `context.app`.
 
 ## Live style editing (v5, implemented)
 
-The overlay can dock to the side of the page (non-modal, page undimmed and
-interactive) and let the reporter restyle one or more selected elements by
-choosing tokens from a project-provided theme. The panel shows only the
-**Design** editor — the former Design/Issues tabs are gone; the report form and
-the captured context/HTML live in the issue submission modal instead. Tokens
-cover the common Tailwind and daisyUI utilities —
+Clicking an element opens the **issue submission modal** first — the former
+"Send to GitHub" step is gone. The reporter fills the comment, title, type and
+intent, then **Create issue** or **Save**. **Edit element** (header or footer)
+swaps to the style editor, which the reporter can dock to the side of the page
+(non-modal, page undimmed and interactive) or keep centered, to restyle one or
+more selected elements by choosing tokens from a project-provided theme. The
+editor shows only the **Design** editor — the former Design/Issues tabs are gone;
+the report form and the captured context/HTML live in the issue submission modal
+instead. Tokens cover the common Tailwind and daisyUI utilities —
 spacing (padding/margin/gap), layout (max-width, width/height, display, flex),
 typography (text size, font weight), colors, borders/effects and daisyUI
 button/badge modifiers — organised into collapsible sections. Each group renders
 as a horizontal property row (label left, control right). Every built-in group
 renders as a **dropdown** (color groups carry a swatch in the trigger and beside
-each option), giving the panel one uniform control. `render` still accepts
+each option), giving the editor one uniform control. `render` still accepts
 `chips` or `icons` (an inline-SVG glyph row) for host manifests; the fallback set
 opts into neither. Group ids must not collide with `position`, which is
 reserved for recorded DOM moves (the CSS position tokens are grouped under
@@ -321,6 +324,20 @@ reserved for recorded DOM moves (the CSS position tokens are grouped under
 class…** item (chip groups expose a **+ Custom** toggle) that reveals an inline
 field for a free-typed class. Applied class/style edits are recorded per element
 and rendered in the issue modal and panel.
+
+**View model.** Both surfaces live in one root (`#__ef_dialog__`) and swap via a
+`data-view` attribute: `data-view="submit"` shows the issue modal,
+`data-view="edit"` shows the style editor (`.ef-card`). Nothing inside either
+surface is re-rendered on the swap, so typed text, chips and pending edits
+survive the round trip. **Edit element** (`#__ef_edit_element__` in the header,
+`#__ef_edit_element_foot__` in the footer) sets `edit`; **Back to issue**
+(`#__ef_back_to_issue__`) sets `submit`. The editor's **Cancel**
+(`#__ef_cancel__`) discards the whole report (draft + uncommitted edits); the
+modal's **Cancel** (`#__ef_issue_cancel__`) does the same. `Escape` cancels the
+report while the modal is up, and returns to the modal while the editor is up.
+`#__ef_change_count__` in the modal header shows the attached style-change count.
+The dock toggle (`#__ef_dock__`) applies to the editor only — the modal is
+always centered.
 
 Every group also carries a **Default** control — the leading chip in a chip row,
 the leading item in a dropdown — which resets the group to the element's own
@@ -357,10 +374,10 @@ a selection spans multiple targets.
 Selection outlines are **hover-driven, not persistent**: selecting an element
 leaves no box on the page, because a permanent outline sits on top of the very
 border/background/shadow the reporter is judging. Hovering (or focusing) a
-target label in the panel outlines that element — amber box plus the badge
+target label in the editor outlines that element — amber box plus the badge
 number matching its tab — and a short **select flash** confirms which element a
 click just bound the editor to. Hovering a selected element on the page outlines
-it too and peeks its tab in the panel (reverse hover).
+it too and peeks its tab in the editor (reverse hover).
 
 Edits start **pending** — applied live but reverted on Cancel/close. The
 **Commit** button freezes pending edits and persists them (localStorage) across
@@ -368,7 +385,7 @@ sidebar close, reopen and page reload until explicitly removed from the global
 **Committed changes** list (per-entry Remove + Remove all).
 
 Docked mode reserves the rail width (document-root `margin-right`), so the host
-page reflows alongside the panel instead of being overlaid; the hover highlight
+page reflows alongside the editor instead of being overlaid; the hover highlight
 is repainted after the reflow. Modal mode sizes the card to ~50 vw (capped at
 900 px, min 480 px) and, when **Add element** is pressed, hides the dialog for the
 click-to-pick and restores it when the pick completes (Escape cancels the pick).
@@ -400,7 +417,7 @@ No storage schema change — everything rides inside `context_json`.
 
 | Surface | Change |
 |---|---|
-| `client/src/dialog.ts` | Design editor (no Issues tab), Commit + persistent Committed-changes list (localStorage, per-entry Remove / Remove all), issue submission modal (context/HTML rendered here only), docked rail + dock toggle, per-element target tabs, token palette, per-target changes summary, drag ghost/insertion-line/container layers |
+| `client/src/dialog.ts` | submission-first view model (`data-view="submit"|"edit"`): issue modal opens on click; **Edit element** (header/footer) → style editor (`.ef-card`), **Back to issue** → modal; modal Cancel/Escape cancel the report, editor Escape returns; dock toggle applies to the editor only. Design editor (no Issues tab), Commit + persistent Committed-changes list (localStorage, per-entry Remove / Remove all), context/HTML rendered in the modal only, per-element target tabs, token palette, per-target changes summary, drag ghost/insertion-line/container layers |
 | `client/src/styleEditor.ts` | single-target Figma-like property rows, dropdown/chip/icon controls, Default (unset) control, custom-class affordance, Position row |
 | `client/src/selection.ts` | per-target apply/change/revert API (`applyTokenToTarget`, `recordMove`, `getChangesFor`, `getChangeCountFor`, `revertChangesFor`, `clearTokenForTarget`), hover-driven highlight, `position` records |
 | `client/src/structure.ts` | drop resolution (`computeDrop`), `moveElement`, replay (`placeAt`), `describePosition`/`ordinal` |

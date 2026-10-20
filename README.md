@@ -89,53 +89,62 @@ No build step, no npm install, no configuration file. The script self-initialise
 |--------|--------|
 | Hold `Alt+Shift` (or configured hotkey) | Enter element-selection mode (crosshair cursor + highlights) |
 | Hover an element | Tooltip shows element tag (or `data-component` name if set) |
-| Click an element | Opens the feedback dialog |
+| Click an element | Opens the issue submission modal |
 | Release hotkey | Exits selection mode (dialog stays open if already clicked) |
 
 ### Feedback dialog
 
-The panel opens on the **Design** editor. To report feedback:
+Clicking an element opens the **issue submission modal** first — the former
+**Send to GitHub** button is gone. To report feedback:
 
-1. Restyle the selected element(s) in the Design editor, then **Commit**
-   (`#__ef_commit__`) to freeze the pending edits — committed edits persist
-   (localStorage) across sidebar close, reopen and page reload.
-2. **Send to GitHub** opens the issue submission modal (it no longer creates
-   the issue directly).
-3. In the modal, fill the title, type (**Bug** / **Enhancement**), intent and
-   note, then **Create issue** to submit.
-4. **Save** (also inside the modal) saves the feedback without creating a
-   GitHub issue.
+1. In the modal, fill the comment (`#__ef_comment__`), issue title, type
+   (**Bug** / **Enhancement**) and intent, then **Create issue**
+   (`#__ef_issue_submit__`) to submit to GitHub, or **Save** (`#__ef_submit__`)
+   to save the feedback locally without creating a GitHub issue.
+2. Optionally, **Edit element** (`#__ef_edit_element__` in the modal header, or
+   `#__ef_edit_element_foot__` in the footer) opens the style editor as a right
+   sidebar (docked, the default) or centered card. Restyle the selected
+   element(s) there, then **Back to issue** (`#__ef_back_to_issue__`) returns to
+   the modal — typed text and pending edits are preserved. In the editor,
+   **Cancel** (`#__ef_cancel__`) throws away the whole report.
+3. In the modal, **Cancel** (`#__ef_issue_cancel__`) discards the report and
+   closes the overlay. `Escape` does the same while the modal is up; in the
+   editor it returns to the modal instead.
 
 ### Docked panel
 
-The dialog can dock to the right edge instead of rendering as a centered modal.
-Docked mode sits **alongside** the page rather than over it: the panel reserves
-its rail width (`margin-right` on the document root), so the host content reflows
-and stays fully visible and undimmed — no overlay covering the page. Element
-picking, multi-select and live style editing all continue while the panel is
-open; the hover highlight is repainted after the reflow. Toggle dock/undock from
-the panel header; the choice is persisted per browser (localStorage
+Docking applies to the **style editor**, not the issue modal. The editor can
+dock to the right edge instead of rendering as a centered card. Docked mode sits
+**alongside** the page rather than over it: the editor reserves its rail width
+(`margin-right` on the document root), so the host content reflows and stays
+fully visible and undimmed — no overlay covering the page. Element picking,
+multi-select and live style editing all continue while the editor is open; the
+hover highlight is repainted after the reflow. Toggle dock/undock from the
+editor header (`#__ef_dock__`); the choice is persisted per browser (localStorage
 `__ef_dialog_docked__`) and docked is the default. On narrow viewports (≤ 520 px)
-the panel takes the full width and the page is not reflowed.
+the editor takes the full width and the page is not reflowed.
 
-In **modal** mode the card takes roughly half the viewport width (50 vw, capped
-at 900 px, min 480 px). Because the modal backdrop blocks the page, pressing
-**Add element** hides the dialog while you click the element to add, then brings
-it straight back; press `Escape` to cancel the pick and stay in the dialog.
+The **issue submission modal is always centered** — it never docks. In centered
+(undocked) mode the editor card takes roughly half the viewport width (50 vw,
+capped at 900 px, min 480 px). Because the centered backdrop blocks the page,
+pressing **Add element** hides the editor while you click the element to add,
+then brings it straight back; press `Escape` to cancel the pick and stay in the
+editor.
 
 > Caveat: host elements positioned with `position: fixed` or `position: sticky`
 > are not shifted by the reserved rail width, and an explicitly sized `html`
 > (`width`/`min-width`) can defeat the reflow and produce a horizontal scrollbar
-> under the panel.
+> under the editor.
 
 ### Live style editing
 
-The panel shows only the **Design** editor (the former Design/Issues tabs are
-gone). Writing the report and viewing the captured context/HTML happen in the
-issue submission modal (see [Feedback dialog](#feedback-dialog)), not in the
-panel header.
+The style editor (`.ef-card`, opened via **Edit element**) shows only the
+**Design** editor (the former Design/Issues tabs are gone). Writing the report
+and viewing the captured context/HTML happen in the issue submission modal (see
+[Feedback dialog](#feedback-dialog)), not in the editor. `#__ef_change_count__`
+in the modal header shows the attached style-change count.
 
-With the panel open, click additional elements to add them to the selection (a
+With the editor open, click additional elements to add them to the selection (a
 click on an already-selected element toggles it off, and **Add element** enters a
 pick mode). When more than one element is selected, the Design editor shows them
 as **per-element tabs**: pick a tab to edit that element on its own. Each edit is
@@ -143,7 +152,7 @@ bounded to the active element — nothing is applied globally.
 
 Outlines are hover-driven: a selected element is **not** permanently boxed (that
 would cover the border/background/shadow being judged). Hover or focus a target
-label in the panel to outline that element, or hover the element itself to peek
+label in the editor to outline that element, or hover the element itself to peek
 its tab — plus a short flash on select.
 
 Properties are grouped into collapsible sections — **Spacing**, **Layout**,
@@ -152,7 +161,7 @@ Tailwind/daisyUI utilities such as padding, margin, gap, max-width, width/height
 display/flex, text size, font weight, rounding, borders, shadow and button/badge
 modifiers. Each group renders as a Figma-like row (label left, control right).
 Every built-in group renders as a **dropdown** (color groups show a swatch in
-the trigger and next to each option), so the panel has one uniform control. The
+the trigger and next to each option), so the editor has one uniform control. The
 `render` field still accepts `chips` or `icons` (an inline-SVG glyph row) for
 host manifests; the fallback set uses neither.
 
@@ -189,12 +198,12 @@ after a reload once committed, and rides in the payload as
 body renders it as a `move:` line.
 
 Edits start **pending**: they apply live to the page but are reverted when the
-panel is cancelled or the editing session ends. Press **Commit** to freeze the
+report is cancelled or the editing session ends. Press **Commit** to freeze the
 pending edits — committed edits are written to localStorage and persist across
-closing/reopening the panel and page reloads. Manage them from the global
+closing/reopening the editor and page reloads. Manage them from the global
 **Committed changes** list (per-entry **Remove** plus **Remove all**); they are
-cleared only by explicit removal. The issue submission modal and the panel
-preview render a **Requested changes** list (`target — group: before → after`).
+cleared only by explicit removal. The issue submission modal and the server
+panel preview render a **Requested changes** list (`target — group: before → after`).
 
 Tokens come from the project via `data-theme-url` (below). Placeholder choices
 are used when it is absent.

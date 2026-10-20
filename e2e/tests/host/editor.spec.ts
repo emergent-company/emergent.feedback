@@ -25,6 +25,10 @@ test.describe("editor affordances (structure fixture)", () => {
     await page.keyboard.up("Alt");
     await page.locator(selector).click();
     await expect(page.locator("#__ef_dialog__")).toBeVisible();
+    // Submission-first: clicking opens the issue modal; "Edit element" swaps
+    // it for the style editor.
+    await page.locator("#__ef_edit_element__").click();
+    await expect(page.locator("#__ef_style_editor__")).toBeVisible();
   }
 
   const classRe = (cls: string) => new RegExp(`(^|\\s)${cls}(\\s|$)`);

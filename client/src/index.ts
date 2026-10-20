@@ -137,7 +137,10 @@ let peekedEl: Element | null = null;
   });
 
   // ── Overlay activation ──────────────────────────────────────────────────────
-  function activateOverlay(): void {
+  // Element picking is a single set of document listeners. They are attached
+  // while the page is pickable (comment mode, and the dialog's Edit view) and
+  // detached while the issue card is up, so the modal never fights the page.
+  function attachEditingListeners(): void {
     document.body.style.cursor = "crosshair";
     document.addEventListener("mouseover", onMouseOver, true);
     document.addEventListener("mouseout", onMouseOut, true);
@@ -151,16 +154,7 @@ let peekedEl: Element | null = null;
     refreshBadges();
   }
 
-  async function refreshBadges(): Promise<void> {
-    const url = window.location.href;
-    const [summaries, issues] = await Promise.all([
-      api.listBadges(url).catch((): never[] => []),
-      api.listIssueBadges(url).catch((): IssueBadge[] => []),
-    ]);
-    renderBadges(summaries, onBadgeClick, issues);
-  }
-
-  function deactivateOverlay(): void {
+  function detachEditingListeners(): void {
     document.body.style.cursor = "";
     document.removeEventListener("mouseover", onMouseOver, true);
     document.removeEventListener("mouseout", onMouseOut, true);
@@ -175,6 +169,23 @@ let peekedEl: Element | null = null;
     peekedEl = null;
     setSelectionHighlight(null);
     clearHighlight();
+  }
+
+  async function refreshBadges(): Promise<void> {
+    const url = window.location.href;
+    const [summaries, issues] = await Promise.all([
+      api.listBadges(url).catch((): never[] => []),
+      api.listIssueBadges(url).catch((): IssueBadge[] => []),
+    ]);
+    renderBadges(summaries, onBadgeClick, issues);
+  }
+
+  function activateOverlay(): void {
+    attachEditingListeners();
+  }
+
+  function deactivateOverlay(): void {
+    detachEditingListeners();
     clearBadges();
     // Undo only the uncommitted (pending) edits; committed edits stay on the
     // page AND in storage when the sidebar closes.
@@ -358,10 +369,9 @@ function elementLabel(el: Element): string {
     const selectedComponentIdx = ancestorCount >= 0 ? ancestorCount : 0;
 
     forceMode("capturing");
-    document.body.style.cursor = "";
-    document.removeEventListener("mouseover", onMouseOver, true);
-    document.removeEventListener("click", onElementClick, true);
-    clearHighlight();
+    // Capture mode owns the page: no hover/click interception until the
+    // dialog's Edit view asks for it (see onEditingChange below).
+    detachEditingListeners();
 
     // Ensure authenticated.
     if (!(await ensureAuthenticated())) {
@@ -388,12 +398,9 @@ function elementLabel(el: Element): string {
     reapplyCommitted();
     addSelectionTarget(target, selector, nearestComponentName(target));
 
-    forceMode("editing");
-    // Re-attach pick listeners for the editing session (page stays interactive
-    // everywhere except the docked rail).
-    document.body.style.cursor = "crosshair";
-    document.addEventListener("mouseover", onMouseOver, true);
-    document.addEventListener("click", onElementClick, true);
+    // The dialog opens on the issue card, so the page is not pickable yet.
+    // Element picking starts when the reporter chooses "Edit element".
+    forceMode("commenting");
 
     // Build the default issue title. Prefer data-component over the CSS selector.
     const dataComponent = context["dataComponent"] as string | undefined;
@@ -493,6 +500,17 @@ function elementLabel(el: Element): string {
         clearSelection();
         forceMode("active");
       },
+      // The dialog owns which surface is showing. Only the Edit view makes the
+      // page pickable, so the issue card never fights hover/click handling.
+      onEditingChange: (view) => {
+        if (view === "edit") {
+          attachEditingListeners();
+          forceMode("editing");
+        } else {
+          detachEditingListeners();
+          forceMode("commenting");
+        }
+      },
     });
   }
 
@@ -522,9 +540,7 @@ function elementLabel(el: Element): string {
         // Never leave the page stuck in capture/comment mode on an unexpected error.
         console.error("[emergent.feedback] failed to open feedback dialog:", err);
         forceMode("active");
-        document.body.style.cursor = "crosshair";
-        document.addEventListener("mouseover", onMouseOver, true);
-        document.addEventListener("click", onElementClick, true);
+        attachEditingListeners();
       }
       return;
     }
