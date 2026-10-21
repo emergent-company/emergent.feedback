@@ -45,6 +45,8 @@ class FakeEl {
   children: FakeEl[] = [];
   textContent = "";
   type = "";
+  /** Absent by default (like the DOM surface the fakes don't model). */
+  isConnected?: boolean;
   constructor(tagName = "div", classes: string[] = []) {
     this.tagName = tagName;
     this.classList = new FakeClassList(classes);
@@ -157,6 +159,47 @@ test("input[type=text] with empty textContent: text groups visible", () => {
   }
 });
 
+test("input[type=submit] with empty textContent: text groups visible (button face)", () => {
+  const el = new FakeEl("input");
+  el.type = "submit";
+  el.textContent = "";
+  const ids = visibleIds(el);
+  for (const shown of ["textSize", "fontWeight", "textAlign"]) {
+    assert.ok(ids.includes(shown), `${shown} visible (submit renders its value as text)`);
+  }
+});
+
+test("multicol (column-count: 2, block): gap visible, align/justify hidden", () => {
+  const el = new FakeEl("div");
+  el.style.props.display = "block";
+  el.style.props["column-count"] = "2";
+  el.children = [new FakeEl("div")];
+  const ids = visibleIds(el);
+  assert.ok(ids.includes("gap"), "gap visible (container includes multi-column)");
+  assert.ok(!ids.includes("align"), "align hidden (align-items does not apply to multicol)");
+  assert.ok(!ids.includes("justify"), "justify hidden (justify-content does not apply to multicol)");
+});
+
+test("display: contents and display: none hide box groups", () => {
+  for (const display of ["contents", "none"]) {
+    const el = new FakeEl("div");
+    el.style.props.display = display;
+    const ids = visibleIds(el);
+    for (const hidden of ["width", "height", "maxWidth", "shadow"]) {
+      assert.ok(!ids.includes(hidden), `${hidden} hidden for display: ${display}`);
+    }
+  }
+});
+
+test("detached element (isConnected: false) is permissive: every group visible", () => {
+  const el = new FakeEl("div");
+  el.style.props.display = "block";
+  el.isConnected = false;
+  const ids = visibleIds(el);
+  assert.equal(ids.length, theme.groups.length, "all groups visible for a detached element");
+  assert.ok(ids.includes("gap"), "even container-requiring gap is visible");
+});
+
 test("daisyUI groups: .btn / .badge classes gate the component groups", () => {
   const btnIds = visibleIds(new FakeEl("button", ["btn"]));
   for (const shown of ["btnColor", "btnModifier", "btnSize"]) {
@@ -254,7 +297,8 @@ test("requirementMet: box allows inline only for replaced elements", () => {
 });
 
 test("describeRequirement returns readable reasons", () => {
-  assert.equal(describeRequirement("container"), "needs a flex/grid container");
+  assert.equal(describeRequirement("container"), "needs a flex/grid/multi-column container");
+  assert.equal(describeRequirement("flex-grid-container"), "needs a flex/grid container");
   assert.equal(describeRequirement("has-class:btn"), 'needs class "btn"');
 });
 

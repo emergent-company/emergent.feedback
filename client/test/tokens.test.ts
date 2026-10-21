@@ -225,8 +225,8 @@ test("buildFallbackTokens: annotates capability requirements", () => {
   const byId = (id: string) => theme.groups.find((x) => x.id === id)!;
 
   assert.deepEqual(byId("gap").requires, ["container", "children"]);
-  assert.equal(byId("align").requires, "container");
-  assert.equal(byId("justify").requires, "container");
+  assert.equal(byId("align").requires, "flex-grid-container");
+  assert.equal(byId("justify").requires, "flex-grid-container");
   assert.equal(byId("flexDir").requires, "flex-container");
   assert.equal(byId("wrap").requires, "flex-container");
   assert.equal(byId("self").requires, "container-item");

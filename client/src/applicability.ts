@@ -11,6 +11,7 @@ import type { TokenGroup } from "./tokens";
 
 export type Requirement =
   | "container"
+  | "flex-grid-container"
   | "flex-container"
   | "container-item"
   | "box"
@@ -36,6 +37,7 @@ export type StyleGetter = (el: Element) => { getPropertyValue(p: string): string
 
 const KNOWN_REQUIREMENTS = new Set<string>([
   "container",
+  "flex-grid-container",
   "flex-container",
   "container-item",
   "box",
@@ -52,13 +54,14 @@ const FLEX_DISPLAYS = new Set(["flex", "inline-flex"]);
 const CONTAINER_DISPLAYS = new Set(["flex", "inline-flex", "grid", "inline-grid"]);
 
 const NON_TEXT_INPUT_TYPES = new Set([
-  "hidden", "checkbox", "radio", "range", "color", "file", "image", "submit", "reset", "button",
+  "hidden", "checkbox", "radio", "range", "color", "file", "image",
 ]);
 
 const REPLACED_TAGS = new Set(["img", "video", "canvas", "iframe", "embed", "object"]);
 
 const REQUIREMENT_DESCRIPTIONS: Record<string, string> = {
-  container: "needs a flex/grid container",
+  container: "needs a flex/grid/multi-column container",
+  "flex-grid-container": "needs a flex/grid container",
   "flex-container": "needs a flex container",
   "container-item": "needs a flex/grid parent",
   box: "needs a box element",
@@ -179,12 +182,19 @@ export function requirementMet(req: Requirement, caps: ElementCapabilities): boo
   switch (req) {
     case "container":
       return CONTAINER_DISPLAYS.has(caps.display) || caps.columnCount > 1;
+    case "flex-grid-container":
+      return CONTAINER_DISPLAYS.has(caps.display);
     case "flex-container":
       return FLEX_DISPLAYS.has(caps.display);
     case "container-item":
       return CONTAINER_DISPLAYS.has(caps.parentDisplay);
     case "box":
-      return caps.display !== "inline" || caps.isReplaced;
+      return (
+        (caps.display !== "inline" &&
+          caps.display !== "contents" &&
+          caps.display !== "none") ||
+        caps.isReplaced
+      );
     case "text":
       return caps.hasText;
     case "children":
@@ -231,6 +241,12 @@ export function isApplicable(
 
   const requires = group.requires;
   if (requires === undefined) return true;
+
+  // Detached elements: computed-style reads for them are unreliable, so show
+  // every group rather than hiding settings by mistake (per the docs). An
+  // undefined `isConnected` (unit-test fakes) must NOT bail.
+  const connected = (el as { isConnected?: boolean }).isConnected;
+  if (connected === false) return true;
 
   // Permissive on failure: if we can't resolve a computed style for this
   // element (no window, detached, or a throwing getter), show everything.

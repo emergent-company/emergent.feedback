@@ -467,7 +467,7 @@ export function buildFallbackTokens(): ThemeTokens {
         id: "align",
         label: "Align items",
         section: "Layout",
-        requires: "container",
+        requires: "flex-grid-container",
         applyType: "class",
         render: "dropdown",
         removePattern: "^items-",
@@ -483,7 +483,7 @@ export function buildFallbackTokens(): ThemeTokens {
         id: "justify",
         label: "Justify",
         section: "Layout",
-        requires: "container",
+        requires: "flex-grid-container",
         applyType: "class",
         render: "dropdown",
         tokens: [

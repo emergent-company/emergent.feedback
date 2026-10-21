@@ -449,10 +449,12 @@ values are validated and all token text is escaped before rendering. A group may
 set `render: "dropdown"` to render as a dropdown (every built-in group does), or
 `render: "icons"` to render as a row of glyph buttons; the default is chips. A
 group may also set `requires` (a single value or array of `container`,
-`flex-container`, `container-item`, `box`, `text`, `children`, `replaced`,
-`positioned`, or `has-class:<class>`) to hide itself from elements it cannot
-affect — unknown values are ignored, an applied edit keeps the group visible,
-and a **Show all** toggle reveals everything. A token
+`flex-grid-container`, `flex-container`, `container-item`, `box`, `text`,
+`children`, `replaced`, `positioned`, or `has-class:<class>`) to hide itself
+from elements it cannot affect — `container` matches flex/grid or a
+multi-column layout (`column-count > 1`), while `flex-grid-container` matches
+only flex/grid — unknown values are ignored, an applied edit keeps the group
+visible, and a **Show all** toggle reveals everything. A token
 may set an inline `icon: { viewBox, paths }` for icon rows; `viewBox` must match
 `0 0 <n> <n>` (1–3 digits each) and every path `d` is held to a strict charset
 (SVG commands, digits and whitespace, ≤ 400 chars, ≤ 12 paths). An invalid icon

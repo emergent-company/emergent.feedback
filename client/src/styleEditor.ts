@@ -248,7 +248,9 @@ interface EditorRenderOptions {
   showAll: boolean;
 }
 
-/** Distinct human-readable reasons for a list of hidden groups, joined by ", ". */
+/** Distinct human-readable reasons for a list of hidden groups, joined by ", ".
+ * Capped at two reasons to keep the footer to a single line; any more are
+ * collapsed into a trailing ellipsis. */
 function hiddenReasons(groups: TokenGroup[]): string {
   const seen = new Set<string>();
   for (const g of groups) {
@@ -256,7 +258,9 @@ function hiddenReasons(groups: TokenGroup[]): string {
     const list = Array.isArray(g.requires) ? g.requires : [g.requires];
     for (const r of list) seen.add(describeRequirement(r));
   }
-  return Array.from(seen).join(", ");
+  const reasons = Array.from(seen);
+  if (reasons.length <= 2) return reasons.join(", ");
+  return `${reasons.slice(0, 2).join(", ")}, …`;
 }
 
 /** Footer hint: N hidden settings + a Show all / Hide inapplicable toggle. */
@@ -264,16 +268,16 @@ function hiddenNoteHTML(opts: EditorRenderOptions): string {
   if (opts.showAll) {
     return `
     <div class="ef-style-hidden-note">
-      <span class="ef-hidden-reasons">Showing all settings — some have no effect on this element</span>
-      <button type="button" class="ef-show-all" id="__ef_show_all__">Hide inapplicable</button>
+      <span class="ef-hidden-reasons" role="status">Showing all settings — some have no effect on this element</span>
+      <button type="button" class="ef-show-all" id="__ef_show_all__" aria-pressed="true">Hide inapplicable</button>
     </div>`;
   }
   if (opts.hiddenCount === 0) return "";
   const noun = opts.hiddenCount === 1 ? "setting" : "settings";
   return `
     <div class="ef-style-hidden-note">
-      <span class="ef-hidden-reasons">${opts.hiddenCount} ${noun} hidden — ${escapeHtml(opts.hiddenReasons)}</span>
-      <button type="button" class="ef-show-all" id="__ef_show_all__">Show all</button>
+      <span class="ef-hidden-reasons" role="status">${opts.hiddenCount} ${noun} hidden — ${escapeHtml(opts.hiddenReasons)}</span>
+      <button type="button" class="ef-show-all" id="__ef_show_all__" aria-pressed="false">Show all</button>
     </div>`;
 }
 

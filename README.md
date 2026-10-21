@@ -266,10 +266,13 @@ validated against a strict charset before rendering; an invalid icon is dropped
 while the token itself is kept (the editor falls back to a text chip).
 
 A group may set `"requires"` to hide itself from elements it cannot affect. The
-accepted values are `container`, `flex-container`, `container-item`, `box`,
-`text`, `children`, `replaced`, `positioned`, or `has-class:<class>` (for
-example `has-class:btn`); set a single value or an array of them, in which case
-all must be met. Unknown values are ignored — the group stays available. Groups
+accepted values are `container`, `flex-grid-container`, `flex-container`,
+`container-item`, `box`, `text`, `children`, `replaced`, `positioned`, or
+`has-class:<class>` (for example `has-class:btn`); set a single value or an
+array of them, in which case all must be met. `container` matches a flex/grid
+container **or** a multi-column layout (`column-count > 1`), while
+`flex-grid-container` matches only a flex/grid container. Unknown values are
+ignored — the group stays available. Groups
 that do not apply to the selected element are hidden from the editor, with a
 footer note (`N settings hidden — …`) and a **Show all** button to reveal them;
 a group with an already-applied edit is always shown so it stays revertable.
