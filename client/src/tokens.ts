@@ -6,6 +6,7 @@
 // from the endpoint as HTML, and never applies an unbounded CSS value.
 
 import { ICONS, iconID, type GlyphIcon } from "./icons";
+import { isValidRequirement, type Requirement } from "./applicability";
 
 /** How a single token is applied to an element. */
 export interface Apply {
@@ -46,6 +47,13 @@ export interface TokenGroup {
   render?: "chips" | "dropdown" | "icons";
   /** Editor section heading. Defaults to "Style" when unset. */
   section?: string;
+  /**
+   * Capability requirements for this group. When set, the editor hides the
+   * group for elements that cannot be affected by it (e.g. `gap` needs a
+   * flex/grid container, `btn-*` needs a `.btn`). A single requirement or an
+   * array (all must be met). Groups with an applied token are always shown.
+   */
+  requires?: Requirement | Requirement[];
 }
 
 /** Normalized theme-token set. */
@@ -245,6 +253,18 @@ export function normalizeTheme(raw: unknown): ThemeTokens | null {
     const section: string | undefined =
       typeof gg.section === "string" && gg.section ? gg.section : undefined;
 
+    let requires: Requirement[] | undefined;
+    if (gg.requires !== undefined) {
+      const rawList = Array.isArray(gg.requires) ? gg.requires : [gg.requires];
+      const kept: Requirement[] = [];
+      for (const entry of rawList) {
+        if (typeof entry !== "string") continue;
+        if (!isValidRequirement(entry)) continue;
+        kept.push(entry as Requirement);
+      }
+      requires = kept.length > 0 ? kept : undefined;
+    }
+
     const tokens: Token[] = [];
     if (Array.isArray(gg.tokens)) {
       for (const t of gg.tokens) {
@@ -261,6 +281,7 @@ export function normalizeTheme(raw: unknown): ThemeTokens | null {
       ...(removePattern !== undefined ? { removePattern } : {}),
       ...(render !== undefined ? { render } : {}),
       ...(section !== undefined ? { section } : {}),
+      ...(requires !== undefined ? { requires } : {}),
       tokens,
     });
   }
@@ -355,6 +376,7 @@ export function buildFallbackTokens(): ThemeTokens {
         id: "gap",
         label: "Gap",
         section: "Spacing",
+        requires: ["container", "children"],
         render: "dropdown",
         applyType: "class",
         removePattern: "^gap-",
@@ -372,6 +394,7 @@ export function buildFallbackTokens(): ThemeTokens {
         id: "maxWidth",
         label: "Max width",
         section: "Layout",
+        requires: "box",
         render: "dropdown",
         applyType: "class",
         removePattern: "^max-w-",
@@ -396,6 +419,7 @@ export function buildFallbackTokens(): ThemeTokens {
         id: "width",
         label: "Width",
         section: "Layout",
+        requires: "box",
         render: "dropdown",
         applyType: "class",
         removePattern: "^w-",
@@ -412,6 +436,7 @@ export function buildFallbackTokens(): ThemeTokens {
         id: "height",
         label: "Height",
         section: "Layout",
+        requires: "box",
         render: "dropdown",
         applyType: "class",
         removePattern: "^h-",
@@ -442,6 +467,7 @@ export function buildFallbackTokens(): ThemeTokens {
         id: "align",
         label: "Align items",
         section: "Layout",
+        requires: "container",
         applyType: "class",
         render: "dropdown",
         removePattern: "^items-",
@@ -457,6 +483,7 @@ export function buildFallbackTokens(): ThemeTokens {
         id: "justify",
         label: "Justify",
         section: "Layout",
+        requires: "container",
         applyType: "class",
         render: "dropdown",
         tokens: [
@@ -472,6 +499,7 @@ export function buildFallbackTokens(): ThemeTokens {
         id: "flexDir",
         label: "Flex direction",
         section: "Layout",
+        requires: "flex-container",
         applyType: "class",
         render: "dropdown",
         tokens: [
@@ -485,6 +513,7 @@ export function buildFallbackTokens(): ThemeTokens {
         id: "wrap",
         label: "Wrap",
         section: "Layout",
+        requires: "flex-container",
         applyType: "class",
         render: "dropdown",
         tokens: [
@@ -497,6 +526,7 @@ export function buildFallbackTokens(): ThemeTokens {
         id: "self",
         label: "Align self",
         section: "Layout",
+        requires: "container-item",
         applyType: "class",
         render: "dropdown",
         removePattern: "^self-",
@@ -528,6 +558,7 @@ export function buildFallbackTokens(): ThemeTokens {
         id: "inset",
         label: "Inset",
         section: "Layout",
+        requires: "positioned",
         applyType: "class",
         render: "dropdown",
         tokens: [
@@ -542,6 +573,7 @@ export function buildFallbackTokens(): ThemeTokens {
         id: "objectFit",
         label: "Object fit",
         section: "Layout",
+        requires: "replaced",
         applyType: "class",
         render: "dropdown",
         removePattern: "^object-",
@@ -557,6 +589,7 @@ export function buildFallbackTokens(): ThemeTokens {
         id: "textSize",
         label: "Text size",
         section: "Typography",
+        requires: "text",
         render: "dropdown",
         applyType: "class",
         tokens: [
@@ -574,6 +607,7 @@ export function buildFallbackTokens(): ThemeTokens {
         id: "fontWeight",
         label: "Font weight",
         section: "Typography",
+        requires: "text",
         applyType: "class",
         render: "dropdown",
         tokens: [
@@ -592,6 +626,7 @@ export function buildFallbackTokens(): ThemeTokens {
         id: "textAlign",
         label: "Text align",
         section: "Typography",
+        requires: "text",
         applyType: "class",
         render: "dropdown",
         // No removePattern: a `^text-` pattern would also strip the text-size
@@ -667,6 +702,7 @@ export function buildFallbackTokens(): ThemeTokens {
         id: "shadow",
         label: "Shadow",
         section: "Borders & Effects",
+        requires: "box",
         applyType: "class",
         render: "dropdown",
         tokens: [
@@ -682,6 +718,7 @@ export function buildFallbackTokens(): ThemeTokens {
         id: "btnColor",
         label: "Button color",
         section: "daisyUI",
+        requires: "has-class:btn",
         render: "dropdown",
         applyType: "class",
         tokens: [
@@ -698,6 +735,7 @@ export function buildFallbackTokens(): ThemeTokens {
         id: "btnModifier",
         label: "Button modifier",
         section: "daisyUI",
+        requires: "has-class:btn",
         render: "dropdown",
         applyType: "class",
         tokens: [
@@ -710,6 +748,7 @@ export function buildFallbackTokens(): ThemeTokens {
         id: "btnSize",
         label: "Button size",
         section: "daisyUI",
+        requires: "has-class:btn",
         render: "dropdown",
         applyType: "class",
         tokens: [
@@ -724,6 +763,7 @@ export function buildFallbackTokens(): ThemeTokens {
         id: "badgeColor",
         label: "Badge color",
         section: "daisyUI",
+        requires: "has-class:badge",
         render: "dropdown",
         applyType: "class",
         tokens: [
@@ -741,6 +781,7 @@ export function buildFallbackTokens(): ThemeTokens {
         id: "badgeModifier",
         label: "Badge modifier",
         section: "daisyUI",
+        requires: "has-class:badge",
         render: "dropdown",
         applyType: "class",
         tokens: [
@@ -752,6 +793,7 @@ export function buildFallbackTokens(): ThemeTokens {
         id: "badgeSize",
         label: "Badge size",
         section: "daisyUI",
+        requires: "has-class:badge",
         render: "dropdown",
         applyType: "class",
         tokens: [

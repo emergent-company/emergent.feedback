@@ -19,6 +19,7 @@ import {
   type TokenGroup,
   type ThemeTokens,
 } from "./tokens";
+import { visibleGroups, describeRequirement } from "./applicability";
 import { setHighlight, type TargetEntry } from "./selection";
 import { describePosition } from "./structure";
 import { ICONS, type GlyphIcon } from "./icons";
@@ -30,6 +31,8 @@ export interface StyleEditorCallbacks {
    * Default control and from a click on an already-active control.
    */
   onClear: (group: TokenGroup) => void;
+  /** Re-render the editor (called after toggling "Show all"). */
+  onRerender: () => void;
 }
 
 /**
@@ -37,6 +40,13 @@ export interface StyleEditorCallbacks {
  * survive mountStyleEditor being called repeatedly (once per selection change).
  */
 const customTokens = new Map<string, Token[]>();
+
+/**
+ * "Show all" escape hatch: when true, inapplicable groups are rendered anyway
+ * (with a hint that some have no effect). Module-level so it survives the
+ * re-mounts the dialog performs on every selection change.
+ */
+let showAllGroups = false;
 
 /**
  * Closes the dropdown currently open, if any. mountStyleEditor rewrites
@@ -232,12 +242,47 @@ function renderClasses(target: TargetEntry): string {
     </details>`;
 }
 
+interface EditorRenderOptions {
+  hiddenCount: number;
+  hiddenReasons: string;
+  showAll: boolean;
+}
+
+/** Distinct human-readable reasons for a list of hidden groups, joined by ", ". */
+function hiddenReasons(groups: TokenGroup[]): string {
+  const seen = new Set<string>();
+  for (const g of groups) {
+    if (g.requires === undefined) continue;
+    const list = Array.isArray(g.requires) ? g.requires : [g.requires];
+    for (const r of list) seen.add(describeRequirement(r));
+  }
+  return Array.from(seen).join(", ");
+}
+
+/** Footer hint: N hidden settings + a Show all / Hide inapplicable toggle. */
+function hiddenNoteHTML(opts: EditorRenderOptions): string {
+  if (opts.showAll) {
+    return `
+    <div class="ef-style-hidden-note">
+      <span class="ef-hidden-reasons">Showing all settings — some have no effect on this element</span>
+      <button type="button" class="ef-show-all" id="__ef_show_all__">Hide inapplicable</button>
+    </div>`;
+  }
+  if (opts.hiddenCount === 0) return "";
+  const noun = opts.hiddenCount === 1 ? "setting" : "settings";
+  return `
+    <div class="ef-style-hidden-note">
+      <span class="ef-hidden-reasons">${opts.hiddenCount} ${noun} hidden — ${escapeHtml(opts.hiddenReasons)}</span>
+      <button type="button" class="ef-show-all" id="__ef_show_all__">Show all</button>
+    </div>`;
+}
+
 function renderEditorHTML(
-  tokens: ThemeTokens,
+  groups: TokenGroup[],
   target: TargetEntry,
-  changesCount: number
+  changesCount: number,
+  opts: EditorRenderOptions
 ): string {
-  const groups = augmentGroups(tokens.groups);
   const label = target.dataComponent || target.selector;
   return `
     <div class="ef-style-editor" data-changes="${changesCount}">
@@ -251,6 +296,7 @@ function renderEditorHTML(
         <span class="ef-style-drag-hint" aria-hidden="true">drag to move</span>
       </div>
       ${renderSections(groups, target.el)}
+      ${hiddenNoteHTML(opts)}
       ${renderClasses(target)}
     </div>`;
 }
@@ -457,8 +503,22 @@ export function mountStyleEditor(
     return;
   }
 
-  const groups = augmentGroups(tokens.groups);
-  root.innerHTML = renderEditorHTML(tokens, target, changesCount);
+  const all = augmentGroups(tokens.groups);
+  const visible = showAllGroups
+    ? all
+    : visibleGroups(all, target.el, {
+        isApplied: (g) => matchToken(target.el, g) !== null,
+      });
+  const hidden = showAllGroups ? [] : all.filter((g) => !visible.includes(g));
+  const groups = showAllGroups ? all : visible;
+
+  const opts: EditorRenderOptions = {
+    hiddenCount: hidden.length,
+    hiddenReasons: hiddenReasons(hidden),
+    showAll: showAllGroups,
+  };
+
+  root.innerHTML = renderEditorHTML(groups, target, changesCount, opts);
 
   // Chip/icon row wiring (dropdowns have their own handlers below). Icon
   // buttons reuse `.ef-token-chip`, so they share this wiring: an active
@@ -487,6 +547,13 @@ export function mountStyleEditor(
   wireDropdowns(root, groups, target.el, cb);
   wireCustomToggles(root);
   wireCustomInputs(root, tokens, cb);
+
+  // "Show all" / "Hide inapplicable" toggle: flips the module-level flag and
+  // re-renders so the filtered/unfiltered group list is rebuilt.
+  root.querySelector<HTMLButtonElement>("#__ef_show_all__")?.addEventListener("click", () => {
+    showAllGroups = !showAllGroups;
+    cb.onRerender();
+  });
 
   // Hovering the "Editing <target>" label outlines the element, matching the
   // per-target tab hover in the dialog (there is no permanent outline).

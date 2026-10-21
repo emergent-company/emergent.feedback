@@ -1126,6 +1126,31 @@ function injectStyles(): void {
       display: inline-block;
     }
     #__ef_dialog__ .ef-style-section[open] > summary::before { transform: rotate(90deg); }
+    #__ef_dialog__ .ef-style-hidden-note {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      padding-block: 10px 0;
+      border-top: 1px solid var(--ef-border-subtle);
+      font-size: 11px;
+    }
+    #__ef_dialog__ .ef-hidden-reasons {
+      color: var(--ef-muted);
+      flex: 1;
+      min-width: 0;
+      line-height: 1.4;
+    }
+    #__ef_dialog__ .ef-show-all {
+      background: transparent;
+      border: none;
+      padding: 0;
+      color: var(--ef-primary);
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    #__ef_dialog__ .ef-show-all:hover { text-decoration: underline; }
     #__ef_dialog__ .ef-select {
       position: relative;
     }
@@ -2346,6 +2371,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
           showToast("That value comes from the page markup, not an overlay edit.");
         }
       },
+      onRerender: () => renderStyle(),
     });
   };
 
