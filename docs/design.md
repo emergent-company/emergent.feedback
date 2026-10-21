@@ -325,6 +325,18 @@ class…** item (chip groups expose a **+ Custom** toggle) that reveals an inlin
 field for a free-typed class. Applied class/style edits are recorded per element
 and rendered in the issue modal and panel.
 
+**Applicability filtering.** Groups that cannot affect the selected element are
+hidden: `gap` needs a flex/grid container with children, `align`/`justify` a
+flex/grid container, `flexDir`/`wrap` a flex container, `self` a flex/grid
+parent, `width`/`height`/`max-width`/`shadow` a box (or replaced element), the
+text groups a text-bearing element, `objectFit` a replaced element, `inset` a
+positioned element, and the daisyUI button/badge groups an element carrying the
+`btn`/`badge` class. A group with an applied edit is always shown so it stays
+revertable; a footer note reports how many settings are hidden and a **Show
+all** toggle reveals them. On failure (no computed style, detached element, or a
+style-read error) the editor shows everything rather than hiding settings by
+mistake.
+
 **View model.** Both surfaces live in one root (`#__ef_dialog__`) and swap via a
 `data-view` attribute: `data-view="submit"` shows the issue modal,
 `data-view="edit"` shows the style editor (`.ef-card`). Nothing inside either
@@ -435,7 +447,14 @@ from the live page plus a built-in spacing scale when absent. See the README
 as a class (default) or an inline style; class names, style properties and style
 values are validated and all token text is escaped before rendering. A group may
 set `render: "dropdown"` to render as a dropdown (every built-in group does), or
-`render: "icons"` to render as a row of glyph buttons; the default is chips. A token
+`render: "icons"` to render as a row of glyph buttons; the default is chips. A
+group may also set `requires` (a single value or array of `container`,
+`flex-grid-container`, `flex-container`, `container-item`, `box`, `text`,
+`children`, `replaced`, `positioned`, or `has-class:<class>`) to hide itself
+from elements it cannot affect — `container` matches flex/grid or a
+multi-column layout (`column-count > 1`), while `flex-grid-container` matches
+only flex/grid — unknown values are ignored, an applied edit keeps the group
+visible, and a **Show all** toggle reveals everything. A token
 may set an inline `icon: { viewBox, paths }` for icon rows; `viewBox` must match
 `0 0 <n> <n>` (1–3 digits each) and every path `d` is held to a strict charset
 (SVG commands, digits and whitespace, ≤ 400 chars, ≤ 12 paths). An invalid icon

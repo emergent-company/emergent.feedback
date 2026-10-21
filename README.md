@@ -227,6 +227,11 @@ when the URL is missing or unreachable.
         { "id": "md", "label": "Medium", "className": "p-4" },
         { "id": "lg", "label": "Large", "apply": { "type": "style", "prop": "padding", "value": "var(--space-lg)" } }
       ] },
+    { "id": "align", "label": "Align items", "applyType": "class", "requires": "container",
+      "tokens": [
+        { "id": "center", "label": "Center", "className": "items-center" },
+        { "id": "end", "label": "End", "className": "items-end" }
+      ] },
     { "id": "textColor", "label": "Text color", "applyType": "class", "removePattern": "^text-",
       "tokens": [
         { "id": "base", "label": "Default", "className": "text-base-content", "swatch": "var(--color-base-content)" },
@@ -259,6 +264,21 @@ A token may carry an inline glyph for icon rows via `"icon": { "viewBox":
 "0 0 24 24", "paths": ["M4 5 …"] }`. The `viewBox` and every path `d` are
 validated against a strict charset before rendering; an invalid icon is dropped
 while the token itself is kept (the editor falls back to a text chip).
+
+A group may set `"requires"` to hide itself from elements it cannot affect. The
+accepted values are `container`, `flex-grid-container`, `flex-container`,
+`container-item`, `box`, `text`, `children`, `replaced`, `positioned`, or
+`has-class:<class>` (for example `has-class:btn`); set a single value or an
+array of them, in which case all must be met. `container` matches a flex/grid
+container **or** a multi-column layout (`column-count > 1`), while
+`flex-grid-container` matches only a flex/grid container. Unknown values are
+ignored — the group stays available. Groups
+that do not apply to the selected element are hidden from the editor, with a
+footer note (`N settings hidden — …`) and a **Show all** button to reveal them;
+a group with an already-applied edit is always shown so it stays revertable.
+When the editor cannot determine the element's capabilities (no computed style,
+detached element, or a style-read error), it shows every group rather than
+hiding settings by mistake.
 
 ### Configuring the activation hotkey
 

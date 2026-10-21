@@ -220,6 +220,36 @@ test("buildFallbackTokens: extended groups, sections, and renders", () => {
   assert.equal(byId("margin").removePattern, "^m[xytrbl]?-");
 });
 
+test("buildFallbackTokens: annotates capability requirements", () => {
+  const theme = buildFallbackTokens();
+  const byId = (id: string) => theme.groups.find((x) => x.id === id)!;
+
+  assert.deepEqual(byId("gap").requires, ["container", "children"]);
+  assert.equal(byId("align").requires, "flex-grid-container");
+  assert.equal(byId("justify").requires, "flex-grid-container");
+  assert.equal(byId("flexDir").requires, "flex-container");
+  assert.equal(byId("wrap").requires, "flex-container");
+  assert.equal(byId("self").requires, "container-item");
+  for (const id of ["width", "height", "maxWidth", "shadow"]) {
+    assert.equal(byId(id).requires, "box", `${id} requires box`);
+  }
+  for (const id of ["textSize", "fontWeight", "textAlign"]) {
+    assert.equal(byId(id).requires, "text", `${id} requires text`);
+  }
+  assert.equal(byId("objectFit").requires, "replaced");
+  assert.equal(byId("inset").requires, "positioned");
+  for (const id of ["btnColor", "btnModifier", "btnSize"]) {
+    assert.equal(byId(id).requires, "has-class:btn", `${id} requires .btn`);
+  }
+  for (const id of ["badgeColor", "badgeModifier", "badgeSize"]) {
+    assert.equal(byId(id).requires, "has-class:badge", `${id} requires .badge`);
+  }
+  // Everything else carries no requirement.
+  for (const id of ["padding", "margin", "display", "positioning", "textColor", "backgroundColor", "rounded", "borderWidth", "borderStyle"]) {
+    assert.equal(byId(id).requires, undefined, `${id} has no requirement`);
+  }
+});
+
 test("buildFallbackTokens: no group id collides with the recorded-move group", () => {
   const theme = buildFallbackTokens();
   const ids = theme.groups.map((g) => g.id);
@@ -406,6 +436,54 @@ test("normalizeTheme: drops an invalid icon but keeps the token", () => {
     assert.equal(out!.groups[0].tokens.length, 1, "token survives a bad icon");
     assert.equal(out!.groups[0].tokens[0].icon, undefined, "icon dropped");
   }
+});
+
+// ── requires parsing ──────────────────────────────────────────────────────────
+
+test("normalizeTheme: keeps valid requires (string and array)", () => {
+  const out = normalizeTheme(payload([
+    { id: "a", label: "A", applyType: "class", requires: "container",
+      tokens: [{ id: "t", label: "T", className: "x" }] },
+    { id: "b", label: "B", applyType: "class", requires: ["box", "text"],
+      tokens: [{ id: "t", label: "T", className: "x" }] },
+    { id: "c", label: "C", applyType: "class", requires: "has-class:btn",
+      tokens: [{ id: "t", label: "T", className: "x" }] },
+  ]));
+  assert.ok(out);
+  assert.deepEqual(out!.groups[0].requires, ["container"]);
+  assert.deepEqual(out!.groups[1].requires, ["box", "text"]);
+  assert.deepEqual(out!.groups[2].requires, ["has-class:btn"]);
+});
+
+test("normalizeTheme: drops unknown requires but keeps the group", () => {
+  const out = normalizeTheme(payload([
+    { id: "a", label: "A", applyType: "class", requires: ["container", "nope", "also-bad"],
+      tokens: [{ id: "t", label: "T", className: "x" }] },
+    { id: "b", label: "B", applyType: "class", requires: "unknown-only",
+      tokens: [{ id: "t", label: "T", className: "x" }] },
+    { id: "c", label: "C", applyType: "class", requires: 42,
+      tokens: [{ id: "t", label: "T", className: "x" }] },
+  ]));
+  assert.ok(out);
+  assert.equal(out!.groups.length, 3, "groups are never dropped for a bad requirement");
+  assert.deepEqual(out!.groups[0].requires, ["container"]);
+  assert.equal(out!.groups[1].requires, undefined, "empty after filtering → dropped");
+  assert.equal(out!.groups[2].requires, undefined, "non-string ignored");
+});
+
+test("normalizeTheme: rejects a malformed has-class requirement", () => {
+  const out = normalizeTheme(payload([
+    { id: "a", label: "A", applyType: "class", requires: "has-class:",
+      tokens: [{ id: "t", label: "T", className: "x" }] },
+    { id: "b", label: "B", applyType: "class", requires: "has-class:btn primary",
+      tokens: [{ id: "t", label: "T", className: "x" }] },
+    { id: "c", label: "C", applyType: "class", requires: "has-class:btn",
+      tokens: [{ id: "t", label: "T", className: "x" }] },
+  ]));
+  assert.ok(out);
+  assert.equal(out!.groups[0].requires, undefined, "empty class dropped");
+  assert.equal(out!.groups[1].requires, undefined, "whitespace in class dropped");
+  assert.deepEqual(out!.groups[2].requires, ["has-class:btn"]);
 });
 
 // ── match / apply / revert ────────────────────────────────────────────────────
