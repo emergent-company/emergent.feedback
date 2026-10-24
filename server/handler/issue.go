@@ -568,8 +568,8 @@ func writeChanges(sb *strings.Builder, ctx map[string]any, heading string) {
 	sb.WriteString("\n")
 }
 
-// changeCount returns the number of renderable live style changes recorded on
-// the intent — only entries that are maps, matching what writeChanges renders.
+// changeCount returns the number of renderable live changes recorded on the
+// intent — only entries that are maps, matching what writeChanges renders.
 func changeCount(intent map[string]any) int {
 	styles, moves := changeCounts(intent)
 	return styles + moves
@@ -596,17 +596,17 @@ func changeCounts(intent map[string]any) (styles int, moves int) {
 	return styles, moves
 }
 
-// changesClause renders "Apply N style change(s) and move M element(s)" for the
+// changesClause renders "Apply N live change(s) and move M element(s)" for the
 // recorded live edits, or "" when there are none.
 func changesClause(intent map[string]any) string {
 	styles, moves := changeCounts(intent)
 	switch {
 	case styles > 0 && moves > 0:
-		return fmt.Sprintf(" Apply %d live style change(s) and move %d element(s) recorded on the selected element(s).", styles, moves)
+		return fmt.Sprintf(" Apply %d live change(s) and move %d element(s) recorded on the selected element(s).", styles, moves)
 	case moves > 0:
 		return fmt.Sprintf(" Move %d element(s) to the recorded position on the selected element(s).", moves)
 	case styles > 0:
-		return fmt.Sprintf(" Apply %d live style change(s) recorded on the selected element(s).", styles)
+		return fmt.Sprintf(" Apply %d live change(s) recorded on the selected element(s).", styles)
 	default:
 		return ""
 	}

@@ -40,6 +40,10 @@ import {
   getAllChanges,
   getAllChangesFor,
   getAllChangeCountFor,
+  getEditableText,
+  setTextForTarget,
+  hasTextChangeFor,
+  clearTextForTarget,
 } from "../src/selection";
 import type { TokenGroup } from "../src/tokens";
 
@@ -854,4 +858,146 @@ test("getAllChanges: a committed move and a pending style edit are both reported
   const all = getAllChanges();
   assert.equal(all.length, 2);
   assert.deepEqual(all.map((c) => c.group).sort(), ["padding", "position"]);
+});
+
+// ── Direct text edits ─────────────────────────────────────────────────────────
+
+interface FakeChild {
+  nodeType: number;
+  nodeValue?: string;
+}
+
+class FakeTextNode implements FakeChild {
+  nodeType = 3;
+  nodeValue: string;
+  constructor(value: string) {
+    this.nodeValue = value;
+  }
+}
+
+/** Fake element exposing `childNodes` (a null part stands in for an element child). */
+class FakeTextEl extends FakeEl {
+  childNodes: FakeChild[];
+  constructor(parts: (string | null)[], classes: string[] = []) {
+    super(classes);
+    this.childNodes = parts.map((p) => (p === null ? { nodeType: 1 } : new FakeTextNode(p)));
+  }
+}
+
+const textEl = (parts: (string | null)[], classes: string[] = []): Element =>
+  new FakeTextEl(parts, classes) as unknown as Element;
+
+const textValue = (el: Element): string =>
+  (el as unknown as { childNodes: FakeChild[] }).childNodes
+    .map((n) => n.nodeValue ?? "")
+    .join("");
+
+test("getEditableText: only a single non-whitespace direct text node is editable", () => {
+  assert.equal(getEditableText(textEl(["Hello"])), "Hello");
+  assert.equal(getEditableText(textEl(["\n  Hello  \n"])), "Hello", "whitespace is trimmed");
+  assert.equal(
+    getEditableText(textEl(["\n  ", "Hello", "\n"])),
+    "Hello",
+    "whitespace-only siblings are ignored"
+  );
+  assert.equal(getEditableText(textEl([null])), null, "text only in descendants");
+  assert.equal(
+    getEditableText(textEl(["Hello ", null, " world"])),
+    null,
+    "mixed inline markup is never collapsed"
+  );
+  assert.equal(getEditableText(textEl(["\n  "])), null, "whitespace-only element");
+});
+
+test("setTextForTarget: applies live, dedupes per element, and keeps the original before", () => {
+  const a = textEl(["\n  Save\n"]);
+  addTarget(a, "#save");
+
+  assert.equal(setTextForTarget(a, "Publish"), true);
+  assert.equal(textValue(a), "Publish");
+  assert.equal(hasTextChangeFor(a), true);
+  assert.deepEqual(getChanges(), [
+    { target: "#save", group: "text", before: "Save", after: "Publish" },
+  ]);
+
+  setTextForTarget(a, "Ship");
+  assert.equal(getChanges().length, 1, "one text record per element");
+  assert.equal(getChanges()[0].before, "Save", "original before preserved");
+  assert.equal(getChanges()[0].after, "Ship");
+
+  assert.equal(clearTextForTarget(a), true);
+  assert.equal(textValue(a), "\n  Save\n", "reset restores the exact original whitespace");
+  assert.equal(hasTextChangeFor(a), false);
+  assert.deepEqual(getChanges(), []);
+});
+
+test("setTextForTarget: typing the original back drops the record", () => {
+  const a = textEl(["\n  Save\n"]);
+  addTarget(a, "#a");
+
+  setTextForTarget(a, "Publish");
+  setTextForTarget(a, "  Save ");
+
+  assert.equal(hasTextChangeFor(a), false);
+  assert.equal(textValue(a), "\n  Save\n");
+  assert.deepEqual(getChanges(), []);
+});
+
+test("setTextForTarget: clearing the field keeps the row editable and Reset targets the same node", () => {
+  // Whitespace, an element child, then the editable text after it.
+  const a = textEl([" ", null, "Save"]);
+  addTarget(a, "#save");
+
+  assert.equal(setTextForTarget(a, ""), true);
+  assert.equal(getEditableText(a), "", "cleared element stays editable");
+  assert.equal(hasTextChangeFor(a), true);
+
+  // Subsequent typing still goes to the SAME node, not the leading whitespace.
+  assert.equal(setTextForTarget(a, "Publish"), true);
+  assert.equal(textValue(a), " Publish");
+
+  assert.equal(clearTextForTarget(a), true);
+  assert.equal(textValue(a), " Save", "Reset restores the edited node, not the first text child");
+});
+
+test("removeTarget: reverts a pending text edit before dropping the record", () => {
+  const a = textEl(["A"]);
+  addTarget(a, "#a");
+  setTextForTarget(a, "Alpha");
+
+  removeTarget(a);
+
+  assert.equal(textValue(a), "A");
+  assert.equal(getChangeCount(), 0);
+});
+
+test("text edits: commit persists, reload replays, and entries are labelled Text", () => {
+  const a = textEl(["\n  A\n"]);
+  addTarget(a, "#a");
+  setTextForTarget(a, "Alpha");
+  commitChanges();
+
+  assert.deepEqual(committedStorage(), [
+    { kind: "text", selector: "#a", nodeIndex: 0, before: "\n  A\n", after: "Alpha" },
+  ]);
+  const entry = getCommittedEntries()[0];
+  assert.equal(entry.group, "text");
+  assert.equal(entry.groupLabel, "Text");
+  assert.equal(entry.before, "A", "display value is trimmed");
+  assert.equal(entry.after, "Alpha");
+
+  // Simulate a reload: a fresh element carrying the host's original text.
+  clear();
+  const reloaded = textEl(["\n  A\n"]);
+  const g = globalThis as unknown as { document: unknown };
+  const prevDocument = g.document;
+  g.document = { querySelector: (sel: string): Element | null => (sel === "#a" ? reloaded : null) };
+  try {
+    loadCommitted();
+  } finally {
+    g.document = prevDocument;
+  }
+
+  assert.equal(textValue(reloaded), "Alpha", "committed text replayed on load");
+  assert.equal(getCommittedEntries()[0].stale, false);
 });

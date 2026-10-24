@@ -146,7 +146,37 @@ func TestBuildIssueContentChanges(t *testing.T) {
 		"## Requested changes",
 		"- `main > section > button.cta` — padding: `p-2` → `p-4`",
 		"- `main > section > button.cta` — backgroundColor: `(none)` → `bg-primary`",
-		"Apply 2 live style change(s) recorded on the selected element(s).",
+		"Apply 2 live change(s) recorded on the selected element(s).",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("body missing %q\n%s", want, body)
+		}
+	}
+}
+
+func TestBuildIssueContentTextChange(t *testing.T) {
+	ctx := map[string]any{
+		"intent": map[string]any{
+			"changes": []any{
+				map[string]any{"target": "button.cta", "group": "text", "before": "A", "after": "Alpha"},
+			},
+		},
+	}
+	ctxJSON, _ := json.Marshal(ctx)
+	items := []store.Feedback{{
+		ID:          1,
+		URL:         "https://app.example.com/",
+		Selector:    "button.cta",
+		Comment:     "rename the button",
+		ContextJSON: string(ctxJSON),
+		GitHubUser:  "alice",
+	}}
+	_, body := buildIssueContent(items, "")
+
+	for _, want := range []string{
+		"## Requested changes",
+		"- `button.cta` — text: `A` → `Alpha`",
+		"Apply 1 live change(s) recorded on the selected element(s).",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("body missing %q\n%s", want, body)
@@ -191,8 +221,8 @@ func TestBuildIssueContentMove(t *testing.T) {
 			t.Fatalf("body missing %q\n%s", want, body)
 		}
 	}
-	if strings.Contains(body, "live style change") {
-		t.Fatalf("a move must not be described as a style change:\n%s", body)
+	if strings.Contains(body, "live change") {
+		t.Fatalf("a move must not be described as a live change:\n%s", body)
 	}
 }
 
@@ -225,7 +255,7 @@ func TestBuildIssueContentStyleAndMove(t *testing.T) {
 	}}
 	_, body := buildIssueContent(items, "")
 
-	if want := "Apply 1 live style change(s) and move 1 element(s) recorded on the selected element(s)."; !strings.Contains(body, want) {
+	if want := "Apply 1 live change(s) and move 1 element(s) recorded on the selected element(s)."; !strings.Contains(body, want) {
 		t.Fatalf("body missing %q\n%s", want, body)
 	}
 }
@@ -256,7 +286,7 @@ func TestBuildIssueContentPositionTokenIsNotAMove(t *testing.T) {
 	for _, want := range []string{
 		"- `button.cta` — positioning: `(none)` → `relative`",
 		"- `button.cta` — position: `(none)` → `absolute`",
-		"Apply 2 live style change(s) recorded on the selected element(s).",
+		"Apply 2 live change(s) recorded on the selected element(s).",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("body missing %q\n%s", want, body)

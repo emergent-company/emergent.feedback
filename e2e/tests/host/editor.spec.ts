@@ -97,6 +97,30 @@ test.describe("editor affordances (structure fixture)", () => {
     await expect(page.locator("#markup-btn")).toHaveClass(classRe("p-4"));
   });
 
+  test("text: edits a direct text child, resets it, and is absent for container text", async ({ page }) => {
+    await openEditorOn(page, "#btn-a");
+    const row = page.locator('.ef-prop-row[data-group="text"]');
+    await expect(row).toHaveCount(1);
+    const input = row.locator(".ef-text-input");
+    await expect(input).toHaveValue("A");
+
+    await input.fill("Alpha");
+    await expect(page.locator("#btn-a")).toHaveText("Alpha", { useInnerText: true });
+    await input.press("Enter");
+
+    await expect(page.locator(".ef-changes-list")).toContainText("Text");
+    await expect(page.locator(".ef-changes-list")).toContainText("Alpha");
+    await expect(row.locator(".ef-text-reset")).toBeVisible();
+
+    await row.locator(".ef-text-reset").click();
+    await expect(page.locator("#btn-a")).toHaveText("A", { useInnerText: true });
+    await expect(page.locator(".ef-changes-list")).toHaveCount(0);
+
+    // The toolbar's text lives in its child buttons, not directly on the container.
+    await openEditorOn(page, "#toolbar", { x: 2, y: 2 });
+    await expect(page.locator('.ef-prop-row[data-group="text"]')).toHaveCount(0);
+  });
+
   test("layout groups render as dropdowns and apply their Tailwind class", async ({ page }) => {
     await openEditorOn(page, "#btn-a");
     // The CSS position group's id is "positioning": "position" is reserved for

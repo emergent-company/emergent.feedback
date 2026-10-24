@@ -22,6 +22,7 @@ import type { ThemeTokens } from "./tokens";
 import {
   applyTokenToTarget,
   clearCommitted,
+  clearTextForTarget,
   clearTokenForTarget,
   commitChanges,
   flash as flashTarget,
@@ -32,6 +33,7 @@ import {
   getCommittedEntries,
   getTargets as getSelectionTargets,
   isPickMode,
+  notifySelectionChange,
   onHighlightChange,
   onSelectionChange,
   refreshOutlines,
@@ -40,6 +42,7 @@ import {
   revertPending,
   setHighlight,
   setPickMode,
+  setTextForTarget,
   type TargetEntry,
 } from "./selection";
 
@@ -939,6 +942,42 @@ function injectStyles(): void {
       flex-direction: column;
       gap: 6px;
     }
+    /* Direct-text row: a single-line input + Reset, same chrome as dropdowns. */
+    #__ef_dialog__ .ef-text-field {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
+    #__ef_dialog__ .ef-text-input {
+      flex: 1;
+      min-width: 0;
+      padding: 4px 9px;
+      border: 1.5px solid var(--ef-control-border);
+      border-radius: 6px;
+      background: var(--ef-control-bg);
+      color: var(--ef-text);
+      font-family: inherit;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    #__ef_dialog__ .ef-text-input:focus {
+      outline: none;
+      border-color: var(--ef-primary);
+      box-shadow: 0 0 0 3px var(--ef-focus-ring-chip);
+    }
+    #__ef_dialog__ .ef-text-reset {
+      flex-shrink: 0;
+      background: transparent;
+      border: none;
+      padding: 0;
+      color: var(--ef-primary);
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    #__ef_dialog__ .ef-text-reset:hover { text-decoration: underline; }
+    #__ef_dialog__ .ef-text-reset[hidden] { display: none; }
     #__ef_dialog__ .ef-token-row {
       display: flex;
       flex-wrap: wrap;
@@ -2372,6 +2411,23 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
         }
       },
       onRerender: () => renderStyle(),
+      onTextInput: (value) => {
+        const cur = activeTarget();
+        if (cur) setTextForTarget(cur.el, value);
+      },
+      onTextCommit: () => {
+        // Defer the re-render: the blur that triggers this can precede a click
+        // on Commit / Revert / a target tab, and re-mounting now would remove
+        // the button under the pointer and swallow the click.
+        setTimeout(() => notifySelectionChange(), 0);
+      },
+      onTextReset: () => {
+        const cur = activeTarget();
+        if (!cur) return;
+        if (!clearTextForTarget(cur.el)) {
+          showToast("This text comes from the page markup, not an overlay edit.");
+        }
+      },
     });
   };
 
@@ -2387,7 +2443,10 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
       pendingCount === 0
         ? `<div class="ef-changes-empty">No pending edits on this element. Commit to freeze them.</div>`
         : `<ul class="ef-changes-list">
-            ${pending.map((c) => `<li><span class="ef-change-group">${escapeHtml(c.move != null ? "Position" : c.group)}</span><span class="ef-change-before">${escapeHtml(c.before || "—")}</span><span class="ef-arrow">→</span><span class="ef-change-after">${escapeHtml(c.after)}</span></li>`).join("")}
+            ${pending.map((c) => {
+              const groupLabel = c.move != null ? "Position" : c.group === "text" ? "Text" : c.group;
+              return `<li><span class="ef-change-group">${escapeHtml(groupLabel)}</span><span class="ef-change-before">${escapeHtml(c.before || "—")}</span><span class="ef-arrow">→</span><span class="ef-change-after">${escapeHtml(c.after)}</span></li>`;
+            }).join("")}
           </ul>`;
 
     const committedList =

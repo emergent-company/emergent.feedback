@@ -20,7 +20,12 @@ import {
   type ThemeTokens,
 } from "./tokens";
 import { visibleGroups, describeRequirement } from "./applicability";
-import { setHighlight, type TargetEntry } from "./selection";
+import {
+  getEditableText,
+  hasTextChangeFor,
+  setHighlight,
+  type TargetEntry,
+} from "./selection";
 import { describePosition } from "./structure";
 import { ICONS, type GlyphIcon } from "./icons";
 
@@ -33,6 +38,15 @@ export interface StyleEditorCallbacks {
   onClear: (group: TokenGroup) => void;
   /** Re-render the editor (called after toggling "Show all"). */
   onRerender: () => void;
+  /**
+   * Live text edit from the Text field. The DOM is updated by the state layer
+   * without a re-render, so typing keeps focus and the caret.
+   */
+  onTextInput: (value: string) => void;
+  /** The Text field blurred / Enter was pressed: refresh the Changes panel. */
+  onTextCommit: () => void;
+  /** Restore the element's original direct text. */
+  onTextReset: () => void;
 }
 
 /**
@@ -242,6 +256,28 @@ function renderClasses(target: TargetEntry): string {
     </details>`;
 }
 
+/**
+ * Direct-text row. Only rendered when the element has exactly one
+ * non-whitespace direct text child — replacing text for mixed inline markup
+ * would collapse the element's children, and elements whose text lives in
+ * descendants are edited through those descendants instead.
+ */
+function renderTextRow(target: TargetEntry): string {
+  const text = getEditableText(target.el);
+  if (text === null) return "";
+  const changed = hasTextChangeFor(target.el);
+  return `
+    <div class="ef-prop-row ef-text-row" data-group="text">
+      <span class="ef-prop-label" title="Text">Text</span>
+      <div class="ef-prop-control">
+        <div class="ef-text-field">
+          <input type="text" class="ef-text-input" value="${escapeHtml(text)}" spellcheck="false" autocomplete="off" aria-label="Text content">
+          <button type="button" class="ef-text-reset" title="Restore the original text"${changed ? "" : " hidden"}>Reset</button>
+        </div>
+      </div>
+    </div>`;
+}
+
 interface EditorRenderOptions {
   hiddenCount: number;
   hiddenReasons: string;
@@ -294,6 +330,7 @@ function renderEditorHTML(
         <span class="ef-style-target-label">Editing</span>
         <code class="ef-style-target-sel" title="${escapeHtml(target.selector)}">${escapeHtml(label)}</code>
       </div>
+      ${renderTextRow(target)}
       <div class="ef-style-structure" title="Drag the element on the page to move it">
         <span class="ef-style-target-label">Position</span>
         <span class="ef-style-position">${escapeHtml(describePosition(target.el))}</span>
@@ -489,6 +526,34 @@ function wireCustomInputs(
   });
 }
 
+/** Wire the direct-text field: live typing, blur/Enter commit, Reset. */
+function wireTextRow(root: HTMLElement, el: Element, cb: StyleEditorCallbacks): void {
+  const input = root.querySelector<HTMLInputElement>(".ef-text-input");
+  if (!input) return;
+  const reset = root.querySelector<HTMLButtonElement>(".ef-text-reset");
+
+  input.addEventListener("input", () => {
+    cb.onTextInput(input.value);
+    if (reset) reset.hidden = !hasTextChangeFor(el);
+  });
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      input.blur();
+      return;
+    }
+    if (e.key === "Escape") {
+      // Keep Escape from reaching the dialog's close handler while editing.
+      e.stopPropagation();
+      input.blur();
+    }
+  });
+  // `change` fires on blur (value changed). The commit callback defers its
+  // re-render so the click that caused the blur still lands.
+  input.addEventListener("change", () => cb.onTextCommit());
+  reset?.addEventListener("click", () => cb.onTextReset());
+}
+
 /** Render + wire the style editor into `root` for the active target. */
 export function mountStyleEditor(
   root: HTMLElement,
@@ -551,6 +616,7 @@ export function mountStyleEditor(
   wireDropdowns(root, groups, target.el, cb);
   wireCustomToggles(root);
   wireCustomInputs(root, tokens, cb);
+  wireTextRow(root, target.el, cb);
 
   // "Show all" / "Hide inapplicable" toggle: flips the module-level flag and
   // re-renders so the filtered/unfiltered group list is rebuilt.

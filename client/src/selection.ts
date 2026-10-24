@@ -27,6 +27,24 @@ interface AppliedRecord {
 }
 
 /**
+ * A direct-text edit on one element. Elements are only offered a text field
+ * when they have exactly one non-whitespace direct text node (see
+ * `directTextNode`), so `nodeIndex` is enough to find it again after the text
+ * is cleared (an empty text node is no longer "non-whitespace").
+ */
+export interface TextRecord {
+  kind: "text";
+  el: Element | null;
+  selector: string;
+  /** Index of the edited node in `el.childNodes` at edit time. */
+  nodeIndex: number;
+  /** Raw original node value (kept exact so revert restores surrounding whitespace). */
+  before: string;
+  /** Value typed into the editor. */
+  after: string;
+}
+
+/**
  * A DOM move ("position" edit). Anchors instead of nodes: a recorded position
  * has to survive a page reload, where the element objects are new.
  */
@@ -38,14 +56,20 @@ export interface PlacementRecord {
   to: PlacementAnchor;
 }
 
-type EditRecord = AppliedRecord | PlacementRecord;
+export type EditRecord = AppliedRecord | PlacementRecord | TextRecord;
 
 const isPlacement = (r: EditRecord): r is PlacementRecord => r.kind === "position";
-const isStyle = (r: EditRecord): r is AppliedRecord => r.kind !== "position";
+const isText = (r: EditRecord): r is TextRecord => r.kind === "text";
+const isStyle = (r: EditRecord): r is AppliedRecord =>
+  r.kind !== "position" && r.kind !== "text";
 
 /** The synthetic group id/label a move is reported under. */
 export const POSITION_GROUP = "position";
 const POSITION_GROUP_LABEL = "Position";
+
+/** The synthetic group id/label a direct-text edit is reported under. */
+export const TEXT_GROUP = "text";
+const TEXT_GROUP_LABEL = "Text";
 
 /** Edit record → payload shape (a move reports its position labels). */
 function toStyleChange(r: EditRecord): StyleChange {
@@ -56,6 +80,14 @@ function toStyleChange(r: EditRecord): StyleChange {
       before: r.from.label,
       after: r.to.label,
       move: { from: r.from, to: r.to },
+    };
+  }
+  if (isText(r)) {
+    return {
+      target: r.selector,
+      group: TEXT_GROUP,
+      before: r.before.trim(),
+      after: r.after.trim(),
     };
   }
   return { target: r.selector, group: r.group.id, before: r.before, after: r.after };
@@ -104,6 +136,7 @@ function revertRecord(r: EditRecord): void {
   if (!r.el) return; // stale entry — nothing to restore
   try {
     if (isPlacement(r)) placeAt(r.el, r.from);
+    else if (isText(r)) writeDirectText(r.el, r.before, r.nodeIndex);
     else revertToken(r.el, r.group, { before: r.before, after: r.after });
   } catch {
     // Element may have left the DOM — nothing to restore.
@@ -199,6 +232,168 @@ export function clear(): void {
   resetHighlight();
   dropListeners();
   removeOverlays();
+  emit();
+}
+
+// ── Direct text ───────────────────────────────────────────────────────────────
+
+const TEXT_NODE = 3;
+
+/** An element's direct text children, ignoring whitespace-only nodes. */
+function directTextNodes(el: Element): Text[] {
+  const out: Text[] = [];
+  const kids = el.childNodes as unknown as ArrayLike<ChildNode> | undefined;
+  if (!kids) return out;
+  for (let i = 0; i < kids.length; i++) {
+    const node = kids[i];
+    if (!node || node.nodeType !== TEXT_NODE) continue;
+    if (!(node.nodeValue ?? "").trim()) continue;
+    out.push(node as Text);
+  }
+  return out;
+}
+
+/**
+ * The element's editable direct text node — only when it has exactly ONE
+ * non-whitespace direct text child. Zero means the text lives in descendants
+ * (or there is none); several means mixed inline markup (`Hello <b>world</b>`),
+ * where replacing "the text" would collapse the markup. In both cases the
+ * editor offers no text field.
+ */
+export function directTextNode(el: Element): Text | null {
+  const nodes = directTextNodes(el);
+  return nodes.length === 1 ? nodes[0] : null;
+}
+
+/** A text node at a recorded `childNodes` index, or null when it drifted. */
+function textNodeAt(el: Element, index: number): Text | null {
+  if (index < 0) return null;
+  const kids = el.childNodes as unknown as ArrayLike<ChildNode> | undefined;
+  const node = kids?.[index];
+  return node && node.nodeType === TEXT_NODE ? (node as Text) : null;
+}
+
+/** The pending or committed text record for `el`, if any. */
+function textRecordFor(el: Element): TextRecord | null {
+  return (
+    applied.find((r): r is TextRecord => isText(r) && r.el === el) ??
+    committed.find((r): r is TextRecord => isText(r) && r.el === el) ??
+    null
+  );
+}
+
+/** Index of `node` in `el.childNodes`, or -1 when it left the DOM. */
+function indexOfChild(el: Element, node: Node): number {
+  const kids = el.childNodes as unknown as ArrayLike<ChildNode> | undefined;
+  if (!kids) return -1;
+  for (let i = 0; i < kids.length; i++) {
+    if (kids[i] === node) return i;
+  }
+  return -1;
+}
+
+/**
+ * The node the Text field edits. A single non-whitespace direct text node is
+ * the normal case; when the user cleared that node, fall back to the recorded
+ * index so the field (and Reset) keep working on an empty string.
+ */
+function textNodeFor(el: Element): Text | null {
+  const direct = directTextNode(el);
+  if (direct) return direct;
+  const rec = textRecordFor(el);
+  return rec ? textNodeAt(el, rec.nodeIndex) : null;
+}
+
+/** Current direct text, trimmed — or null when the element is not editable. */
+export function getEditableText(el: Element): string | null {
+  const node = textNodeFor(el);
+  if (node) return (node.nodeValue ?? "").trim();
+  const rec = textRecordFor(el);
+  return rec ? rec.after.trim() : null;
+}
+
+/**
+ * Write a direct text node's value, leaving surrounding markup intact. A
+ * recorded `nodeIndex` wins so Reset targets the node that was edited, even
+ * after it was cleared; otherwise the normal single-text-node lookup is used.
+ */
+function writeDirectText(el: Element, value: string, nodeIndex?: number): boolean {
+  const node =
+    (nodeIndex !== undefined ? textNodeAt(el, nodeIndex) : null) ?? textNodeFor(el);
+  if (!node) return false;
+  node.nodeValue = value;
+  return true;
+}
+
+/**
+ * Apply a live text edit from the editor: update the node and record the
+ * pending change WITHOUT notifying subscribers. A notify here would re-mount
+ * the editor on every keystroke and destroy the caret; the field's blur/change
+ * calls `notifySelectionChange` instead. Returns false when the element has no
+ * editable text node anymore.
+ */
+export function setTextForTarget(el: Element, value: string): boolean {
+  const node = textNodeFor(el);
+  if (!node) return false;
+  const current = node.nodeValue ?? "";
+  const existing = applied.find((r): r is TextRecord => isText(r) && r.el === el);
+  const before = existing ? existing.before : current;
+
+  // Typing back the original value is not an edit: restore the exact original
+  // (including surrounding whitespace) and drop the pending record.
+  if (value.trim() === before.trim()) {
+    node.nodeValue = before;
+    applied = applied.filter((r) => !(isText(r) && r.el === el));
+    return true;
+  }
+
+  node.nodeValue = value;
+  const selector = targets.find((t) => t.el === el)?.selector ?? "";
+  const nodeIndex =
+    existing?.nodeIndex ?? indexOfChild(el, node);
+  applied = applied.filter((r) => !(isText(r) && r.el === el));
+  applied.push({ kind: "text", el, selector, nodeIndex, before, after: value });
+  return true;
+}
+
+/** True when a pending or committed text edit is recorded for `el`. */
+export function hasTextChangeFor(el: Element): boolean {
+  return (
+    applied.some((r) => isText(r) && r.el === el) ||
+    committed.some((r) => isText(r) && r.el === el)
+  );
+}
+
+/**
+ * Restore the element's original direct text ("Reset"): revert + drop the
+ * pending record, else the committed one. Returns false when the overlay
+ * recorded no text edit for this element.
+ */
+export function clearTextForTarget(el: Element): boolean {
+  const pending = applied.find((r): r is TextRecord => isText(r) && r.el === el);
+  if (pending) {
+    revertRecord(pending);
+    applied = applied.filter((r) => r !== pending);
+    renderHighlight();
+    emit();
+    return true;
+  }
+
+  const idx = committed.findIndex((r): r is TextRecord => isText(r) && r.el === el);
+  if (idx < 0) return false;
+  revertRecord(committed[idx]);
+  committed.splice(idx, 1);
+  renderHighlight();
+  persist();
+  emit();
+  return true;
+}
+
+/**
+ * Notify selection subscribers without touching the DOM. Used after live text
+ * typing (whose per-keystroke updates deliberately stay silent).
+ */
+export function notifySelectionChange(): void {
   emit();
 }
 
@@ -376,11 +571,21 @@ function storageKey(): string {
 function persist(): void {
   if (typeof localStorage === "undefined") return;
   try {
-    const data = committed.map((r) =>
-      isPlacement(r)
-        ? { kind: POSITION_GROUP, selector: r.selector, from: r.from, to: r.to }
-        : { selector: r.selector, group: r.group, token: r.token, before: r.before, after: r.after }
-    );
+    const data = committed.map((r) => {
+      if (isPlacement(r)) {
+        return { kind: POSITION_GROUP, selector: r.selector, from: r.from, to: r.to };
+      }
+      if (isText(r)) {
+        return {
+          kind: TEXT_GROUP,
+          selector: r.selector,
+          nodeIndex: r.nodeIndex,
+          before: r.before,
+          after: r.after,
+        };
+      }
+      return { selector: r.selector, group: r.group, token: r.token, before: r.before, after: r.after };
+    });
     localStorage.setItem(storageKey(), JSON.stringify(data));
   } catch {
     // Private mode / sandboxed iframe / absent localStorage — ignore.
@@ -390,11 +595,16 @@ function persist(): void {
 /** True when two records cover the same element (or selector) + group. */
 function sameRecord(a: EditRecord, b: EditRecord): boolean {
   if (isPlacement(a) !== isPlacement(b)) return false;
+  if (isText(a) !== isText(b)) return false;
   if (isPlacement(a) && isPlacement(b)) {
     if (a.el && b.el) return a.el === b.el;
     return a.selector === b.selector;
   }
-  if (!isPlacement(a) && !isPlacement(b)) {
+  if (isText(a) && isText(b)) {
+    if (a.el && b.el) return a.el === b.el;
+    return a.selector === b.selector;
+  }
+  if (isStyle(a) && isStyle(b)) {
     if (a.group.id !== b.group.id) return false;
     if (a.el && b.el) return a.el === b.el;
     return a.selector === b.selector;
@@ -418,7 +628,8 @@ export function commitChanges(): void {
     }
     const prev = merged[idx];
     if (isPlacement(prev) && isPlacement(r)) merged[idx] = { ...r, from: prev.from };
-    else if (!isPlacement(prev) && !isPlacement(r)) merged[idx] = { ...r, before: prev.before };
+    else if (isText(prev) && isText(r)) merged[idx] = { ...r, before: prev.before };
+    else if (isStyle(prev) && isStyle(r)) merged[idx] = { ...r, before: prev.before };
     else merged[idx] = r;
   }
   committed = merged;
@@ -511,6 +722,23 @@ export function loadCommitted(): void {
       continue;
     }
 
+    // A recorded direct-text edit: replay it on the element's text node.
+    if (rec.kind === TEXT_GROUP) {
+      const before = typeof rec.before === "string" ? rec.before : "";
+      const after = typeof rec.after === "string" ? rec.after : "";
+      const nodeIndex = typeof rec.nodeIndex === "number" ? rec.nodeIndex : -1;
+      const el = queryEl(selector);
+      if (el) {
+        try {
+          writeDirectText(el, after, nodeIndex >= 0 ? nodeIndex : undefined);
+        } catch {
+          // ignore — element apply failed, treat as stale-but-present
+        }
+      }
+      records.push({ kind: "text", el, selector, nodeIndex, before, after });
+      continue;
+    }
+
     const group = (rec.group ?? null) as TokenGroup | null;
     const token = (rec.token ?? null) as Token | null;
     const before = typeof rec.before === "string" ? rec.before : "";
@@ -545,6 +773,7 @@ export function reapplyCommitted(): void {
     if (!el) continue;
     try {
       if (isPlacement(r)) placeAt(el, r.to);
+      else if (isText(r)) writeDirectText(el, r.after, r.nodeIndex);
       else applyToken(el, r.group, r.token);
     } catch {
       // ignore — keep the entry stale-but-present
@@ -557,25 +786,36 @@ export function reapplyCommitted(): void {
 
 /** Committed edits, flattened for the panel's "committed changes" list. */
 export function getCommittedEntries(): CommittedEntry[] {
-  return committed.map((r) =>
-    isPlacement(r)
-      ? {
-          selector: r.selector,
-          group: POSITION_GROUP,
-          groupLabel: POSITION_GROUP_LABEL,
-          before: r.from.label,
-          after: r.to.label,
-          stale: r.el == null,
-        }
-      : {
-          selector: r.selector,
-          group: r.group.id,
-          groupLabel: r.group.label,
-          before: r.before,
-          after: r.after,
-          stale: r.el == null,
-        }
-  );
+  return committed.map((r) => {
+    if (isPlacement(r)) {
+      return {
+        selector: r.selector,
+        group: POSITION_GROUP,
+        groupLabel: POSITION_GROUP_LABEL,
+        before: r.from.label,
+        after: r.to.label,
+        stale: r.el == null,
+      };
+    }
+    if (isText(r)) {
+      return {
+        selector: r.selector,
+        group: TEXT_GROUP,
+        groupLabel: TEXT_GROUP_LABEL,
+        before: r.before.trim(),
+        after: r.after.trim(),
+        stale: r.el == null,
+      };
+    }
+    return {
+      selector: r.selector,
+      group: r.group.id,
+      groupLabel: r.group.label,
+      before: r.before,
+      after: r.after,
+      stale: r.el == null,
+    };
+  });
 }
 
 export function getCommittedCount(): number {

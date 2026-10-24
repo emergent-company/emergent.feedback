@@ -181,6 +181,16 @@ selected dropdown option does the same. `Default` (unset) is not `None`
 an element comes from the page's own markup rather than an overlay edit, Default
 leaves it alone and says so.
 
+When the active element's text is a **direct child** of that element (one
+non-whitespace text node, e.g. `<button>Save</button>`), a **Text** field
+appears above **Position**. Typing updates the text on the page live; Enter or
+blur records the edit and **Reset** restores the original text. Elements whose
+text lives only in descendants, or whose content mixes text and inline markup
+(`<p>Hello <b>world</b>!</p>`), get no field — the overlay never collapses child
+markup. Text edits join the same pending/commit flow and ride in the payload as
+`{ target, group: "text", before, after }`, so the issue body lists them as
+`` `target` — text: `before` → `after` ``.
+
 Selected elements can also be **dragged to move them**. There is no move mode:
 press a selected element on the page, move more than ~5 px and drop it. Inside a
 container the drop reorders siblings (the insertion line follows the row/column

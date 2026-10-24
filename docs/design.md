@@ -413,6 +413,11 @@ click-to-pick and restores it when the pick completes (Escape cancels the pick).
   be empty). Even though editing is per element, the payload aggregates every
   target's changes and each record carries its `target` selector. Scope breadth
   becomes `multi` when more than one target is selected.
+- A text edit is the same record with `group: "text"`: `{ target, group: "text",
+  before, after }`. The editor only offers the field when the element has exactly
+  one non-whitespace direct text child, so mixed inline markup (`Hello <b>world</b>`)
+  is never collapsed. The change's DOM node index is tracked internally for
+  replay/revert but is not part of the payload.
 - A DOM move is the same record with `group: "position"` and a `move` field:
   `{ from, to }`, each anchor `{ container, before, index, label }` (`before:
   null` = last child; selectors, so a reload can replay). `before`/`after` carry
