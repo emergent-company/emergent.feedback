@@ -261,10 +261,10 @@ function injectStyles(): void {
       flex-direction: column;
     }
     #__ef_dialog__ .ef-design-body {
-      padding: 16px 18px 20px;
+      padding: 0;
       display: flex;
       flex-direction: column;
-      gap: 22px;
+      gap: 0;
     }
 
     /* ── Existing comments ─────────────────────────────────────────────────── */
@@ -752,8 +752,7 @@ function injectStyles(): void {
 
     /* ── Targets (per-element tabs) ────────────────────────────────────────── */
     #__ef_dialog__ .ef-targets {
-      padding: 12px 18px;
-      border-bottom: 1px solid var(--ef-border);
+      padding: 10px 8px 12px 16px;
       flex-shrink: 0;
     }
     #__ef_dialog__ .ef-target-tabs {
@@ -862,23 +861,26 @@ function injectStyles(): void {
       border-color: var(--ef-primary);
     }
 
-    /* ── Live style editor ─────────────────────────────────────────────────── */
+    /* ── Live style editor ─────────────────────────────────────────────────────
+       Property-inspector layout: a labelled field grid inside collapsible
+       sections. Fields pair into two columns; segmented groups keep their
+       intrinsic width and never stretch. Sizes follow a design tool's inspector
+       (26px controls, 10px labels, 8px gutters) in this overlay's palette. */
     #__ef_dialog__ .ef-style-editor {
       display: flex;
       flex-direction: column;
-      gap: 16px;
     }
     #__ef_dialog__ .ef-style-empty {
       font-size: 12px;
       color: var(--ef-muted);
-      padding: 2px 0 4px;
+      padding: 4px 16px 12px;
     }
     #__ef_dialog__ .ef-style-head {
       display: flex;
-      align-items: baseline;
+      align-items: center;
       gap: 8px;
-      padding-bottom: 12px;
-      border-bottom: 1px solid var(--ef-border-subtle);
+      padding: 12px 8px 6px 16px;
+      min-width: 0;
     }
     #__ef_dialog__ .ef-style-target-label {
       font-size: 10px;
@@ -895,89 +897,440 @@ function injectStyles(): void {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      min-width: 0;
+      cursor: default;
     }
     /* Where the element sits in its parent + the "drag to move" affordance. */
-    #__ef_dialog__ .ef-style-structure {
+    #__ef_dialog__ .ef-style-context {
       display: flex;
-      align-items: baseline;
+      align-items: center;
       gap: 8px;
-      padding: 8px 0 12px;
-      border-bottom: 1px solid var(--ef-border-subtle);
+      padding: 0 8px 10px 16px;
+      min-width: 0;
     }
     #__ef_dialog__ .ef-style-position {
       font-family: ui-monospace, "SF Mono", Menlo, monospace;
       font-size: 11px;
-      color: var(--ef-text);
+      color: var(--ef-text-soft);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      flex: 1;
+      min-width: 0;
     }
     #__ef_dialog__ .ef-style-drag-hint {
-      margin-left: auto;
       font-size: 10px;
       color: var(--ef-muted);
       flex-shrink: 0;
     }
-    #__ef_dialog__ .ef-prop-row {
-      display: flex;
-      align-items: flex-start;
-      gap: 12px;
-      min-width: 0;
+
+    /* ── Sections ─────────────────────────────────────────────────────────── */
+    #__ef_dialog__ .ef-style-section {
+      border-top: 1px solid var(--ef-border);
     }
-    #__ef_dialog__ .ef-prop-label {
-      flex: 0 0 auto;
-      width: 94px;
-      padding-top: 5px;
+    #__ef_dialog__ .ef-section-head {
+      display: flex;
+      align-items: center;
+      height: 34px;
+      padding: 0 8px 0 16px;
+      gap: 4px;
+    }
+    #__ef_dialog__ .ef-section-toggle {
+      flex: 1;
+      min-width: 0;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0;
+      border: none;
+      background: none;
+      color: var(--ef-text);
+      font-family: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+    #__ef_dialog__ .ef-section-toggle:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 2px var(--ef-focus-ring-input);
+      border-radius: 4px;
+    }
+    #__ef_dialog__ .ef-section-title {
       font-size: 11px;
       font-weight: 600;
+      letter-spacing: 0.01em;
       color: var(--ef-text);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+    #__ef_dialog__ .ef-section-chevron {
+      display: inline-flex;
+      width: 12px;
+      height: 12px;
+      flex-shrink: 0;
+      color: var(--ef-muted);
+      transition: transform 0.12s ease;
+    }
+    #__ef_dialog__ .ef-section-chevron svg {
+      width: 12px;
+      height: 12px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    #__ef_dialog__ .ef-style-section:not(.ef-section-collapsed) .ef-section-chevron {
+      transform: rotate(90deg);
+    }
+    #__ef_dialog__ .ef-section-reset {
+      width: 22px;
+      height: 22px;
+      flex-shrink: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      border: none;
+      background: transparent;
+      color: var(--ef-muted);
+      border-radius: 4px;
+      cursor: pointer;
+      opacity: 0.45;
+      transition: opacity 0.12s, color 0.12s, background 0.12s;
+    }
+    #__ef_dialog__ .ef-section-reset svg {
+      width: 13px;
+      height: 13px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.6;
+    }
+    #__ef_dialog__ .ef-section-reset:hover:not(:disabled) {
+      opacity: 1;
+      color: var(--ef-text-strong);
+      background: var(--ef-hover-bg);
+    }
+    #__ef_dialog__ .ef-section-reset:disabled {
+      opacity: 0;
+      visibility: hidden;
+      cursor: default;
+    }
+    #__ef_dialog__ .ef-section-body {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px 8px;
+      padding: 4px 8px 14px 16px;
+    }
+    #__ef_dialog__ .ef-section-collapsed .ef-section-body {
+      display: none;
+    }
+
+    /* ── Fields ───────────────────────────────────────────────────────────── */
+    #__ef_dialog__ .ef-prop-row {
+      grid-column: 1 / -1;
+      min-width: 0;
+    }
+    #__ef_dialog__ .ef-prop-row--half {
+      grid-column: span 1;
+    }
+    #__ef_dialog__ .ef-prop-head {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 14px;
+      margin-bottom: 5px;
+      min-width: 0;
+    }
+    #__ef_dialog__ .ef-prop-label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      color: var(--ef-muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
+    }
+    #__ef_dialog__ .ef-prop-reset {
+      margin-left: auto;
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      border: none;
+      background: transparent;
+      color: var(--ef-muted);
+      border-radius: 4px;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.12s, color 0.12s, background 0.12s;
+    }
+    #__ef_dialog__ .ef-prop-reset svg {
+      width: 12px;
+      height: 12px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.6;
+    }
+    #__ef_dialog__ .ef-prop-row:hover .ef-prop-reset,
+    #__ef_dialog__ .ef-prop-row:focus-within .ef-prop-reset {
+      opacity: 0.9;
+    }
+    #__ef_dialog__ .ef-prop-row .ef-prop-reset:hover,
+    #__ef_dialog__ .ef-prop-reset:focus-visible {
+      opacity: 1;
+      color: var(--ef-text-strong);
+      background: var(--ef-hover-bg);
+      outline: none;
+    }
     #__ef_dialog__ .ef-prop-control {
-      flex: 1;
       min-width: 0;
       display: flex;
       flex-direction: column;
       gap: 6px;
     }
-    /* Direct-text row: a single-line input + Reset, same chrome as dropdowns. */
-    #__ef_dialog__ .ef-text-field {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      min-width: 0;
+    #__ef_dialog__ .ef-prop-row--segmented .ef-prop-control {
+      align-items: flex-start;
+    }
+
+    /* Direct-text field: the element's own editable text, above the sections. */
+    #__ef_dialog__ .ef-text-row {
+      padding: 0 8px 12px 16px;
     }
     #__ef_dialog__ .ef-text-input {
-      flex: 1;
-      min-width: 0;
-      padding: 4px 9px;
-      border: 1.5px solid var(--ef-control-border);
+      width: 100%;
+      height: 26px;
+      padding: 0 9px;
+      border: 1px solid var(--ef-control-border);
       border-radius: 6px;
       background: var(--ef-control-bg);
       color: var(--ef-text);
       font-family: inherit;
       font-size: 12px;
-      line-height: 1.5;
+      outline: none;
+    }
+    #__ef_dialog__ .ef-text-input:hover {
+      border-color: var(--ef-control-border-hover);
     }
     #__ef_dialog__ .ef-text-input:focus {
-      outline: none;
       border-color: var(--ef-primary);
-      box-shadow: 0 0 0 3px var(--ef-focus-ring-chip);
+      box-shadow: 0 0 0 2px var(--ef-focus-ring-input);
     }
-    #__ef_dialog__ .ef-text-reset {
-      flex-shrink: 0;
-      background: transparent;
-      border: none;
-      padding: 0;
-      color: var(--ef-primary);
+    #__ef_dialog__ .ef-text-reset[hidden] {
+      display: none;
+    }
+    #__ef_dialog__ .ef-text-reset:not([hidden]) {
+      opacity: 0.6;
+    }
+
+    /* ── Value field (select) ─────────────────────────────────────────────── */
+    #__ef_dialog__ .ef-select {
+      position: relative;
+      min-width: 0;
+    }
+    #__ef_dialog__ .ef-select-trigger {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      width: 100%;
+      height: 26px;
+      padding: 0 7px 0 8px;
+      border: 1px solid var(--ef-control-border);
+      border-radius: 6px;
+      background: var(--ef-control-bg);
+      color: var(--ef-text);
       font-size: 11px;
       font-weight: 500;
+      font-family: inherit;
+      text-align: left;
       cursor: pointer;
+      transition: border-color 0.1s, background 0.1s;
     }
-    #__ef_dialog__ .ef-text-reset:hover { text-decoration: underline; }
-    #__ef_dialog__ .ef-text-reset[hidden] { display: none; }
+    #__ef_dialog__ .ef-select-trigger:hover {
+      border-color: var(--ef-control-border-hover);
+      background: var(--ef-hover-bg);
+    }
+    #__ef_dialog__ .ef-select-trigger:focus-visible,
+    #__ef_dialog__ .ef-select-trigger[aria-expanded="true"] {
+      outline: none;
+      border-color: var(--ef-primary);
+      box-shadow: 0 0 0 2px var(--ef-focus-ring-input);
+    }
+    #__ef_dialog__ .ef-select-label {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    /* An unset field reads as a placeholder; an applied value is the only thing
+       that gets full-strength text. */
+    #__ef_dialog__ .ef-prop-row:not(.ef-is-set) .ef-select-label {
+      color: var(--ef-muted);
+    }
+    #__ef_dialog__ .ef-select-caret {
+      display: inline-flex;
+      width: 10px;
+      height: 10px;
+      flex-shrink: 0;
+      color: var(--ef-muted);
+    }
+    #__ef_dialog__ .ef-select-caret svg {
+      width: 10px;
+      height: 10px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    #__ef_dialog__ .ef-select-menu {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: calc(100% + 3px);
+      z-index: 20;
+      margin: 0;
+      padding: 4px;
+      list-style: none;
+      background: var(--ef-card-bg);
+      border: 1px solid var(--ef-border);
+      border-radius: 8px;
+      box-shadow: var(--ef-card-shadow);
+      max-height: 240px;
+      overflow-y: auto;
+    }
+    #__ef_dialog__ .ef-select-option {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      height: 24px;
+      padding: 0 7px;
+      border-radius: 5px;
+      font-size: 11px;
+      color: var(--ef-text);
+      cursor: pointer;
+      outline: none;
+    }
+    #__ef_dialog__ .ef-select-option:hover,
+    #__ef_dialog__ .ef-select-option:focus-visible {
+      background: var(--ef-hover-bg);
+    }
+    #__ef_dialog__ .ef-select-option.ef-token-on {
+      background: var(--ef-chip-on-bg);
+      color: var(--ef-chip-on-text);
+      font-weight: 600;
+    }
+    #__ef_dialog__ .ef-select-sep {
+      height: 1px;
+      margin: 4px 2px;
+      background: var(--ef-border-subtle);
+      list-style: none;
+    }
+    #__ef_dialog__ .ef-select-custom {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      height: 24px;
+      padding: 0 7px;
+      border-radius: 5px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--ef-primary);
+      cursor: pointer;
+      outline: none;
+    }
+    #__ef_dialog__ .ef-select-custom:hover,
+    #__ef_dialog__ .ef-select-custom:focus-visible {
+      background: var(--ef-hover-bg);
+    }
+    #__ef_dialog__ .ef-select-custom-edit {
+      padding: 4px 2px 2px;
+      list-style: none;
+    }
+    #__ef_dialog__ .ef-select-custom-edit[hidden] { display: none; }
+    #__ef_dialog__ .ef-custom-input {
+      width: 100%;
+      height: 26px;
+      border: 1px solid var(--ef-control-border);
+      border-radius: 6px;
+      padding: 0 8px;
+      font-size: 11px;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      color: var(--ef-text-strong);
+      outline: none;
+      background: var(--ef-surface);
+    }
+    #__ef_dialog__ .ef-custom-input:focus {
+      border-color: var(--ef-primary);
+      background: var(--ef-control-bg);
+      box-shadow: 0 0 0 2px var(--ef-focus-ring-input);
+    }
+    #__ef_dialog__ .ef-custom-input[aria-invalid="true"] {
+      border-color: var(--ef-error);
+    }
+
+    /* ── Segmented groups (icon cells) ────────────────────────────────────── */
+    #__ef_dialog__ .ef-segmented {
+      display: inline-flex;
+      flex-wrap: wrap;
+      align-items: stretch;
+      gap: 1px;
+      padding: 1px;
+      max-width: 100%;
+      background: var(--ef-control-border);
+      border-radius: 7px;
+      overflow: hidden;
+    }
+    #__ef_dialog__ .ef-segmented .ef-icon-btn {
+      width: 27px;
+      height: 24px;
+      padding: 0;
+      border: none;
+      border-radius: 4px;
+      background: var(--ef-control-bg);
+      color: var(--ef-muted-strong);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.1s, color 0.1s;
+    }
+    #__ef_dialog__ .ef-segmented .ef-icon-btn:hover {
+      background: var(--ef-hover-bg);
+      color: var(--ef-text-strong);
+    }
+    #__ef_dialog__ .ef-segmented .ef-icon-btn:focus-visible {
+      outline: none;
+      box-shadow: inset 0 0 0 2px var(--ef-focus-ring-chip);
+    }
+    #__ef_dialog__ .ef-segmented .ef-icon-btn.ef-token-on {
+      background: var(--ef-chip-on-bg);
+      color: var(--ef-chip-on-text);
+      box-shadow: inset 0 0 0 1px var(--ef-primary);
+    }
+    #__ef_dialog__ .ef-segmented .ef-icon-btn svg {
+      width: 15px;
+      height: 15px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.6;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    #__ef_dialog__ .ef-cell-text {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 0 4px;
+      white-space: nowrap;
+    }
+
+    /* ── Chip rows (host manifests that ask for render: "chips") ───────────── */
     #__ef_dialog__ .ef-token-row {
       display: flex;
       flex-wrap: wrap;
@@ -1007,37 +1360,6 @@ function injectStyles(): void {
       box-shadow: 0 0 0 3px var(--ef-focus-ring-chip);
     }
     #__ef_dialog__ .ef-token-chip.ef-token-on {
-      background: var(--ef-chip-on-bg);
-      border-color: var(--ef-primary);
-      color: var(--ef-chip-on-text);
-    }
-    /* ── Icon rows (glyph buttons) ─────────────────────────────────────────── */
-    #__ef_dialog__ .ef-icon-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
-    }
-    #__ef_dialog__ .ef-icon-btn {
-      width: 28px;
-      height: 28px;
-      padding: 0;
-      justify-content: center;
-      border-radius: 8px;
-    }
-    #__ef_dialog__ .ef-icon-btn svg {
-      width: 16px;
-      height: 16px;
-      fill: none;
-      stroke: currentColor;
-      stroke-width: 1.6;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-    }
-    #__ef_dialog__ .ef-icon-btn:hover {
-      border-color: var(--ef-control-border-hover);
-      background: var(--ef-hover-bg);
-    }
-    #__ef_dialog__ .ef-icon-btn.ef-token-on {
       background: var(--ef-chip-on-bg);
       border-color: var(--ef-primary);
       color: var(--ef-chip-on-text);
@@ -1078,26 +1400,66 @@ function injectStyles(): void {
       box-shadow: 0 0 0 3px var(--ef-focus-ring-chip);
     }
     #__ef_dialog__ .ef-custom-field[hidden] { display: none; }
-    #__ef_dialog__ .ef-style-classes summary {
+
+    /* ── Hidden-settings note ─────────────────────────────────────────────── */
+    #__ef_dialog__ .ef-style-hidden-note {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 8px 10px 16px;
+      border-top: 1px solid var(--ef-border);
       font-size: 11px;
+    }
+    #__ef_dialog__ .ef-hidden-reasons {
       color: var(--ef-muted);
+      flex: 1;
+      min-width: 0;
+      line-height: 1.4;
+    }
+    #__ef_dialog__ .ef-show-all {
+      height: 22px;
+      padding: 0 8px;
+      border: 1px solid var(--ef-control-border);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--ef-text-soft);
+      font-size: 10px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background 0.1s, border-color 0.1s, color 0.1s;
+    }
+    #__ef_dialog__ .ef-show-all:hover {
+      border-color: var(--ef-control-border-hover);
+      background: var(--ef-hover-bg);
+      color: var(--ef-text-strong);
+    }
+    #__ef_dialog__ .ef-show-all:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 2px var(--ef-focus-ring-input);
+    }
+
+    /* ── Current classes (section-style disclosure) ───────────────────────── */
+    #__ef_dialog__ .ef-style-classes {
+      border-top: 1px solid var(--ef-border);
+    }
+    #__ef_dialog__ .ef-style-classes summary {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      height: 34px;
+      padding: 0 16px;
       cursor: pointer;
       user-select: none;
       list-style: none;
-      display: flex;
-      align-items: center;
-      gap: 4px;
     }
     #__ef_dialog__ .ef-style-classes summary::-webkit-details-marker { display: none; }
-    #__ef_dialog__ .ef-style-classes summary::before {
-      content: "▶";
-      font-size: 8px;
-      transition: transform 0.15s;
-      display: inline-block;
+    #__ef_dialog__ .ef-style-classes[open] .ef-section-chevron {
+      transform: rotate(90deg);
     }
-    #__ef_dialog__ .ef-style-classes[open] summary::before { transform: rotate(90deg); }
     #__ef_dialog__ .ef-style-class-list {
-      margin-top: 5px;
+      padding: 0 16px 12px;
       display: flex;
       flex-direction: column;
       gap: 3px;
@@ -1117,6 +1479,7 @@ function injectStyles(): void {
     }
     #__ef_dialog__ .ef-style-class-item code {
       font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 10.5px;
       color: var(--ef-text-soft);
       word-break: break-all;
     }
@@ -1124,194 +1487,25 @@ function injectStyles(): void {
       display: flex;
       justify-content: flex-end;
     }
-    #__ef_dialog__ .ef-style-section {
-      border-top: 1px solid var(--ef-border-subtle);
-      padding-top: 14px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-    #__ef_dialog__ .ef-style-section + .ef-style-section {
-      margin-top: 14px;
-    }
-    #__ef_dialog__ .ef-style-section:first-child {
-      border-top: none;
-      padding-top: 0;
-      margin-top: 0;
-    }
-    #__ef_dialog__ .ef-style-section-body {
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-    #__ef_dialog__ .ef-style-section > summary {
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--ef-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      cursor: pointer;
-      user-select: none;
-      list-style: none;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-    #__ef_dialog__ .ef-style-section > summary::-webkit-details-marker { display: none; }
-    #__ef_dialog__ .ef-style-section > summary::before {
-      content: "▶";
-      font-size: 8px;
-      transition: transform 0.15s;
-      display: inline-block;
-    }
-    #__ef_dialog__ .ef-style-section[open] > summary::before { transform: rotate(90deg); }
-    #__ef_dialog__ .ef-style-hidden-note {
-      display: flex;
-      align-items: baseline;
-      gap: 8px;
-      padding-block: 10px 0;
-      border-top: 1px solid var(--ef-border-subtle);
-      font-size: 11px;
-    }
-    #__ef_dialog__ .ef-hidden-reasons {
-      color: var(--ef-muted);
-      flex: 1;
-      min-width: 0;
-      line-height: 1.4;
-    }
-    #__ef_dialog__ .ef-show-all {
-      background: transparent;
-      border: none;
-      padding: 0;
-      color: var(--ef-primary);
-      font-size: 11px;
-      font-weight: 500;
-      cursor: pointer;
-      flex-shrink: 0;
-    }
-    #__ef_dialog__ .ef-show-all:hover { text-decoration: underline; }
-    #__ef_dialog__ .ef-select {
-      position: relative;
-    }
-    #__ef_dialog__ .ef-select-trigger {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      width: 100%;
-      padding: 5px 9px;
-      border: 1.5px solid var(--ef-control-border);
-      border-radius: 6px;
-      background: var(--ef-control-bg);
-      color: var(--ef-muted-strong);
-      font-size: 12px;
-      font-weight: 500;
-      font-family: inherit;
-      text-align: left;
-      cursor: pointer;
-      transition: border-color 0.1s, background 0.1s;
-    }
-    #__ef_dialog__ .ef-select-trigger:hover {
-      border-color: var(--ef-control-border-hover);
-      background: var(--ef-hover-bg);
-    }
-    #__ef_dialog__ .ef-select-trigger:focus-visible {
-      outline: none;
-      box-shadow: 0 0 0 3px var(--ef-focus-ring-chip);
-    }
-    #__ef_dialog__ .ef-select-caret {
-      margin-left: auto;
-      color: var(--ef-muted);
-      font-size: 10px;
-      line-height: 1;
-    }
-    #__ef_dialog__ .ef-select-menu {
-      position: absolute;
-      left: 0;
-      right: 0;
-      top: calc(100% + 4px);
-      z-index: 20;
-      margin: 0;
-      padding: 4px;
-      list-style: none;
-      background: var(--ef-card-bg);
-      border: 1px solid var(--ef-border);
-      border-radius: 6px;
-      box-shadow: var(--ef-card-shadow);
-      max-height: 220px;
-      overflow-y: auto;
-    }
-    #__ef_dialog__ .ef-select-option {
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      padding: 5px 8px;
-      border-radius: 5px;
-      font-size: 12px;
-      color: var(--ef-text);
-      cursor: pointer;
-      outline: none;
-    }
-    #__ef_dialog__ .ef-select-option:hover,
-    #__ef_dialog__ .ef-select-option:focus-visible {
-      background: var(--ef-hover-bg);
-    }
-    #__ef_dialog__ .ef-select-option.ef-token-on {
-      background: var(--ef-chip-on-bg);
-      color: var(--ef-chip-on-text);
-      font-weight: 600;
-    }
-    #__ef_dialog__ .ef-select-sep {
-      height: 1px;
-      margin: 4px 2px;
-      background: var(--ef-border-subtle);
-      list-style: none;
-    }
-    #__ef_dialog__ .ef-select-custom {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 8px;
-      border-radius: 5px;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--ef-primary);
-      cursor: pointer;
-      outline: none;
-    }
-    #__ef_dialog__ .ef-select-custom:hover,
-    #__ef_dialog__ .ef-select-custom:focus-visible {
-      background: var(--ef-hover-bg);
-    }
-    #__ef_dialog__ .ef-select-custom-edit {
-      padding: 4px 4px 2px;
-      list-style: none;
-    }
-    #__ef_dialog__ .ef-select-custom-edit[hidden] { display: none; }
-    #__ef_dialog__ .ef-custom-input {
-      width: 100%;
-      border: 1px solid var(--ef-control-border);
-      border-radius: 6px;
-      padding: 4px 8px;
-      font-size: 11px;
-      font-family: ui-monospace, "SF Mono", Menlo, monospace;
-      color: var(--ef-text-strong);
-      outline: none;
-      background: var(--ef-surface);
-    }
-    #__ef_dialog__ .ef-custom-input:focus {
-      border-color: var(--ef-primary);
-      background: var(--ef-control-bg);
-      box-shadow: 0 0 0 3px var(--ef-focus-ring-input);
-    }
-    #__ef_dialog__ .ef-custom-input[aria-invalid="true"] {
-      border-color: var(--ef-error);
+
+    /* Phones: a 400px rail keeps two columns, but a ~380px screen cannot fit a
+       6-cell icon track in one, so the field grid collapses to a single column. */
+    @media (max-width: 420px) {
+      #__ef_dialog__ .ef-section-body {
+        grid-template-columns: 1fr;
+      }
+      #__ef_dialog__ .ef-prop-row--half {
+        grid-column: 1 / -1;
+      }
     }
 
     /* ── Changes summary ───────────────────────────────────────────────────── */
     #__ef_dialog__ .ef-changes {
       display: flex;
       flex-direction: column;
-      gap: 18px;
+      gap: 12px;
+      padding: 14px 8px 18px 16px;
+      border-top: 1px solid var(--ef-border);
     }
     #__ef_dialog__ .ef-changes-block {
       display: flex;

@@ -313,17 +313,26 @@ the report form and the captured context/HTML live in the issue submission modal
 instead. Tokens cover the common Tailwind and daisyUI utilities —
 spacing (padding/margin/gap), layout (max-width, width/height, display, flex),
 typography (text size, font weight), colors, borders/effects and daisyUI
-button/badge modifiers — organised into collapsible sections. Each group renders
-as a horizontal property row (label left, control right). Every built-in group
-renders as a **dropdown** (color groups carry a swatch in the trigger and beside
-each option), giving the editor one uniform control. `render` still accepts
-`chips` or `icons` (an inline-SVG glyph row) for host manifests; the fallback set
-opts into neither. Group ids must not collide with `position`, which is
-reserved for recorded DOM moves (the CSS position tokens are grouped under
-`positioning`). Every dropdown ends with a **Custom
-class…** item (chip groups expose a **+ Custom** toggle) that reveals an inline
-field for a free-typed class. Applied class/style edits are recorded per element
-and rendered in the issue modal and panel.
+button/badge modifiers — organised into collapsible sections named like a design
+tool's inspector: **Position**, **Auto layout**, **Appearance**, **Fill**,
+**Typography** and **daisyUI**.
+
+Each field is a small label above its control, and related fields pair into a
+two-column grid (`ROW_PAIRS` in `styleEditor.ts`: width/height, align/justify,
+direction/wrap, gap/padding, corner radius/border width, text size/font weight,
+text color/background, and the daisyUI color/size pairs). Value fields render as
+a compact select showing the current value — color groups carry a swatch in the
+trigger and beside each option. Spatial enums (display, direction, wrap,
+alignment, text align, border style, object fit) render as an intrinsic-width
+segmented row of icon cells; `render` still accepts `chips` or `icons` for host
+manifests, and the fallback set now opts into `icons` for exactly those groups.
+Group ids must not collide with `position`, which is reserved for recorded DOM
+moves (the CSS position tokens are grouped under `positioning`). Every dropdown
+ends with a **Custom class…** item (chip groups expose a **+ Custom** toggle)
+that reveals an inline field for a free-typed class. Sections collapse from
+their 34px header — the collapsed set is module state, so it survives the
+re-mount on every selection change. Applied class/style edits are recorded per
+element and rendered in the issue modal and panel.
 
 **Applicability filtering.** Groups that cannot affect the selected element are
 hidden: `gap` needs a flex/grid container with children, `align`/`justify` a
@@ -351,10 +360,14 @@ report while the modal is up, and returns to the modal while the editor is up.
 The dock toggle (`#__ef_dock__`) applies to the editor only — the modal is
 always centered.
 
-Every group also carries a **Default** control — the leading chip in a chip row,
-the leading item in a dropdown — which resets the group to the element's own
+Every field also carries a **reset** control — the ↺ that appears at the end of
+its label on hover (`.ef-prop-reset`, wired to `onClear`) or the leading
+**Default** item in a dropdown — which resets the group to the element's own
 styling: the recorded edit (pending or committed) is reverted and dropped, so a
-committed edit stops being replayed too. Clicking an already-active chip (or the
+committed edit stops being replayed too. A section header carries the same
+action for the whole section: clicking `.ef-section-reset` drops every applied
+value in that section in one go, and stays hidden while the section has nothing
+applied. Clicking an already-active segmented cell (or the
 selected dropdown option) is the same action. `Default` differs from the `None`
 tokens (`p-0`, `m-0`, `gap-0`), which apply an explicit zero value. A group whose
 value comes from the host markup has no recorded edit, so Default is reported as
@@ -435,7 +448,7 @@ No storage schema change — everything rides inside `context_json`.
 | Surface | Change |
 |---|---|
 | `client/src/dialog.ts` | submission-first view model (`data-view="submit"|"edit"`): issue modal opens on click; **Edit element** (header/footer) → style editor (`.ef-card`), **Back to issue** → modal; modal Cancel/Escape cancel the report, editor Escape returns; dock toggle applies to the editor only. Design editor (no Issues tab), Commit + persistent Committed-changes list (localStorage, per-entry Remove / Remove all), context/HTML rendered in the modal only, per-element target tabs, token palette, per-target changes summary, drag ghost/insertion-line/container layers |
-| `client/src/styleEditor.ts` | single-target Figma-like property rows, dropdown/chip/icon controls, Default (unset) control, custom-class affordance, Position row |
+| `client/src/styleEditor.ts` | single-target property inspector: collapsible sections in `SECTION_ORDER` (Position, Auto layout, Appearance, Fill, Typography, daisyUI), label-above fields in a two-column grid (`ROW_PAIRS`), segmented icon groups for spatial enums, value fields for the rest, per-field + per-section reset, custom-class affordance, direct-text row |
 | `client/src/selection.ts` | per-target apply/change/revert API (`applyTokenToTarget`, `recordMove`, `getChangesFor`, `getChangeCountFor`, `revertChangesFor`, `clearTokenForTarget`), hover-driven highlight, `position` records |
 | `client/src/structure.ts` | drop resolution (`computeDrop`), `moveElement`, replay (`placeAt`), `describePosition`/`ordinal` |
 | `client/src/index.ts` | `editing` mode; picking stays live; always-on drag to move (5px threshold, click swallowed after a drop); pending edits revert on cancel/close; Commit freezes + persists in localStorage until removed |

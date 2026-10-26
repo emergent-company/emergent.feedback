@@ -343,7 +343,7 @@ export function buildFallbackTokens(): ThemeTokens {
       {
         id: "padding",
         label: "Padding",
-        section: "Spacing",
+        section: "Auto layout",
         render: "dropdown",
         applyType: "class",
         removePattern: "^p[xytrbl]?-",
@@ -359,7 +359,7 @@ export function buildFallbackTokens(): ThemeTokens {
       {
         id: "margin",
         label: "Margin",
-        section: "Spacing",
+        section: "Auto layout",
         render: "dropdown",
         applyType: "class",
         removePattern: "^m[xytrbl]?-",
@@ -375,7 +375,7 @@ export function buildFallbackTokens(): ThemeTokens {
       {
         id: "gap",
         label: "Gap",
-        section: "Spacing",
+        section: "Auto layout",
         requires: ["container", "children"],
         render: "dropdown",
         applyType: "class",
@@ -393,7 +393,7 @@ export function buildFallbackTokens(): ThemeTokens {
       {
         id: "maxWidth",
         label: "Max width",
-        section: "Layout",
+        section: "Auto layout",
         requires: "box",
         render: "dropdown",
         applyType: "class",
@@ -418,7 +418,7 @@ export function buildFallbackTokens(): ThemeTokens {
       {
         id: "width",
         label: "Width",
-        section: "Layout",
+        section: "Auto layout",
         requires: "box",
         render: "dropdown",
         applyType: "class",
@@ -435,7 +435,7 @@ export function buildFallbackTokens(): ThemeTokens {
       {
         id: "height",
         label: "Height",
-        section: "Layout",
+        section: "Auto layout",
         requires: "box",
         render: "dropdown",
         applyType: "class",
@@ -450,9 +450,9 @@ export function buildFallbackTokens(): ThemeTokens {
       {
         id: "display",
         label: "Display",
-        section: "Layout",
+        section: "Auto layout",
         applyType: "class",
-        render: "dropdown",
+        render: "icons",
         tokens: [
           { id: "block", label: "Block", className: "block", icon: iconID("display", "block") },
           { id: "inline", label: "Inline", className: "inline", icon: iconID("display", "inline") },
@@ -466,10 +466,10 @@ export function buildFallbackTokens(): ThemeTokens {
       {
         id: "align",
         label: "Align items",
-        section: "Layout",
+        section: "Auto layout",
         requires: "flex-grid-container",
         applyType: "class",
-        render: "dropdown",
+        render: "icons",
         removePattern: "^items-",
         tokens: [
           { id: "start", label: "Start", className: "items-start", icon: iconID("align", "start") },
@@ -482,10 +482,10 @@ export function buildFallbackTokens(): ThemeTokens {
       {
         id: "justify",
         label: "Justify",
-        section: "Layout",
+        section: "Auto layout",
         requires: "flex-grid-container",
         applyType: "class",
-        render: "dropdown",
+        render: "icons",
         tokens: [
           { id: "start", label: "Start", className: "justify-start", icon: iconID("justify", "start") },
           { id: "center", label: "Center", className: "justify-center", icon: iconID("justify", "center") },
@@ -497,11 +497,11 @@ export function buildFallbackTokens(): ThemeTokens {
       },
       {
         id: "flexDir",
-        label: "Flex direction",
-        section: "Layout",
+        label: "Direction",
+        section: "Auto layout",
         requires: "flex-container",
         applyType: "class",
-        render: "dropdown",
+        render: "icons",
         tokens: [
           { id: "row", label: "Row", className: "flex-row", icon: iconID("flex", "row") },
           { id: "row-reverse", label: "Row reverse", className: "flex-row-reverse", icon: iconID("flex", "row-reverse") },
@@ -512,10 +512,10 @@ export function buildFallbackTokens(): ThemeTokens {
       {
         id: "wrap",
         label: "Wrap",
-        section: "Layout",
+        section: "Auto layout",
         requires: "flex-container",
         applyType: "class",
-        render: "dropdown",
+        render: "icons",
         tokens: [
           { id: "wrap", label: "Wrap", className: "flex-wrap", icon: ICONS["wrap"] },
           { id: "nowrap", label: "No wrap", className: "flex-nowrap", icon: ICONS["nowrap"] },
@@ -525,10 +525,10 @@ export function buildFallbackTokens(): ThemeTokens {
       {
         id: "self",
         label: "Align self",
-        section: "Layout",
+        section: "Auto layout",
         requires: "container-item",
         applyType: "class",
-        render: "dropdown",
+        render: "icons",
         removePattern: "^self-",
         tokens: [
           { id: "auto", label: "Auto", className: "self-auto", icon: iconID("self", "auto") },
@@ -542,8 +542,8 @@ export function buildFallbackTokens(): ThemeTokens {
         // NOT "position": that id is reserved for recorded DOM moves
         // (selection.ts POSITION_GROUP), and the payload must not be ambiguous.
         id: "positioning",
-        label: "Position",
-        section: "Layout",
+        label: "Position type",
+        section: "Position",
         applyType: "class",
         render: "dropdown",
         tokens: [
@@ -557,7 +557,7 @@ export function buildFallbackTokens(): ThemeTokens {
       {
         id: "inset",
         label: "Inset",
-        section: "Layout",
+        section: "Position",
         requires: "positioned",
         applyType: "class",
         render: "dropdown",
@@ -572,10 +572,10 @@ export function buildFallbackTokens(): ThemeTokens {
       {
         id: "objectFit",
         label: "Object fit",
-        section: "Layout",
+        section: "Auto layout",
         requires: "replaced",
         applyType: "class",
-        render: "dropdown",
+        render: "icons",
         removePattern: "^object-",
         tokens: [
           { id: "cover", label: "Cover", className: "object-cover", icon: iconID("object", "cover") },
@@ -628,7 +628,7 @@ export function buildFallbackTokens(): ThemeTokens {
         section: "Typography",
         requires: "text",
         applyType: "class",
-        render: "dropdown",
+        render: "icons",
         // No removePattern: a `^text-` pattern would also strip the text-size
         // (`text-lg`) and text-color (`text-primary`) classes. Exact-class
         // removal (like textSize/textColor) strips the previous alignment.
@@ -642,7 +642,7 @@ export function buildFallbackTokens(): ThemeTokens {
       {
         id: "textColor",
         label: "Text color",
-        section: "Color",
+        section: "Fill",
         render: "dropdown",
         applyType: "class",
         tokens: textTokens,
@@ -650,15 +650,15 @@ export function buildFallbackTokens(): ThemeTokens {
       {
         id: "backgroundColor",
         label: "Background",
-        section: "Color",
+        section: "Fill",
         render: "dropdown",
         applyType: "class",
         tokens: bgTokens,
       },
       {
         id: "rounded",
-        label: "Rounded",
-        section: "Borders & Effects",
+        label: "Corner radius",
+        section: "Appearance",
         applyType: "class",
         render: "dropdown",
         tokens: [
@@ -675,7 +675,7 @@ export function buildFallbackTokens(): ThemeTokens {
       {
         id: "borderWidth",
         label: "Border width",
-        section: "Borders & Effects",
+        section: "Appearance",
         applyType: "class",
         render: "dropdown",
         removePattern: "^border-[0-9]",
@@ -689,9 +689,9 @@ export function buildFallbackTokens(): ThemeTokens {
       {
         id: "borderStyle",
         label: "Border style",
-        section: "Borders & Effects",
+        section: "Appearance",
         applyType: "class",
-        render: "dropdown",
+        render: "icons",
         tokens: [
           { id: "solid", label: "Solid", className: "border-solid", icon: iconID("stroke", "solid") },
           { id: "dashed", label: "Dashed", className: "border-dashed", icon: iconID("stroke", "dashed") },
@@ -701,7 +701,7 @@ export function buildFallbackTokens(): ThemeTokens {
       {
         id: "shadow",
         label: "Shadow",
-        section: "Borders & Effects",
+        section: "Appearance",
         requires: "box",
         applyType: "class",
         render: "dropdown",

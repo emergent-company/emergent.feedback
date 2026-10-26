@@ -127,9 +127,9 @@ test.describe("editor affordances (structure fixture)", () => {
     // recorded DOM moves, so an applied `relative` must not read as a reorder.
     const row = page.locator('.ef-prop-row[data-group="positioning"]');
 
-    // Uniform control chrome: a dropdown, never an icon row.
+    // Uniform control chrome: a value field, never an icon group.
     await expect(row.locator(".ef-select-trigger")).toHaveCount(1);
-    await expect(row.locator("svg")).toHaveCount(0);
+    await expect(row.locator(".ef-segmented")).toHaveCount(0);
 
     await row.locator(".ef-select-trigger").click();
     const opt = row.locator('[data-token="relative"]');

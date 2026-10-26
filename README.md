@@ -156,15 +156,23 @@ would cover the border/background/shadow being judged). Hover or focus a target
 label in the editor to outline that element, or hover the element itself to peek
 its tab — plus a short flash on select.
 
-Properties are grouped into collapsible sections — **Spacing**, **Layout**,
-**Typography**, **Color**, **Borders & Effects** and **daisyUI** — covering
-Tailwind/daisyUI utilities such as padding, margin, gap, max-width, width/height,
-display/flex, text size, font weight, rounding, borders, shadow and button/badge
-modifiers. Each group renders as a Figma-like row (label left, control right).
-Every built-in group renders as a **dropdown** (color groups show a swatch in
-the trigger and next to each option), so the editor has one uniform control. The
-`render` field still accepts `chips` or `icons` (an inline-SVG glyph row) for
-host manifests; the fallback set uses neither.
+Properties are grouped into collapsible sections laid out like a design tool's
+inspector — **Position**, **Auto layout**, **Appearance**, **Fill**,
+**Typography** and **daisyUI** — covering Tailwind/daisyUI utilities such as
+padding, margin, gap, max-width, width/height, display/flex, text size, font
+weight, rounding, borders, shadow and button/badge modifiers.
+
+Each field is a small label above its control, and fields that belong together
+pair up in a two-column grid (width/height, align/justify, direction/wrap,
+gap/padding, corner radius/border width, text size/font weight, text
+color/background). Value fields render as a compact select showing the current
+value (color fields show a swatch); spatial enums — display, direction, wrap,
+alignment, text align, border style, object fit — render as an intrinsic-width
+segmented group of icon cells, which never stretch to fill their column. The
+`render` field still accepts `chips` or `icons` for host manifests; the fallback
+set uses `icons` for those spatial groups and `dropdown` everywhere else.
+Sections collapse from their header (that state survives the re-renders the
+editor does on select), and each field reveals a reset control on hover.
 
 Every dropdown ends with a **Custom class…** item (chip groups expose a
 **+ Custom** toggle) — type any Tailwind/daisyUI class (e.g. `max-w-6xl`) and
@@ -172,10 +180,13 @@ press Enter to apply it. Choosing a token applies it live to the active element 
 a CSS class (or inline style, per token); applied edits are recorded per element
 and shown in the **Changes** list.
 
-Every group also has a **Default** control — the first chip in a chip row, the
-first item in a dropdown — which unsets the group: the overlay's edit is reverted
+Every field also has a **reset** control — the ↺ that appears at the end of its
+label on hover, or the first **Default** item in a dropdown — which unsets the
+group: the overlay's edit is reverted
 and dropped, restoring whatever the element had before (a committed edit too, so
-it stops being replayed). Clicking an already-selected chip or choosing the
+it stops being replayed). Each section header carries the same action for the
+whole section: it drops every applied value in it at once. Clicking an
+already-selected segmented cell or choosing the
 selected dropdown option does the same. `Default` (unset) is not `None`
 (`p-0`, `m-0`, `gap-0`), which explicitly applies a zero value. When the value on
 an element comes from the page's own markup rather than an overlay edit, Default

@@ -201,14 +201,54 @@ test("buildFallbackTokens: extended groups, sections, and renders", () => {
   assert.equal(byId("textColor").render, "dropdown");
   assert.equal(byId("backgroundColor").render, "dropdown");
 
-  // One uniform control: every built-in group is a dropdown. Chips and icon
-  // rows remain available to host manifests via `render`, but the fallback set
-  // no longer opts into either.
-  for (const g of theme.groups) {
-    assert.equal(g.render, "dropdown", `${g.id} renders as dropdown`);
+  // Sections follow the inspector's vocabulary (see SECTION_ORDER in
+  // styleEditor.ts), not the old Spacing/Layout/Color grouping.
+  const sections = new Set(theme.groups.map((g) => g.section));
+  for (const section of ["Position", "Auto layout", "Appearance", "Fill", "Typography"]) {
+    assert.ok(sections.has(section), `section ${section} exists`);
   }
-  for (const id of ["padding", "margin", "gap", "maxWidth", "width", "height"]) {
+
+  // Spatial enums render as icon groups; value/name enums stay value fields.
+  // Chips remain available to host manifests via `render`, but the fallback
+  // set no longer opts into them.
+  for (const id of [
+    "display",
+    "flexDir",
+    "wrap",
+    "align",
+    "justify",
+    "self",
+    "textAlign",
+    "borderStyle",
+    "objectFit",
+  ]) {
+    assert.equal(byId(id).render, "icons", `${id} renders as icons`);
+  }
+  for (const id of [
+    "positioning",
+    "inset",
+    "padding",
+    "margin",
+    "gap",
+    "maxWidth",
+    "width",
+    "height",
+    "textSize",
+    "fontWeight",
+    "textColor",
+    "backgroundColor",
+    "rounded",
+    "borderWidth",
+    "shadow",
+  ]) {
     assert.equal(byId(id).render, "dropdown", `${id} renders as dropdown`);
+  }
+
+  // Icon cells are icon-only: every token in an icon group needs a glyph.
+  for (const g of theme.groups.filter((x) => x.render === "icons")) {
+    for (const t of g.tokens) {
+      assert.ok(t.icon, `${g.id}/${t.id} carries an icon`);
+    }
   }
 
   assert.equal(byId("textSize").removePattern, undefined);
@@ -263,23 +303,36 @@ test("buildFallbackTokens: no group id collides with the recorded-move group", (
     `token group id "${POSITION_GROUP}" is reserved for recorded DOM moves`
   );
   assert.ok(ids.includes("positioning"), "the CSS position group keeps its own id");
-  assert.equal(theme.groups.find((g) => g.id === "positioning")!.label, "Position");
+  // Label reads like the inspector's "Position type" row; the id stays
+  // `positioning` so recorded moves still use POSITION_GROUP.
+  assert.equal(theme.groups.find((g) => g.id === "positioning")!.label, "Position type");
 });
 
-test("buildFallbackTokens: no group renders as icon rows, glyphs stay well-formed", () => {
+test("buildFallbackTokens: icon groups carry a well-formed glyph per token", () => {
   const theme = buildFallbackTokens();
 
-  // The icon renderer stays available to host manifests (see `normalizeTheme`),
-  // but no built-in group opts in, so the panel never renders a glyph row.
+  // Spatial enums render as icon cells; every token in them must own a glyph,
+  // because the cell has no text label.
   const iconGroups = theme.groups.filter((g) => g.render === "icons");
-  assert.equal(iconGroups.length, 0, "the fallback set must not use icon rows");
+  assert.ok(iconGroups.length > 0, "the fallback set uses icon groups");
+  for (const g of iconGroups) {
+    for (const t of g.tokens) {
+      assert.ok(t.icon, `${g.id}/${t.id} has no icon`);
+    }
+  }
 
-  // The dormant capability is still well-formed: a token that carries a glyph
-  // (used when a manifest asks for `render: "icons"`) has a valid inline SVG.
+  // Chip rows stay available to host manifests, but the fallback set never
+  // opts into them.
+  assert.equal(
+    theme.groups.filter((g) => g.render === "chips").length,
+    0,
+    "the fallback set must not use chip rows"
+  );
+
   const glyphs = theme.groups
     .flatMap((g) => g.tokens.map((t) => ({ id: g.id, t })))
     .filter((x) => x.t.icon);
-  assert.ok(glyphs.length > 0, "the built-in glyph set is still attached to tokens");
+  assert.ok(glyphs.length > 0, "the built-in glyph set is attached to tokens");
   for (const { id, t } of glyphs) {
     assert.equal(t.icon!.viewBox, "0 0 24 24", `${id}/${t.id} viewBox`);
     assert.ok(

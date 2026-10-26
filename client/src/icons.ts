@@ -112,8 +112,24 @@ export const ICONS: Record<string, GlyphIcon> = Object.freeze({
 
   // ── border-style (bottom edge solid / dashed / dotted) ─────────────────────
   "stroke-solid": { viewBox: V, paths: ["M4 5 H20 V19 H4 Z"] },
-  "stroke-dashed": { viewBox: V, paths: ["M4 5 H20", "M4 5 V19", "M20 5 V19", "M4 19 H8", "M10 19 H14", "M16 19 H20"] },
-  "stroke-dotted": { viewBox: V, paths: ["M4 5 H20", "M4 5 V19", "M20 5 V19", "M6 19 h0.01", "M10 19 h0.01", "M14 19 h0.01", "M18 19 h0.01"] },
+  "stroke-dashed": {
+    viewBox: V,
+    paths: [
+      "M4 5 H8", "M10 5 H14", "M16 5 H20",
+      "M20 7 V11", "M20 13 V17",
+      "M4 7 V11", "M4 13 V17",
+      "M4 19 H8", "M10 19 H14", "M16 19 H20",
+    ],
+  },
+  "stroke-dotted": {
+    viewBox: V,
+    paths: [
+      "M5 5 h0.01", "M9 5 h0.01", "M13 5 h0.01", "M17 5 h0.01", "M20 5 h0.01",
+      "M20 9 h0.01", "M20 13 h0.01", "M20 17 h0.01", "M20 19.5 h0.01",
+      "M5 19 h0.01", "M9 19 h0.01", "M13 19 h0.01", "M17 19 h0.01",
+      "M4 9 h0.01", "M4 13 h0.01", "M4 17 h0.01", "M4 19.5 h0.01",
+    ],
+  },
 
   // ── box-shadow (offset square behind the element) ──────────────────────────
   "shadow-none": { viewBox: V, paths: ["M4 5 H16 V17 H4 Z", "M4 17 L16 5"] },
@@ -132,6 +148,10 @@ export const ICONS: Record<string, GlyphIcon> = Object.freeze({
 
   // ── Default / unset (circled slash) ────────────────────────────────────────
   "unset": { viewBox: V, paths: ["M12 4 a8 8 0 1 0 0 16 a8 8 0 1 0 0 -16", "M6 18 L18 6"] },
+
+  // ── Disclosure chevrons (section headers, select triggers) ─────────────────
+  "chevron-right": { viewBox: V, paths: ["M9.5 6 L15.5 12 L9.5 18"] },
+  "chevron-down": { viewBox: V, paths: ["M6 9.5 L12 15.5 L18 9.5"] },
 });
 
 /** Look up a glyph by `<prefix>-<id>` (empty prefix → the id itself). */
