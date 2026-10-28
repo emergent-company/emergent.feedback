@@ -33,6 +33,9 @@ type createFeedbackRequest struct {
 	Replay      string `json:"replay"` // base64 of gzip(rrweb event JSON), may be empty
 	Repo        string `json:"repo"`
 	Label       string `json:"label"`
+	// MemorySync is set by the overlay when the reporter opted in while the
+	// repo is in "ask" mode. "auto" mode syncs regardless; "off" never does.
+	MemorySync bool `json:"memory_sync"`
 }
 
 // maxReplayBytes bounds the decoded replay blob size (~5MB).
@@ -129,9 +132,20 @@ func (h *Handler) HandleCreateFeedback(c echo.Context) error {
 		go h.persistAutoTitle(f.ID, req.Comment, req.Selector, ctxJSON)
 	}
 
+	// Mirror the report into Memory when the repo has a destination and the
+	// reporter opted in (ask) or the repo is set to auto. A destination failure
+	// must never fail the feedback capture itself; the outbox retries it.
+	memoryStatus := memoryModeOff
+	if d, derr := h.Store.GetMemoryDestination(c.Request().Context(), f.Repo); derr == nil {
+		if st, serr := h.enqueueMemoryForFeedback(c.Request().Context(), f, d, req.MemorySync); serr == nil {
+			memoryStatus = st
+		}
+	}
+
 	return c.JSON(http.StatusCreated, map[string]any{
 		"id":         f.ID,
 		"created_at": f.CreatedAt,
+		"memory":     memoryStatus,
 	})
 }
 
@@ -291,7 +305,11 @@ func (h *Handler) HandleDeleteFeedback(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid feedback id")
 	}
 
-	if err := h.Store.Delete(c.Request().Context(), id, middleware.GetLogin(c)); err != nil {
+	ctx := c.Request().Context()
+	if f, err := h.Store.Get(ctx, id); err == nil && f.GitHubUser == middleware.GetLogin(c) {
+		h.enqueueMemoryPatch(ctx, f, map[string]any{"capture_status": "dismissed"})
+	}
+	if err := h.Store.Delete(ctx, id, middleware.GetLogin(c)); err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, "feedback not found or not owned by you")
 	}
 	return c.NoContent(http.StatusNoContent)
@@ -422,6 +440,9 @@ func (h *Handler) HandleResolve(c echo.Context) error {
 	if err := h.Store.SetStatus(ctx, id, store.StatusResolved, middleware.GetLogin(c), req.Summary); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to resolve")
 	}
+	// Write the capture status back to Memory via a patch so agent-owned
+	// properties (status, severity, group) are preserved.
+	h.enqueueMemoryPatch(ctx, f, map[string]any{"capture_status": "resolved"})
 	if err := h.commentOnIssue(ctx, f, statusComment("resolved", req.Summary)); err != nil {
 		c.Logger().Warnf("resolve: github comment: %v", err)
 	}

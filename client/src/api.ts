@@ -115,6 +115,14 @@ export interface CreateFeedbackParams {
   snapshot?: string;
   /** Opt-in session replay: base64 of gzip(rrweb JSON). */
   replay?: string;
+  /** Reported opt-in when the repo's Memory mode is "ask". */
+  memory_sync?: boolean;
+}
+
+/** Public overlay probe for a repo's Memory destination. No secrets. */
+export interface MemoryStatus {
+  connected: boolean;
+  mode: "ask" | "auto" | "off";
 }
 
 export interface ExportIssueParams {
@@ -242,6 +250,13 @@ export class APIClient {
       method: "POST",
       body: JSON.stringify(p),
     });
+  }
+
+  /** Whether this repo has a Memory destination, and its submit mode. */
+  async getMemoryStatus(repo: string): Promise<MemoryStatus> {
+    return this.fetchJSON<MemoryStatus>(
+      `/api/memory/status?repo=${encodeURIComponent(repo)}`
+    );
   }
 
   /** Deletes a feedback item. Requires authentication (own items only). */

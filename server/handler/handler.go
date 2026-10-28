@@ -2,8 +2,10 @@ package handler
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/emergent-company/emergent.feedback/server/github"
+	"github.com/emergent-company/emergent.feedback/server/memory"
 	"github.com/emergent-company/emergent.feedback/server/store"
 )
 
@@ -12,14 +14,25 @@ type Handler struct {
 	Store     *store.Store
 	GHConfig  *github.AppConfig
 	JWTSecret string
+	// PublicBaseURL is the externally reachable feedback origin, used to build
+	// deep links back to a report. Optional; derived from the request when empty.
+	PublicBaseURL string
+	// MemoryHTTP is the client used for Memory server-to-server calls. The app
+	// injects an SSRF-guarded client; tests that use httptest servers opt in to
+	// a private-address client.
+	MemoryHTTP *http.Client
+
+	memoryWake chan struct{}
 }
 
 // New creates a new Handler with the given dependencies.
 func New(s *store.Store, ghCfg *github.AppConfig, jwtSecret string) *Handler {
 	return &Handler{
-		Store:     s,
-		GHConfig:  ghCfg,
-		JWTSecret: jwtSecret,
+		Store:      s,
+		GHConfig:   ghCfg,
+		JWTSecret:  jwtSecret,
+		MemoryHTTP: memory.SafeHTTPClient(false),
+		memoryWake: make(chan struct{}, 1),
 	}
 }
 

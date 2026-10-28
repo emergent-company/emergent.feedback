@@ -29,8 +29,8 @@ func TestMigrateCreatesSchema(t *testing.T) {
 	if err := s.db.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&v); err != nil {
 		t.Fatal(err)
 	}
-	if v != 7 {
-		t.Fatalf("schema version = %d, want 7", v)
+	if v != LatestSchemaVersion {
+		t.Fatalf("schema version = %d, want %d", v, LatestSchemaVersion)
 	}
 
 	for _, col := range []string{"applied_at", "verified_at", "resolved_at", "verification_result", "verification_detail", "replay", "replay_size"} {
@@ -83,8 +83,8 @@ func TestMigrateUpgradeFromV4(t *testing.T) {
 	if err := s.db.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&v); err != nil {
 		t.Fatal(err)
 	}
-	if v != 7 {
-		t.Fatalf("schema version = %d, want 7", v)
+	if v != LatestSchemaVersion {
+		t.Fatalf("schema version = %d, want %d", v, LatestSchemaVersion)
 	}
 	var n int
 	if err := s.db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='feedback_events'`).Scan(&n); err != nil {
@@ -116,8 +116,8 @@ func TestMigrateIdempotent(t *testing.T) {
 	if err := s2.db.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&v); err != nil {
 		t.Fatal(err)
 	}
-	if v != 7 {
-		t.Fatalf("schema version = %d, want 7", v)
+	if v != LatestSchemaVersion {
+		t.Fatalf("schema version = %d, want %d", v, LatestSchemaVersion)
 	}
 }
 

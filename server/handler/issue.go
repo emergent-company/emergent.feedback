@@ -725,6 +725,9 @@ func writeEnvironment(sb *strings.Builder, ctx map[string]any, f store.Feedback)
 	if appVersion, ok := ctx["appVersion"].(string); ok && appVersion != "" {
 		fmt.Fprintf(sb, "- **Version:** `%s`\n", appVersion)
 	}
+	if environmentName, ok := ctx["environmentName"].(string); ok && environmentName != "" {
+		fmt.Fprintf(sb, "- **Environment:** `%s`\n", environmentName)
+	}
 
 	sb.WriteString("\n")
 }

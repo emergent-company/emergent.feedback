@@ -8,7 +8,7 @@ import {
   describeAPIError,
   withAuthRetry,
 } from "./api";
-import type { FeedbackComment, ExportIssueResult } from "./api";
+import type { FeedbackComment, ExportIssueResult, MemoryStatus } from "./api";
 import type {
   FeedbackIntent,
   IntentAction,
@@ -1747,6 +1747,22 @@ function injectStyles(): void {
       gap: 8px;
       flex-shrink: 0;
     }
+    #__ef_dialog__ .ef-memory-opt {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-right: 2px;
+      font-size: 12px;
+      color: var(--ef-muted);
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+    #__ef_dialog__ .ef-memory-opt[hidden] { display: none; }
+    #__ef_dialog__ .ef-memory-opt input {
+      accent-color: var(--ef-primary);
+      cursor: pointer;
+    }
     @media (max-width: 520px) {
       #__ef_dialog__ .ef-issue-modal { padding: 0; }
       #__ef_dialog__ .ef-issue-card {
@@ -1943,6 +1959,9 @@ export interface SubmitFeedbackOptions {
   repo: string;
   branch?: string;
   appVersion?: string;
+  environment?: string;
+  /** Public Memory destination probe for this repo (connected + mode). */
+  memory?: MemoryStatus;
   componentHierarchy?: { name: string; isChild: boolean }[];
   selectedComponentIdx?: number;
   onComponentChange?: (index: number) => void;
@@ -1956,7 +1975,7 @@ export interface SubmitFeedbackOptions {
   /** Live applied style changes. Defaults to the selection module. */
   getChanges?: () => StyleChange[];
   /** Submits a comment; resolves with the new feedback ID when known. */
-  onSubmit: (comment: string, type: FeedbackType, intent: FeedbackIntent) => Promise<number | void>;
+  onSubmit: (comment: string, type: FeedbackType, intent: FeedbackIntent, memorySync?: boolean) => Promise<number | void>;
   onExport: (ids: number[], type: FeedbackType, issueTopic: string) => Promise<ExportIssueResult>;
   /**
    * Called when a submit/export hits 401. Resolves true if the user
@@ -2096,6 +2115,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   if (opts.repo)       chips.push(`<span class="ef-target-chip"><span class="ef-target-chip-label">repo</span>${escapeHtml(opts.repo)}</span>`);
   if (opts.branch)     chips.push(`<span class="ef-target-chip"><span class="ef-target-chip-label">branch</span>${escapeHtml(opts.branch)}</span>`);
   if (opts.appVersion) chips.push(`<span class="ef-target-chip"><span class="ef-target-chip-label">version</span>${escapeHtml(opts.appVersion)}</span>`);
+  if (opts.environment) chips.push(`<span class="ef-target-chip"><span class="ef-target-chip-label">env</span>${escapeHtml(opts.environment)}</span>`);
   const targetStripHTML = chips.length > 0 ? `<div class="ef-target-strip">${chips.join("")}</div>` : "";
 
   const hierarchy = opts.componentHierarchy ?? [];
@@ -2164,6 +2184,9 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   if (opts.repo) issueSubParts.push(opts.repo);
   issueSubParts.push(opts.selector);
   const issueSub = issueSubParts.join(" · ");
+  // "ask" is the only mode where the reporter chooses. "auto" syncs server-side
+  // without a control; "off"/absent shows nothing.
+  const memoryAsk = !!opts.memory && opts.memory.connected && opts.memory.mode === "ask";
 
   dialog.innerHTML = `
     <div class="ef-card" role="dialog" aria-modal="true" aria-labelledby="__ef_title__" tabindex="-1" hidden inert aria-hidden="true">
@@ -2253,6 +2276,10 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
           <button type="button" class="ef-btn-secondary" id="__ef_issue_cancel__">Cancel</button>
           <button type="button" class="ef-btn-secondary" id="__ef_edit_element_foot__" aria-label="Edit element styles">Edit element</button>
           <div class="ef-footer-spacer"></div>
+          <label class="ef-memory-opt" id="__ef_memory_opt__" ${memoryAsk ? "" : "hidden"}>
+            <input type="checkbox" id="__ef_memory_sync__" checked />
+            <span>Send to Memory</span>
+          </label>
           <button type="button" class="ef-btn-secondary" id="__ef_submit__">Save</button>
           <button type="button" class="ef-btn-primary" id="__ef_issue_submit__">Create issue</button>
         </div>
@@ -2301,6 +2328,8 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   const modalCard = dialog.querySelector<HTMLElement>(".ef-issue-card")!;
   const issueCancelBtn = dialog.querySelector<HTMLButtonElement>("#__ef_issue_cancel__")!;
   const issueSubmitBtn = dialog.querySelector<HTMLButtonElement>("#__ef_issue_submit__")!;
+  const memorySyncInput = dialog.querySelector<HTMLInputElement>("#__ef_memory_sync__");
+  const memorySyncRequested = (): boolean => memoryAsk && !!memorySyncInput?.checked;
   const editBtn = dialog.querySelector<HTMLButtonElement>("#__ef_edit_element__")!;
   const editFootBtn = dialog.querySelector<HTMLButtonElement>("#__ef_edit_element_foot__")!;
   const changeChip = dialog.querySelector<HTMLElement>("#__ef_change_count__")!;
@@ -2935,7 +2964,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     errDiv.textContent = "";
     try {
       await withAuthRetry(
-        () => opts.onSubmit(comment, getType(), buildIntent()),
+        () => opts.onSubmit(comment, getType(), buildIntent(), memorySyncRequested()),
         opts.ensureAuth
       )();
       clearDraft(opts.selector);
@@ -2975,7 +3004,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
       if (comment && comment !== submittedComment) {
         // Submit the new comment first, then include its ID in the export.
         const newId = await withAuthRetry(
-          () => opts.onSubmit(comment, type, buildIntent()),
+          () => opts.onSubmit(comment, type, buildIntent(), memorySyncRequested()),
           opts.ensureAuth
         )();
         if (typeof newId === "number") ids = [...ids, newId];

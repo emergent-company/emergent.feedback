@@ -387,6 +387,8 @@ function elementLabel(el: Element): string {
     const existingComments = allComments.filter((c) => c.selector === selector);
 
     const tokens = await loadTokens(config);
+    // One public probe per dialog open; failures must never block feedback.
+    const memory = await api.getMemoryStatus(config.repo).catch(() => undefined);
 
     // Seed the multi-select set with the clicked element (revert any pending
     // edits left over from a previous target so the page is clean; committed
@@ -418,6 +420,8 @@ function elementLabel(el: Element): string {
       repo: config.repo,
       branch: config.branch,
       appVersion: config.version,
+      environment: config.environment,
+      memory,
       componentHierarchy: rawHierarchy.map((h, i) => ({
         name: h.name,
         isChild: i > selectedComponentIdx,
@@ -431,7 +435,7 @@ function elementLabel(el: Element): string {
       getTargets: getSelectionTargets,
       getChanges: () => getAllSelectionChanges(),
       ensureAuth,
-      onSubmit: async (comment, type: FeedbackType, intent: FeedbackIntent) => {
+      onSubmit: async (comment, type: FeedbackType, intent: FeedbackIntent, memorySync?: boolean) => {
         const screenshot = await captureElement(target);
         const snapshot = captureSnapshot();
         const replay = config.replay ? await getReplayPayloadAsync() : undefined;
@@ -471,6 +475,7 @@ function elementLabel(el: Element): string {
           screenshot,
           snapshot,
           ...(replay ? { replay } : {}),
+          ...(memorySync ? { memory_sync: true } : {}),
         });
         // Promote the applied edits to committed; stop tracking them as pending.
         markSent();
@@ -678,8 +683,9 @@ function elementLabel(el: Element): string {
       timestamp: new Date().toISOString(),
       sessionId: getSessionId(),
       traceId: resolveTraceId(),
-      ...(config.branch  ? { branch: config.branch }   : {}),
-      ...(config.version ? { appVersion: config.version } : {}),
+      ...(config.branch      ? { branch: config.branch }           : {}),
+      ...(config.version     ? { appVersion: config.version }       : {}),
+      ...(config.environment ? { environmentName: config.environment } : {}),
       sessionHistory: getHistory(),
       repro: {
         steps: [],

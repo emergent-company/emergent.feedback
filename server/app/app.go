@@ -14,6 +14,7 @@ import (
 	"github.com/emergent-company/emergent.feedback/server/github"
 	"github.com/emergent-company/emergent.feedback/server/handler"
 	"github.com/emergent-company/emergent.feedback/server/landing"
+	"github.com/emergent-company/emergent.feedback/server/memory"
 	authmw "github.com/emergent-company/emergent.feedback/server/middleware"
 	"github.com/emergent-company/emergent.feedback/server/panel"
 	"github.com/emergent-company/emergent.feedback/server/store"
@@ -40,6 +41,16 @@ type Options struct {
 	AllowedOrigins string
 	MCPAPIKey      string
 	Port           string
+	// PublicBaseURL is the externally reachable feedback origin (e.g.
+	// https://feedback.example.com). Used for report deep links in Memory.
+	PublicBaseURL string
+	// AllowPrivateMemoryURLs permits loopback/RFC1918 Memory API URLs for local
+	// development. Off by default so user-supplied URLs cannot reach internal
+	// services (SSRF).
+	AllowPrivateMemoryURLs bool
+	// StartWorkers starts the in-process Memory outbox retry loop. Tests leave
+	// this false and drive ProcessMemoryOutbox directly.
+	StartWorkers bool
 	// StaticFS serves the embedded client bundles. Optional; defaults to the embedded bundle.
 	StaticFS fs.FS
 	// EnvelopeSchema is the feedback envelope JSON Schema served at /schema/envelope.v1.json. Optional; defaults to the embedded schema.
@@ -88,7 +99,7 @@ func BuildRouter(opts Options) (*echo.Echo, error) {
 			h := c.Response().Header()
 			h.Set("Access-Control-Allow-Origin", origin)
 			h.Set("Access-Control-Allow-Credentials", "true")
-			h.Set("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS")
+			h.Set("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS")
 			h.Set("Access-Control-Allow-Headers", "Content-Type,Authorization")
 			h.Set("Vary", "Origin")
 			if c.Request().Method == http.MethodOptions {
@@ -112,6 +123,8 @@ func BuildRouter(opts Options) (*echo.Echo, error) {
 
 	// ── Routes ────────────────────────────────────────────────────────────────
 	h := handler.New(opts.Store, opts.GitHub, opts.JWTSecret)
+	h.PublicBaseURL = opts.PublicBaseURL
+	h.MemoryHTTP = memory.SafeHTTPClient(opts.AllowPrivateMemoryURLs)
 
 	// Panel (public; go-daisy Templ pages)
 	e.GET("/panel", func(c echo.Context) error {
@@ -126,6 +139,10 @@ func BuildRouter(opts Options) (*echo.Echo, error) {
 		render.RenderPage(c.Response().Writer, c.Request(), panel.PanelReportsPage())
 		return nil
 	})
+	e.GET("/panel/destinations", func(c echo.Context) error {
+		render.RenderPage(c.Response().Writer, c.Request(), panel.PanelDestinationsPage())
+		return nil
+	})
 
 	// Landing page (public; commercial one-pager)
 	e.GET("/", func(c echo.Context) error {
@@ -137,6 +154,8 @@ func BuildRouter(opts Options) (*echo.Echo, error) {
 	e.GET("/auth/github", h.HandleGitHubLogin)
 	e.GET("/auth/callback", h.HandleGitHubCallback)
 	e.GET("/auth/setup", h.HandleGitHubSetup)
+	// Memory OAuth callback (public; protected by single-use state + PKCE).
+	e.GET("/oauth/memory/callback", h.HandleMemoryOAuthCallback)
 
 	// Health (public)
 	e.GET("/health", func(c echo.Context) error {
@@ -155,6 +174,8 @@ func BuildRouter(opts Options) (*echo.Echo, error) {
 	// Feedback — public read endpoints (counts + public issue refs only, no PII)
 	e.GET("/feedback", h.HandleListFeedback)
 	e.GET("/issues", h.HandleListIssues)
+	// Public overlay probe: only {connected, mode}, scoped to one repo.
+	e.GET("/api/memory/status", h.HandleMemoryStatus)
 
 	// Authenticated routes
 	auth := e.Group("", authmw.RequireAuth(opts.JWTSecret))
@@ -175,6 +196,16 @@ func BuildRouter(opts Options) (*echo.Echo, error) {
 	auth.GET("/api/repos", h.HandleListRepos)
 	auth.GET("/api/reports", h.HandleListReports)
 	auth.GET("/api/reports/:id", h.HandleGetReport)
+
+	// Memory destinations (per repo). Repo names contain "/", so identify the
+	// repo in the body/query rather than a path param.
+	auth.GET("/api/memory/destinations", h.HandleListMemoryDestinations)
+	auth.POST("/api/memory/destinations", h.HandleCreateMemoryDestination)
+	auth.PATCH("/api/memory/destinations", h.HandleUpdateMemoryDestination)
+	auth.DELETE("/api/memory/destinations", h.HandleDeleteMemoryDestination)
+	auth.POST("/api/memory/destinations/test", h.HandleTestMemoryDestination)
+	auth.POST("/api/memory/sync", h.HandleSyncFeedbackToMemory)
+	auth.POST("/api/memory/oauth/start", h.HandleMemoryOAuthStart)
 
 	// Write endpoints are rate-limited per client IP to protect the SQLite DB and
 	// the upstream GitHub API from abuse. Export is stricter since it calls GitHub.
@@ -219,6 +250,11 @@ func BuildRouter(opts Options) (*echo.Echo, error) {
 			return nil, err
 		}
 	}
+
+	if opts.StartWorkers {
+		h.StartMemoryWorker(context.Background())
+	}
+
 	return e, nil
 }
 
@@ -320,11 +356,14 @@ func OptionsFromEnv() (Options, func(), error) {
 	}
 
 	return Options{
-		Store:          s,
-		GitHub:         &github.AppConfig{AppID: appID, ClientID: clientID, ClientSecret: clientSecret, RedirectURI: redirectURI, PrivateKeyPEM: privateKey, InstallationID: installID, BotToken: botToken, AuthorMode: authorMode, AppSlug: slug},
-		JWTSecret:      jwtSecret,
-		AllowedOrigins: envOr("ALLOWED_ORIGINS", "*"),
-		MCPAPIKey:      os.Getenv("MCP_API_KEY"),
-		Port:           envOr("PORT", "8080"),
+		Store:                  s,
+		GitHub:                 &github.AppConfig{AppID: appID, ClientID: clientID, ClientSecret: clientSecret, RedirectURI: redirectURI, PrivateKeyPEM: privateKey, InstallationID: installID, BotToken: botToken, AuthorMode: authorMode, AppSlug: slug},
+		JWTSecret:              jwtSecret,
+		AllowedOrigins:         envOr("ALLOWED_ORIGINS", "*"),
+		MCPAPIKey:              os.Getenv("MCP_API_KEY"),
+		Port:                   envOr("PORT", "8080"),
+		PublicBaseURL:          envOr("PUBLIC_BASE_URL", ""),
+		AllowPrivateMemoryURLs: strings.EqualFold(envOr("ALLOW_PRIVATE_MEMORY_URLS", ""), "true"),
+		StartWorkers:           true,
 	}, func() { _ = s.Close() }, nil
 }

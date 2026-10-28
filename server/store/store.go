@@ -15,6 +15,9 @@ import (
 
 const pragmas = `PRAGMA journal_mode=WAL;`
 
+// LatestSchemaVersion is the highest migration version applied by Migrate.
+const LatestSchemaVersion = 8
+
 type dialect int
 
 const (
@@ -217,6 +220,64 @@ var sqliteMigrations = []migration{
 		`ALTER TABLE feedback ADD COLUMN duplicate_of INTEGER;`,
 		`CREATE INDEX IF NOT EXISTS feedback_dedupe_idx ON feedback(repo, dedupe_key);`,
 	}},
+	{8, "memory_destinations", []string{
+		`CREATE TABLE IF NOT EXISTS memory_destinations (
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  repo              TEXT    NOT NULL UNIQUE,
+  base_url          TEXT    NOT NULL,
+  project_id        TEXT    NOT NULL,
+  project_name      TEXT    NOT NULL DEFAULT '',
+  client_id         TEXT    NOT NULL DEFAULT '',
+  token_encrypted   BLOB    NOT NULL,
+  token_id          TEXT    NOT NULL DEFAULT '',
+  scopes            TEXT    NOT NULL DEFAULT '',
+  mode              TEXT    NOT NULL DEFAULT 'ask',
+  feedback_base_url TEXT    NOT NULL DEFAULT '',
+  last_sync_at      TEXT,
+  last_error        TEXT    NOT NULL DEFAULT '',
+  created_by        TEXT    NOT NULL DEFAULT '',
+  created_at        TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+  updated_at        TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+);`,
+		`CREATE TABLE IF NOT EXISTS memory_links (
+  feedback_id     INTEGER NOT NULL,
+  destination_id  INTEGER NOT NULL,
+  object_key      TEXT    NOT NULL,
+  canonical_id    TEXT    NOT NULL DEFAULT '',
+  last_synced_at  TEXT,
+  last_error      TEXT    NOT NULL DEFAULT '',
+  PRIMARY KEY (feedback_id, destination_id)
+);`,
+		`CREATE TABLE IF NOT EXISTS memory_outbox (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  feedback_id     INTEGER NOT NULL,
+  destination_id  INTEGER NOT NULL,
+  op              TEXT    NOT NULL DEFAULT 'upsert',
+  payload         TEXT    NOT NULL,
+  attempts        INTEGER NOT NULL DEFAULT 0,
+  next_attempt_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+  last_error      TEXT    NOT NULL DEFAULT '',
+  created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+);`,
+		`CREATE INDEX IF NOT EXISTS memory_outbox_due_idx ON memory_outbox(next_attempt_at);`,
+		`CREATE TABLE IF NOT EXISTS memory_oauth_states (
+  state             TEXT PRIMARY KEY,
+  repo              TEXT NOT NULL,
+  github_user       TEXT NOT NULL DEFAULT '',
+  base_url          TEXT NOT NULL,
+  verifier          TEXT NOT NULL,
+  redirect_uri      TEXT NOT NULL,
+  feedback_base_url TEXT NOT NULL DEFAULT '',
+  created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+  expires_at        TEXT NOT NULL
+);`,
+		`CREATE TABLE IF NOT EXISTS memory_oauth_clients (
+  base_url     TEXT PRIMARY KEY,
+  client_id    TEXT NOT NULL,
+  redirect_uri TEXT NOT NULL,
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+);`,
+	}},
 }
 
 // postgresMigrations mirror sqliteMigrations with PostgreSQL DDL. Same version
@@ -316,6 +377,64 @@ var postgresMigrations = []migration{
 		`ALTER TABLE feedback ADD COLUMN dedupe_key TEXT;`,
 		`ALTER TABLE feedback ADD COLUMN duplicate_of BIGINT;`,
 		`CREATE INDEX IF NOT EXISTS feedback_dedupe_idx ON feedback(repo, dedupe_key);`,
+	}},
+	{8, "memory_destinations", []string{
+		`CREATE TABLE IF NOT EXISTS memory_destinations (
+  id                BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  repo              TEXT    NOT NULL UNIQUE,
+  base_url          TEXT    NOT NULL,
+  project_id        TEXT    NOT NULL,
+  project_name      TEXT    NOT NULL DEFAULT '',
+  client_id         TEXT    NOT NULL DEFAULT '',
+  token_encrypted   BYTEA   NOT NULL,
+  token_id          TEXT    NOT NULL DEFAULT '',
+  scopes            TEXT    NOT NULL DEFAULT '',
+  mode              TEXT    NOT NULL DEFAULT 'ask',
+  feedback_base_url TEXT    NOT NULL DEFAULT '',
+  last_sync_at      TEXT,
+  last_error        TEXT    NOT NULL DEFAULT '',
+  created_by        TEXT    NOT NULL DEFAULT '',
+  created_at        TEXT    NOT NULL DEFAULT (to_char(now() AT TIME ZONE 'utc','YYYY-MM-DD"T"HH24:MI:SS"Z"')),
+  updated_at        TEXT    NOT NULL DEFAULT (to_char(now() AT TIME ZONE 'utc','YYYY-MM-DD"T"HH24:MI:SS"Z"'))
+);`,
+		`CREATE TABLE IF NOT EXISTS memory_links (
+  feedback_id     BIGINT NOT NULL,
+  destination_id  BIGINT NOT NULL,
+  object_key      TEXT   NOT NULL,
+  canonical_id    TEXT   NOT NULL DEFAULT '',
+  last_synced_at  TEXT,
+  last_error      TEXT   NOT NULL DEFAULT '',
+  PRIMARY KEY (feedback_id, destination_id)
+);`,
+		`CREATE TABLE IF NOT EXISTS memory_outbox (
+  id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  feedback_id     BIGINT NOT NULL,
+  destination_id  BIGINT NOT NULL,
+  op              TEXT   NOT NULL DEFAULT 'upsert',
+  payload         TEXT   NOT NULL,
+  attempts        INTEGER NOT NULL DEFAULT 0,
+  next_attempt_at TEXT   NOT NULL DEFAULT (to_char(now() AT TIME ZONE 'utc','YYYY-MM-DD"T"HH24:MI:SS"Z"')),
+  last_error      TEXT   NOT NULL DEFAULT '',
+  created_at      TEXT   NOT NULL DEFAULT (to_char(now() AT TIME ZONE 'utc','YYYY-MM-DD"T"HH24:MI:SS"Z"'))
+);`,
+		`CREATE INDEX IF NOT EXISTS memory_outbox_due_idx ON memory_outbox(next_attempt_at);`,
+		`CREATE TABLE IF NOT EXISTS memory_oauth_states (
+  state             TEXT PRIMARY KEY,
+  repo              TEXT NOT NULL,
+  github_user       TEXT NOT NULL DEFAULT '',
+  base_url          TEXT NOT NULL,
+  verifier          TEXT NOT NULL,
+  redirect_uri      TEXT NOT NULL,
+  feedback_base_url TEXT NOT NULL DEFAULT '',
+  created_at        TEXT NOT NULL DEFAULT (to_char(now() AT TIME ZONE 'utc','YYYY-MM-DD"T"HH24:MI:SS"Z"')),
+  expires_at        TEXT NOT NULL
+);`,
+		`CREATE TABLE IF NOT EXISTS memory_oauth_clients (
+  base_url     TEXT PRIMARY KEY,
+  client_id    TEXT NOT NULL,
+  redirect_uri TEXT NOT NULL,
+  created_at   TEXT NOT NULL DEFAULT (to_char(now() AT TIME ZONE 'utc','YYYY-MM-DD"T"HH24:MI:SS"Z"'))
+);`,
 	}},
 }
 

@@ -469,6 +469,9 @@ func buildEnvironment(ctx map[string]any, f store.Feedback) map[string]any {
 	if v := asString(ctx["appVersion"]); v != "" {
 		out["version"] = v
 	}
+	if v := asString(ctx["environmentName"]); v != "" {
+		out["name"] = v
+	}
 	if v := asString(ctx["sessionId"]); v != "" {
 		out["session_id"] = v
 	}

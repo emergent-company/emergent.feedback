@@ -31,6 +31,7 @@ func panelSidebarGroups(active string) []layout.SidebarGroup {
 				{Label: "Overview", Href: "/panel", Icon: "lucide--layout-dashboard", Active: active == "overview"},
 				{Label: "API keys", Href: "/panel/keys", Icon: "lucide--key-round", Active: active == "keys"},
 				{Label: "Reports", Href: "/panel/reports", Icon: "lucide--inbox", Active: active == "reports"},
+				{Label: "Destinations", Href: "/panel/destinations", Icon: "lucide--plug", Active: active == "destinations"},
 			},
 		},
 		{
@@ -205,6 +206,7 @@ templ panelShell(title string, active string) {
 					{Label: "Overview", Href: "/panel", Icon: "lucide--layout-dashboard", Group: "Navigate"},
 					{Label: "API keys", Href: "/panel/keys", Icon: "lucide--key-round", Group: "Navigate"},
 					{Label: "Reports", Href: "/panel/reports", Icon: "lucide--inbox", Group: "Navigate"},
+					{Label: "Destinations", Href: "/panel/destinations", Icon: "lucide--plug", Group: "Navigate"},
 					{Label: "Landing page", Href: "/", Icon: "lucide--globe", Group: "Navigate"},
 					{Label: "GitHub", Href: "https://github.com/emergent-company/emergent.feedback", Icon: "lucide--github", Group: "Navigate"},
 					{Label: "Docs", Href: "https://github.com/emergent-company/emergent.feedback/tree/main/docs", Icon: "lucide--book-open", Group: "Navigate"},
@@ -420,6 +422,79 @@ templ PanelReportsPage() {
 // panelScript is the shared vanilla-JS controller. It is page-aware via the
 // body's data-panel-page attribute so it only loads the data a page shows;
 // every DOM lookup is null-guarded because the same script ships on all routes.
+// PanelDestinationsPage is the /panel/destinations route: connect repositories
+// to Memory projects and choose the per-repo submit mode.
+templ PanelDestinationsPage() {
+	@panelShell("emergent.feedback · Destinations", "destinations") {
+		<div class="mb-6 flex flex-wrap items-start justify-between gap-4">
+			<div>
+				<h1 class="text-2xl font-semibold tracking-tight">Destinations</h1>
+				<p class="mt-1 max-w-2xl text-sm text-base-content/60">Send captured feedback to an emergent.memory project. Pick a per-repository mode: ask each reporter, sync automatically, or turn Memory off.</p>
+			</div>
+			<div class="flex gap-2">
+				<button type="button" class="btn btn-ghost btn-sm" id="memory-refresh">Refresh</button>
+				<button type="button" class="btn btn-primary btn-sm" id="memory-connect">Connect Memory</button>
+			</div>
+		</div>
+		<div id="memory-flash" class="alert mb-4 hidden"></div>
+		<div class="mb-4 rounded-box border border-base-300 bg-base-100 p-4 text-sm text-base-content/70">
+			<p><span class="font-medium text-base-content">Ask</span> shows a “Send to Memory” option in the feedback dialog (default). <span class="font-medium text-base-content">Auto</span> sends every report. <span class="font-medium text-base-content">Off</span> disables syncing without deleting the connection.</p>
+		</div>
+		<div id="memory-list" class="flex flex-col gap-3">
+			<div class="rounded-box border border-base-300 bg-base-100 p-6 text-sm text-base-content/60">Loading destinations…</div>
+		</div>
+		@panelMemoryConnectModal()
+	}
+}
+
+templ panelMemoryConnectModal() {
+	<dialog id="memory-connect-modal" class="modal">
+		<div class="modal-box max-w-2xl p-0">
+			<div class="flex items-start justify-between gap-4 border-b border-base-300 px-5 py-4">
+				<div>
+					<h2 class="text-lg font-semibold">Connect a Memory project</h2>
+					<p class="mt-1 text-xs text-base-content/60">One connection per repository. Tokens are encrypted at rest and shared across the repository.</p>
+				</div>
+				<button type="button" class="btn btn-ghost btn-sm btn-square" id="memory-close" aria-label="Close">✕</button>
+			</div>
+			<div class="space-y-4 p-5">
+				<label class="form-control w-full">
+					<span class="label-text mb-1">Repository</span>
+					<select id="memory-repo" class="select select-bordered w-full"></select>
+				</label>
+				<label class="form-control w-full">
+					<span class="label-text mb-1">Memory API URL</span>
+					<input id="memory-base-url" class="input input-bordered w-full" placeholder="https://api.memory.example.com" autocomplete="off"/>
+					<span class="label-text-alt mt-1 text-base-content/50">The Memory API origin. OAuth opens the Memory app to choose a project.</span>
+				</label>
+				<div class="flex flex-wrap items-center gap-2">
+					<button type="button" class="btn btn-primary btn-sm" id="memory-oauth">Connect with Memory</button>
+					<span class="text-xs text-base-content/50">Opens Memory to choose a project and approve access.</span>
+				</div>
+				<p id="memory-oauth-status" class="hidden text-xs"></p>
+				<div class="divider text-xs text-base-content/40">or paste a project token</div>
+				<details class="rounded-box border border-base-300 p-3">
+					<summary class="cursor-pointer text-sm font-medium">Advanced: paste a token</summary>
+					<div class="mt-3 space-y-3">
+						<label class="form-control w-full">
+							<span class="label-text mb-1">Project ID</span>
+							<input id="memory-project-id" class="input input-bordered w-full font-mono text-xs" placeholder="00000000-0000-0000-0000-000000000000" autocomplete="off"/>
+						</label>
+						<label class="form-control w-full">
+							<span class="label-text mb-1">Project token</span>
+							<input id="memory-token" type="password" class="input input-bordered w-full font-mono text-xs" placeholder="emt_…" autocomplete="off"/>
+						</label>
+						<p class="text-xs text-base-content/50">Create a token with <code class="font-mono">graph:read</code>, <code class="font-mono">graph:write</code>, and <code class="font-mono">projects:read</code>.</p>
+						<button type="button" class="btn btn-outline btn-sm" id="memory-paste">Save token</button>
+					</div>
+				</details>
+				<p id="memory-connect-error" class="hidden text-sm text-error"></p>
+			</div>
+		</div>
+		<form method="dialog" class="modal-backdrop"><button>close</button></form>
+	</dialog>
+}
+
 templ panelScript() {
 	<script>
 	(function () {
@@ -1449,12 +1524,239 @@ templ panelScript() {
 			}
 		}
 
+		// ── Memory destinations ──────────────────────────────────────────
+		var memoryState = { destinations: [], repos: null };
+
+		function memoryFlash(message, kind) {
+			var el = byId("memory-flash");
+			if (!el) return;
+			el.className = "alert mb-4 " + (kind === "error" ? "alert-error" : "alert-success");
+			el.textContent = message;
+			el.classList.remove("hidden");
+		}
+
+		function hideMemoryFlash() {
+			var el = byId("memory-flash");
+			if (el) el.classList.add("hidden");
+		}
+
+		function memoryConnectError(message) {
+			var el = byId("memory-connect-error");
+			if (!el) return;
+			if (!message) { el.classList.add("hidden"); el.textContent = ""; return; }
+			el.textContent = message;
+			el.classList.remove("hidden");
+		}
+
+		function memoryRepoValue() {
+			var sel = byId("memory-repo");
+			return sel ? sel.value : "";
+		}
+
+		function memoryBaseURLValue() {
+			var input = byId("memory-base-url");
+			return input ? input.value.trim().replace(/\/+$/, "") : "";
+		}
+
+		function loadMemoryDestinations() {
+			var list = byId("memory-list");
+			if (!list) return;
+			api("/api/memory/destinations").then(function (items) {
+				memoryState.destinations = Array.isArray(items) ? items : [];
+				renderMemoryDestinations(memoryState.destinations);
+			}).catch(function (err) {
+				clear(list);
+				var p = makeEl("div", "rounded-box border border-error/40 bg-base-100 p-5 text-sm text-error");
+				p.textContent = err.message;
+				list.appendChild(p);
+			});
+		}
+
+		function renderMemoryDestinations(items) {
+			var list = byId("memory-list");
+			if (!list) return;
+			clear(list);
+			if (!items.length) {
+				var empty = makeEl("div", "rounded-box border border-dashed border-base-300 bg-base-100 p-8 text-center");
+				var t = makeEl("p", "text-sm font-medium"); t.textContent = "No Memory destinations yet";
+				var d = makeEl("p", "mt-1 text-xs text-base-content/60"); d.textContent = "Connect a repository to send captured feedback into an emergent.memory project.";
+				empty.appendChild(t); empty.appendChild(d);
+				list.appendChild(empty);
+				return;
+			}
+			items.forEach(function (item) {
+				var card = makeEl("div", "rounded-box border border-base-300 bg-base-100 p-4");
+				var top = makeEl("div", "flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between");
+				var left = makeEl("div", "min-w-0 sm:flex-1");
+				var repo = makeEl("div", "font-medium break-all"); repo.textContent = item.repo;
+				var project = makeEl("div", "mt-1 break-all text-xs text-base-content/60");
+				project.textContent = (item.project_name || "Memory project") + " · " + item.project_id;
+				left.appendChild(repo); left.appendChild(project);
+				if (item.last_sync_at) {
+					var sync = makeEl("div", "mt-1 text-xs text-base-content/50");
+					sync.textContent = "Last sync " + new Date(item.last_sync_at).toLocaleString();
+					left.appendChild(sync);
+				}
+				if (item.last_error) {
+					var errEl = makeEl("div", "mt-2 text-xs text-error"); errEl.textContent = item.last_error;
+					left.appendChild(errEl);
+				}
+
+				var right = makeEl("div", "flex items-center gap-2 sm:shrink-0");
+				var mode = makeEl("select", "select select-bordered select-sm w-24", { "aria-label": "Memory mode for " + item.repo });
+				[["ask", "Ask"], ["auto", "Auto"], ["off", "Off"]].forEach(function (pair) {
+					var opt = makeEl("option", "", { value: pair[0] }); opt.textContent = pair[1]; mode.appendChild(opt);
+				});
+				mode.value = item.mode || "ask";
+				mode.addEventListener("change", function () {
+					mode.disabled = true;
+					api("/api/memory/destinations", {
+						method: "PATCH",
+						body: JSON.stringify({ repo: item.repo, mode: mode.value })
+					}).then(function (saved) {
+						item.mode = saved.mode;
+						memoryFlash("Mode updated for " + item.repo + ".", "success");
+					}).catch(function (err) {
+						memoryFlash(err.message, "error");
+						mode.value = item.mode || "ask";
+					}).then(function () { mode.disabled = false; });
+				});
+
+				var test = makeEl("button", "btn btn-ghost btn-sm", { type: "button" });
+				test.textContent = "Test";
+				test.addEventListener("click", function () {
+					test.disabled = true; test.textContent = "Testing…";
+					api("/api/memory/destinations/test", {
+						method: "POST",
+						body: JSON.stringify({ repo: item.repo })
+					}).then(function (res) {
+						memoryFlash("Connection OK: " + (res.project || item.project_name), "success");
+						loadMemoryDestinations();
+					}).catch(function (err) {
+						memoryFlash(err.message, "error");
+					}).then(function () { test.disabled = false; test.textContent = "Test"; });
+				});
+
+				var disc = makeEl("button", "btn btn-ghost btn-sm text-error", { type: "button" });
+				disc.textContent = "Disconnect";
+				disc.addEventListener("click", function () {
+					if (!window.confirm("Disconnect " + item.repo + " from Memory? Captured reports will stop syncing.")) return;
+					disc.disabled = true;
+					api("/api/memory/destinations?repo=" + encodeURIComponent(item.repo), { method: "DELETE" })
+						.then(function () { memoryFlash("Disconnected " + item.repo + ".", "success"); loadMemoryDestinations(); })
+						.catch(function (err) { memoryFlash(err.message, "error"); disc.disabled = false; });
+				});
+
+				right.appendChild(mode); right.appendChild(test); right.appendChild(disc);
+				top.appendChild(left); top.appendChild(right);
+				card.appendChild(top);
+				list.appendChild(card);
+			});
+		}
+
+		function loadMemoryRepos() {
+			var sel = byId("memory-repo");
+			if (!sel) return;
+			var fill = function (repos) {
+				clear(sel);
+				var placeholder = makeEl("option", "", { value: "" }); placeholder.textContent = "Choose a repository…";
+				sel.appendChild(placeholder);
+				(repos || []).forEach(function (r) {
+					var name = r.full_name || r.fullName || r.name || "";
+					if (!name) return;
+					var opt = makeEl("option", "", { value: name }); opt.textContent = name;
+					sel.appendChild(opt);
+				});
+			};
+			if (memoryState.repos) { fill(memoryState.repos); return; }
+			api("/api/repos").then(function (repos) {
+				memoryState.repos = Array.isArray(repos) ? repos : [];
+				fill(memoryState.repos);
+			}).catch(function (err) { memoryConnectError(err.message); });
+		}
+
+		function openMemoryModal() {
+			var modal = byId("memory-connect-modal");
+			if (!modal) return;
+			memoryConnectError("");
+			var status = byId("memory-oauth-status"); if (status) status.classList.add("hidden");
+			var base = byId("memory-base-url"); if (base && !base.value) base.value = "";
+			var pid = byId("memory-project-id"); if (pid) pid.value = "";
+			var tok = byId("memory-token"); if (tok) tok.value = "";
+			loadMemoryRepos();
+			if (typeof modal.showModal === "function") modal.showModal();
+		}
+
+		function memoryOAuthConnect() {
+			memoryConnectError("");
+			var repo = memoryRepoValue();
+			var base = memoryBaseURLValue();
+			if (!repo) { memoryConnectError("Choose a repository."); return; }
+			if (!base) { memoryConnectError("Enter the Memory URL."); return; }
+			var btn = byId("memory-oauth");
+			var status = byId("memory-oauth-status");
+			if (btn) { btn.disabled = true; btn.textContent = "Opening Memory…"; }
+			if (status) { status.className = "text-xs text-base-content/60"; status.textContent = "Requesting authorization…"; status.classList.remove("hidden"); }
+			api("/api/memory/oauth/start", {
+				method: "POST",
+				body: JSON.stringify({ repo: repo, base_url: base })
+			}).then(function (res) {
+				if (res && res.authorize_url) { window.location.href = res.authorize_url; return; }
+				memoryConnectError("Memory did not return an authorization URL.");
+			}).catch(function (err) {
+				memoryConnectError(err.message);
+			}).then(function () {
+				if (btn) { btn.disabled = false; btn.textContent = "Connect with Memory"; }
+			});
+		}
+
+		function memoryPasteConnect() {
+			memoryConnectError("");
+			var repo = memoryRepoValue();
+			var base = memoryBaseURLValue();
+			var pidEl = byId("memory-project-id");
+			var tokEl = byId("memory-token");
+			var projectID = pidEl ? pidEl.value.trim() : "";
+			var token = tokEl ? tokEl.value.trim() : "";
+			if (!repo || !base || !projectID || !token) {
+				memoryConnectError("Repository, Memory URL, project ID, and token are required.");
+				return;
+			}
+			var btn = byId("memory-paste");
+			if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
+			api("/api/memory/destinations", {
+				method: "POST",
+				body: JSON.stringify({ repo: repo, base_url: base, project_id: projectID, token: token, mode: "ask" })
+			}).then(function () {
+				var modal = byId("memory-connect-modal"); if (modal && modal.close) modal.close();
+				memoryFlash("Connected " + repo + " to Memory.", "success");
+				loadMemoryDestinations();
+			}).catch(function (err) {
+				memoryConnectError(err.message);
+			}).then(function () {
+				if (btn) { btn.disabled = false; btn.textContent = "Save token"; }
+			});
+		}
+
+		function memoryHandleQuery() {
+			var params;
+			try { params = new URLSearchParams(location.search); } catch (e) { return; }
+			var connected = params.get("connected");
+			var failed = params.get("memory_error");
+			if (connected) memoryFlash("Connected " + connected + " to Memory.", "success");
+			if (failed) memoryFlash(failed, "error");
+			if (connected || failed) {
+				try { history.replaceState(null, "", location.pathname); } catch (e) {}
+			}
+		}
+
 		// ── Bootstrap + events ───────────────────────────────────────────
 		function loadPageData() {
 			var page = currentPage();
 			if (page === "overview") { loadOverview(); return; }
 			if (page === "keys") { loadKeys(); return; }
 			if (page === "reports") { loadReports(); return; }
+			if (page === "destinations") { memoryHandleQuery(); loadMemoryDestinations(); return; }
 			// Fallback (unknown page): load everything that has a container.
 			loadRepos();
 			loadKeys();
@@ -1541,6 +1843,19 @@ templ panelScript() {
 				var keyEl = byId("reveal-key");
 				if (keyEl) copyText(keyEl.textContent, copy);
 			});
+
+			var memoryRefresh = byId("memory-refresh");
+			if (memoryRefresh) memoryRefresh.addEventListener("click", loadMemoryDestinations);
+			var memoryConnect = byId("memory-connect");
+			if (memoryConnect) memoryConnect.addEventListener("click", openMemoryModal);
+			var memoryClose = byId("memory-close");
+			if (memoryClose) memoryClose.addEventListener("click", function () {
+				var modal = byId("memory-connect-modal"); if (modal && modal.close) modal.close();
+			});
+			var memoryOAuth = byId("memory-oauth");
+			if (memoryOAuth) memoryOAuth.addEventListener("click", memoryOAuthConnect);
+			var memoryPaste = byId("memory-paste");
+			if (memoryPaste) memoryPaste.addEventListener("click", memoryPasteConnect);
 
 			spotlightReports();
 

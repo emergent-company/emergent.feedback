@@ -13,6 +13,7 @@ A lightweight, drop-in feedback tool for any web app. Users hold `Alt+Shift` (co
 - **`data-component` support** — if an element or ancestor has `data-component="MyWidget"`, the component name is shown in the hover tooltip
 - **GitHub OAuth** — users sign in with GitHub; session persists across page reloads (30-day JWT in `localStorage`)
 - **Export to GitHub Issues** — creates a well-structured issue with comments, selector, position, CSS framework, computed styles, and pretty-printed HTML
+- **Memory destinations** — optionally mirror reports into an `emergent.memory` project per repository, with an OAuth connect flow, token fallback and ask/auto/off modes
 - **Badge overlays** — elements with existing feedback show a count badge in selection mode; clicking a badge reopens the dialog for that element
 
 ---
@@ -41,6 +42,7 @@ Add the following snippet to your HTML, just before `</body>`:
 | `data-hotkey` | No | Activation key combo. Defaults to `alt+shift`. Options: `alt+shift`, `ctrl+shift`, `meta+shift` |
 | `data-branch` | No | Git branch being tested. Shown in dialog and included in issue body |
 | `data-version` | No | App version being tested. Shown in dialog and included in issue body |
+| `data-environment` | No | Environment name (e.g. `staging`, `production`). Shown in the dialog and included in the issue body and Memory `Issue` |
 | `data-theme` | No | Overlay theme: `auto` (default), `light` or `dark`. `auto` detects the host page theme, then falls back to the OS `prefers-color-scheme`. |
 | `data-theme-url` | No | Absolute or same-origin URL of a JSON theme manifest (design-token groups) that powers the live style editor. See [Live style editing](#live-style-editing). When omitted, the overlay reads daisyUI color variables from the page and uses a built-in Tailwind/daisyUI utility set (spacing, layout, typography, colors, borders/effects, daisyUI components). |
 
@@ -136,6 +138,29 @@ editor.
 > are not shifted by the reserved rail width, and an explicitly sized `html`
 > (`width`/`min-width`) can defeat the reflow and produce a horizontal scrollbar
 > under the editor.
+
+### Memory destinations
+
+Repository collaborators can connect a repository to an `emergent.memory`
+project from **Panel → Destinations**; the connection is shared across everyone
+with access to that repository. Use **Connect with Memory** to authorize through
+Memory's OAuth flow (choose the project on the consent screen), or expand
+**Advanced** to paste a project-scoped `emt_…` token. Each repository has a
+submit mode:
+
+- **Ask** (default) — the feedback dialog shows a **Send to Memory** checkbox,
+  so each reporter decides per report.
+- **Auto** — every report is mirrored automatically.
+- **Off** — keep the connection but stop syncing.
+
+Reports are written as `Issue` objects with the page URL, environment, app
+version, capture status and a deep link back to the report. Writes go through a
+durable outbox and retry with backoff when Memory is unavailable. Set
+`PUBLIC_BASE_URL` when the externally reachable origin differs from the request
+host (for example behind a reverse proxy), so OAuth callbacks and report links
+use the correct origin. Memory API URLs must resolve to public addresses; for a
+Memory instance on localhost or a private network, set
+`ALLOW_PRIVATE_MEMORY_URLS=true` in development.
 
 ### Live style editing
 
@@ -515,6 +540,8 @@ credential matrix and configuration knobs (`e2e/.env.example`).
 | `DATABASE_URL` | — | Postgres DSN; when set, uses Postgres instead of SQLite |
 | `ALLOWED_ORIGINS` | `*` | Comma-separated CORS origins |
 | `MAX_BODY_BYTES` | `10MB` | Maximum request body size |
+| `PUBLIC_BASE_URL` | — | Externally reachable origin for Memory OAuth callbacks and report deep links; derived from the request when empty |
+| `ALLOW_PRIVATE_MEMORY_URLS` | `false` | Allow Memory API URLs on loopback/RFC1918 networks (local development only; off prevents SSRF) |
 
 **GitHub issue authoring** (optional)
 
