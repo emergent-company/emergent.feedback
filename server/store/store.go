@@ -16,7 +16,7 @@ import (
 const pragmas = `PRAGMA journal_mode=WAL;`
 
 // LatestSchemaVersion is the highest migration version applied by Migrate.
-const LatestSchemaVersion = 8
+const LatestSchemaVersion = 9
 
 type dialect int
 
@@ -278,6 +278,19 @@ var sqliteMigrations = []migration{
   created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
 );`,
 	}},
+	{9, "memory_oauth_clients_per_redirect", []string{
+		`CREATE TABLE memory_oauth_clients_v9 (
+  base_url     TEXT NOT NULL,
+  redirect_uri TEXT NOT NULL,
+  client_id    TEXT NOT NULL,
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+  PRIMARY KEY (base_url, redirect_uri)
+);`,
+		`INSERT OR IGNORE INTO memory_oauth_clients_v9 (base_url, redirect_uri, client_id, created_at)
+SELECT base_url, redirect_uri, client_id, created_at FROM memory_oauth_clients;`,
+		`DROP TABLE memory_oauth_clients;`,
+		`ALTER TABLE memory_oauth_clients_v9 RENAME TO memory_oauth_clients;`,
+	}},
 }
 
 // postgresMigrations mirror sqliteMigrations with PostgreSQL DDL. Same version
@@ -435,6 +448,20 @@ var postgresMigrations = []migration{
   redirect_uri TEXT NOT NULL,
   created_at   TEXT NOT NULL DEFAULT (to_char(now() AT TIME ZONE 'utc','YYYY-MM-DD"T"HH24:MI:SS"Z"'))
 );`,
+	}},
+	{9, "memory_oauth_clients_per_redirect", []string{
+		`CREATE TABLE memory_oauth_clients_v9 (
+  base_url     TEXT NOT NULL,
+  redirect_uri TEXT NOT NULL,
+  client_id    TEXT NOT NULL,
+  created_at   TEXT NOT NULL DEFAULT (to_char(now() AT TIME ZONE 'utc','YYYY-MM-DD"T"HH24:MI:SS"Z"')),
+  PRIMARY KEY (base_url, redirect_uri)
+);`,
+		`INSERT INTO memory_oauth_clients_v9 (base_url, redirect_uri, client_id, created_at)
+SELECT base_url, redirect_uri, client_id, created_at FROM memory_oauth_clients
+ON CONFLICT DO NOTHING;`,
+		`DROP TABLE memory_oauth_clients;`,
+		`ALTER TABLE memory_oauth_clients_v9 RENAME TO memory_oauth_clients;`,
 	}},
 }
 

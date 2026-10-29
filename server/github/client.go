@@ -387,11 +387,21 @@ func GetUser(ctx context.Context, accessToken string) (User, error) {
 	return u, nil
 }
 
+// RepoPermissions is the authenticated user's permission level on a repository.
+type RepoPermissions struct {
+	Admin    bool `json:"admin"`
+	Maintain bool `json:"maintain"`
+	Push     bool `json:"push"`
+	Triage   bool `json:"triage"`
+	Pull     bool `json:"pull"`
+}
+
 // Repo is a minimal GitHub repository.
 type Repo struct {
-	FullName string `json:"full_name"`
-	Name     string `json:"name"`
-	Private  bool   `json:"private"`
+	FullName    string          `json:"full_name"`
+	Name        string          `json:"name"`
+	Private     bool            `json:"private"`
+	Permissions RepoPermissions `json:"permissions"`
 }
 
 // maxGitHubPages bounds pagination to avoid an unbounded follow of the Link
@@ -491,12 +501,12 @@ func ListUserRepos(ctx context.Context, accessToken string) ([]Repo, error) {
 	return repos, nil
 }
 
-// RepoAccessible reports whether accessToken can access repo ("owner/name").
-// 200 => (true,nil); 404 => (false,nil); 401/403 => (false,&APIError); other => (false,err).
-func RepoAccessible(ctx context.Context, accessToken, repo string) (bool, error) {
+// getRepo fetches a repository. A 200 returns the decoded repo; 404 returns
+// (Repo{}, 404, nil); 401/403 returns an *APIError; other non-200s are errors.
+func getRepo(ctx context.Context, accessToken, repo string) (Repo, int, error) {
 	parts := strings.SplitN(repo, "/", 2)
 	if len(parts) != 2 {
-		return false, fmt.Errorf("github: invalid repo %q (want owner/repo)", repo)
+		return Repo{}, 0, fmt.Errorf("github: invalid repo %q (want owner/repo)", repo)
 	}
 	url := fmt.Sprintf("%s/repos/%s/%s", apiBase, parts[0], parts[1])
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -505,19 +515,47 @@ func RepoAccessible(ctx context.Context, accessToken, repo string) (bool, error)
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return false, fmt.Errorf("github: get repo: %w", err)
+		return Repo{}, 0, fmt.Errorf("github: get repo: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	switch resp.StatusCode {
 	case http.StatusOK:
-		return true, nil
+		var r Repo
+		if err := json.NewDecoder(resp.Body).Decode(&r); err != nil {
+			return Repo{}, 0, fmt.Errorf("github: decode repo: %w", err)
+		}
+		return r, resp.StatusCode, nil
 	case http.StatusNotFound:
-		return false, nil
+		return Repo{}, resp.StatusCode, nil
 	case http.StatusUnauthorized, http.StatusForbidden:
-		return false, &APIError{Op: "get repo", Status: resp.StatusCode}
+		return Repo{}, resp.StatusCode, &APIError{Op: "get repo", Status: resp.StatusCode}
 	default:
-		return false, fmt.Errorf("github: get repo: status %d", resp.StatusCode)
+		return Repo{}, resp.StatusCode, fmt.Errorf("github: get repo: status %d", resp.StatusCode)
 	}
+}
+
+// RepoAccessible reports whether accessToken can access repo ("owner/name").
+// 200 => (true,nil); 404 => (false,nil); 401/403 => (false,&APIError); other => (false,err).
+func RepoAccessible(ctx context.Context, accessToken, repo string) (bool, error) {
+	_, status, err := getRepo(ctx, accessToken, repo)
+	if err != nil {
+		return false, err
+	}
+	return status == http.StatusOK, nil
+}
+
+// RepoAdmin reports whether accessToken has admin permission on repo
+// ("owner/name"). 404/other non-200 => (false,nil) or an error, matching
+// RepoAccessible's shape so callers can map failures the same way.
+func RepoAdmin(ctx context.Context, accessToken, repo string) (bool, error) {
+	r, status, err := getRepo(ctx, accessToken, repo)
+	if err != nil {
+		return false, err
+	}
+	if status != http.StatusOK {
+		return false, nil
+	}
+	return r.Permissions.Admin, nil
 }
 
 // Account is a GitHub account (user or organization).

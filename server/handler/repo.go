@@ -102,8 +102,9 @@ func repoListError(err error) error {
 	return echo.NewHTTPError(http.StatusBadGateway, "failed to list repos")
 }
 
-// userRepos returns the authenticated user's GitHub repos (full_name list).
-func (h *Handler) userRepos(c echo.Context) ([]string, error) {
+// userRepoDetails returns the authenticated user's GitHub repos, including the
+// permission flags GitHub reports for each one.
+func (h *Handler) userRepoDetails(c echo.Context) ([]github.Repo, error) {
 	token, err := h.userToken(c)
 	if err != nil {
 		return nil, err
@@ -111,6 +112,15 @@ func (h *Handler) userRepos(c echo.Context) ([]string, error) {
 	repos, err := github.ListUserRepos(c.Request().Context(), token)
 	if err != nil {
 		return nil, repoListError(err)
+	}
+	return repos, nil
+}
+
+// userRepos returns the authenticated user's GitHub repos (full_name list).
+func (h *Handler) userRepos(c echo.Context) ([]string, error) {
+	repos, err := h.userRepoDetails(c)
+	if err != nil {
+		return nil, err
 	}
 	names := make([]string, 0, len(repos))
 	for _, r := range repos {
@@ -121,13 +131,9 @@ func (h *Handler) userRepos(c echo.Context) ([]string, error) {
 
 // HandleListRepos handles GET /api/repos — lists the user's GitHub repos.
 func (h *Handler) HandleListRepos(c echo.Context) error {
-	token, err := h.userToken(c)
+	repos, err := h.userRepoDetails(c)
 	if err != nil {
 		return err
-	}
-	repos, err := github.ListUserRepos(c.Request().Context(), token)
-	if err != nil {
-		return repoListError(err)
 	}
 	return c.JSON(http.StatusOK, repos)
 }
@@ -141,6 +147,17 @@ func (h *Handler) callerCanAccessRepo(c echo.Context, repo string) (bool, error)
 		return false, err
 	}
 	return github.RepoAccessible(c.Request().Context(), token, repo)
+}
+
+// callerCanAdminRepo reports whether the caller has admin permission on repo.
+// Destination management (connect, mode changes, test, disconnect) is limited
+// to repo admins; read-only listing only requires access.
+func (h *Handler) callerCanAdminRepo(c echo.Context, repo string) (bool, error) {
+	token, err := h.userToken(c)
+	if err != nil {
+		return false, err
+	}
+	return github.RepoAdmin(c.Request().Context(), token, repo)
 }
 
 // repoAccessError maps a repo-access-probe error to an HTTP error. An echo 401

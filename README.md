@@ -141,12 +141,13 @@ editor.
 
 ### Memory destinations
 
-Repository collaborators can connect a repository to an `emergent.memory`
-project from **Panel → Destinations**; the connection is shared across everyone
-with access to that repository. Use **Connect with Memory** to authorize through
-Memory's OAuth flow (choose the project on the consent screen), or expand
-**Advanced** to paste a project-scoped `emt_…` token. Each repository has a
-submit mode:
+Repository admins can connect a repository to an `emergent.memory` project from
+**Panel → Destinations**; the connection is shared across everyone with access
+to that repository. Collaborators can see the connection and its mode, but only
+repository admins can connect, change the mode, test, or disconnect it. Use
+**Connect with Memory** to authorize through Memory's OAuth flow (choose the
+project on the consent screen), or expand **Advanced** to paste a
+project-scoped `emt_…` token. Each repository has a submit mode:
 
 - **Ask** (default) — the feedback dialog shows a **Send to Memory** checkbox,
   so each reporter decides per report.

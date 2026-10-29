@@ -429,7 +429,7 @@ templ PanelDestinationsPage() {
 		<div class="mb-6 flex flex-wrap items-start justify-between gap-4">
 			<div>
 				<h1 class="text-2xl font-semibold tracking-tight">Destinations</h1>
-				<p class="mt-1 max-w-2xl text-sm text-base-content/60">Send captured feedback to an emergent.memory project. Pick a per-repository mode: ask each reporter, sync automatically, or turn Memory off.</p>
+				<p class="mt-1 max-w-2xl text-sm text-base-content/60">Send captured feedback to an emergent.memory project. Pick a per-repository mode: ask each reporter, sync automatically, or turn Memory off. Repository admins manage the connection; collaborators can see it.</p>
 			</div>
 			<div class="flex gap-2">
 				<button type="button" class="btn btn-ghost btn-sm" id="memory-refresh">Refresh</button>
@@ -1601,6 +1601,12 @@ templ panelScript() {
 					var errEl = makeEl("div", "mt-2 text-xs text-error"); errEl.textContent = item.last_error;
 					left.appendChild(errEl);
 				}
+				var readOnly = item.can_manage === false;
+				if (readOnly) {
+					var note = makeEl("div", "mt-2 text-xs text-base-content/50");
+					note.textContent = "Read-only — a repository admin must change this connection.";
+					left.appendChild(note);
+				}
 
 				var right = makeEl("div", "flex items-center gap-2 sm:shrink-0");
 				var mode = makeEl("select", "select select-bordered select-sm w-24", { "aria-label": "Memory mode for " + item.repo });
@@ -1608,7 +1614,9 @@ templ panelScript() {
 					var opt = makeEl("option", "", { value: pair[0] }); opt.textContent = pair[1]; mode.appendChild(opt);
 				});
 				mode.value = item.mode || "ask";
+				mode.disabled = readOnly;
 				mode.addEventListener("change", function () {
+					if (readOnly) return;
 					mode.disabled = true;
 					api("/api/memory/destinations", {
 						method: "PATCH",
@@ -1624,7 +1632,9 @@ templ panelScript() {
 
 				var test = makeEl("button", "btn btn-ghost btn-sm", { type: "button" });
 				test.textContent = "Test";
+				test.disabled = readOnly;
 				test.addEventListener("click", function () {
+					if (readOnly) return;
 					test.disabled = true; test.textContent = "Testing…";
 					api("/api/memory/destinations/test", {
 						method: "POST",
@@ -1637,9 +1647,11 @@ templ panelScript() {
 					}).then(function () { test.disabled = false; test.textContent = "Test"; });
 				});
 
-				var disc = makeEl("button", "btn btn-ghost btn-sm text-error", { type: "button" });
+				var disc = makeEl("button", "btn btn-ghost btn-sm" + (readOnly ? "" : " text-error"), { type: "button" });
 				disc.textContent = "Disconnect";
+				disc.disabled = readOnly;
 				disc.addEventListener("click", function () {
+					if (readOnly) return;
 					if (!window.confirm("Disconnect " + item.repo + " from Memory? Captured reports will stop syncing.")) return;
 					disc.disabled = true;
 					api("/api/memory/destinations?repo=" + encodeURIComponent(item.repo), { method: "DELETE" })
@@ -1661,12 +1673,21 @@ templ panelScript() {
 				clear(sel);
 				var placeholder = makeEl("option", "", { value: "" }); placeholder.textContent = "Choose a repository…";
 				sel.appendChild(placeholder);
-				(repos || []).forEach(function (r) {
+				var eligible = (repos || []).filter(function (r) {
+					// Connecting a repository is admin-only. Older API responses
+					// without permissions are left selectable; the server still
+					// enforces the rule.
+					return !r.permissions || r.permissions.admin === true;
+				});
+				eligible.forEach(function (r) {
 					var name = r.full_name || r.fullName || r.name || "";
 					if (!name) return;
 					var opt = makeEl("option", "", { value: name }); opt.textContent = name;
 					sel.appendChild(opt);
 				});
+				if (!eligible.length) {
+					memoryConnectError("You need admin access to a repository to connect Memory.");
+				}
 			};
 			if (memoryState.repos) { fill(memoryState.repos); return; }
 			api("/api/repos").then(function (repos) {

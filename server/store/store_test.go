@@ -95,6 +95,55 @@ func TestMigrateUpgradeFromV4(t *testing.T) {
 	}
 }
 
+func TestMigrateOAuthClientsPreservesRows(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "test.db")
+
+	db, err := sql.Open("sqlite", dsnWithPragmas(path))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	ctx := context.Background()
+	if _, err := db.ExecContext(ctx, dialectSQLite.schemaMigrationsDDL()); err != nil {
+		t.Fatalf("schema_migrations: %v", err)
+	}
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatalf("conn: %v", err)
+	}
+	for _, m := range sqliteMigrations[:8] {
+		if err := applyMigration(ctx, conn, dialectSQLite, m); err != nil {
+			t.Fatalf("migration %d: %v", m.version, err)
+		}
+	}
+	if _, err := db.ExecContext(ctx,
+		`INSERT INTO memory_oauth_clients (base_url, redirect_uri, client_id) VALUES (?, ?, ?)`,
+		"https://m", "https://f/cb", "client-old"); err != nil {
+		t.Fatalf("seed client: %v", err)
+	}
+	_ = conn.Close()
+	_ = db.Close()
+
+	s, err := OpenSQLite(path)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer func() { _ = s.Close() }()
+
+	got, err := s.GetMemoryOAuthClient(ctx, "https://m", "https://f/cb")
+	if err != nil || got.ClientID != "client-old" {
+		t.Fatalf("preserved client = %+v err=%v", got, err)
+	}
+	if err := s.UpsertMemoryOAuthClient(ctx, MemoryOAuthClient{
+		BaseURL: "https://m", ClientID: "client-second", RedirectURI: "https://other/cb",
+	}); err != nil {
+		t.Fatalf("second client: %v", err)
+	}
+	got, err = s.GetMemoryOAuthClient(ctx, "https://m", "https://other/cb")
+	if err != nil || got.ClientID != "client-second" {
+		t.Fatalf("second client = %+v err=%v", got, err)
+	}
+}
+
 func TestMigrateIdempotent(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "test.db")
 

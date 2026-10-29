@@ -24,6 +24,8 @@ const (
 
 	memoryIssueType   = "Issue"
 	memoryScopeString = "graph:read graph:write schema:read projects:read"
+
+	memoryAdminRequiredMessage = "Only repository admins can manage the Memory connection."
 )
 
 type memoryConnectRequest struct {
@@ -55,6 +57,7 @@ type memoryDestinationView struct {
 	ProjectName string `json:"project_name"`
 	Mode        string `json:"mode"`
 	Connected   bool   `json:"connected"`
+	CanManage   bool   `json:"can_manage"`
 	LastSyncAt  string `json:"last_sync_at,omitempty"`
 	LastError   string `json:"last_error,omitempty"`
 	CreatedAt   string `json:"created_at,omitempty"`
@@ -155,12 +158,12 @@ func (h *Handler) HandleCreateMemoryDestination(c echo.Context) error {
 	if !validMemoryMode(mode) {
 		return echo.NewHTTPError(http.StatusBadRequest, "mode must be ask, auto, or off")
 	}
-	ok, err := h.callerCanAccessRepo(c, req.Repo)
+	ok, err := h.callerCanAdminRepo(c, req.Repo)
 	if err != nil {
 		return h.repoAccessError(err)
 	}
 	if !ok {
-		return echo.NewHTTPError(http.StatusForbidden, "you do not have access to this repository")
+		return echo.NewHTTPError(http.StatusForbidden, memoryAdminRequiredMessage)
 	}
 
 	client := memory.NewWithHTTP(base, req.Token, h.MemoryHTTP)
@@ -201,7 +204,9 @@ func (h *Handler) HandleCreateMemoryDestination(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to load the Memory destination")
 	}
-	return c.JSON(http.StatusCreated, memoryView(saved))
+	view := memoryView(saved)
+	view.CanManage = true
+	return c.JSON(http.StatusCreated, view)
 }
 
 // HandleListMemoryDestinations returns the signed-in user's destinations.
@@ -213,20 +218,25 @@ func (h *Handler) HandleListMemoryDestinations(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to list Memory destinations")
 	}
 	// Destinations are repo-scoped, not user-scoped: every collaborator with
-	// repo access sees (and can manage) the same connection. One repo listing
-	// is enough to filter the small set of connected repos.
-	repos, err := h.userRepos(c)
+	// repo access sees the same connection. Only repo admins can change it,
+	// so one repo listing is enough to filter and annotate the small set of
+	// connected repos.
+	repos, err := h.userRepoDetails(c)
 	if err != nil {
 		return err
 	}
 	allowed := make(map[string]bool, len(repos))
+	admins := make(map[string]bool, len(repos))
 	for _, r := range repos {
-		allowed[r] = true
+		allowed[r.FullName] = true
+		admins[r.FullName] = r.Permissions.Admin
 	}
 	out := make([]memoryDestinationView, 0, len(items))
 	for _, d := range items {
 		if allowed[d.Repo] {
-			out = append(out, memoryView(d))
+			v := memoryView(d)
+			v.CanManage = admins[d.Repo]
+			out = append(out, v)
 		}
 	}
 	return c.JSON(http.StatusOK, out)
@@ -247,11 +257,16 @@ func (h *Handler) HandleUpdateMemoryDestination(c echo.Context) error {
 	if err != nil {
 		return err
 	}
+	if err := h.requireMemoryAdmin(c, d.Repo); err != nil {
+		return err
+	}
 	if err := h.Store.SetMemoryDestinationMode(c.Request().Context(), d.Repo, req.Mode); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to update the Memory destination")
 	}
 	d.Mode = req.Mode
-	return c.JSON(http.StatusOK, memoryView(d))
+	view := memoryView(d)
+	view.CanManage = true
+	return c.JSON(http.StatusOK, view)
 }
 
 // HandleDeleteMemoryDestination disconnects a repo.
@@ -264,6 +279,9 @@ func (h *Handler) HandleDeleteMemoryDestination(c echo.Context) error {
 	}
 	d, err := h.ownedMemoryDestination(c, repo)
 	if err != nil {
+		return err
+	}
+	if err := h.requireMemoryAdmin(c, d.Repo); err != nil {
 		return err
 	}
 	revokeCtx, cancel := context.WithTimeout(c.Request().Context(), 8*time.Second)
@@ -286,6 +304,9 @@ func (h *Handler) HandleTestMemoryDestination(c echo.Context) error {
 	}
 	d, err := h.ownedMemoryDestination(c, req.Repo)
 	if err != nil {
+		return err
+	}
+	if err := h.requireMemoryAdmin(c, d.Repo); err != nil {
 		return err
 	}
 	client, err := h.memoryClient(d)
@@ -389,6 +410,19 @@ func (h *Handler) ownedMemoryDestination(c echo.Context, repo string) (store.Mem
 		return store.MemoryDestination{}, echo.NewHTTPError(http.StatusNotFound, "Memory destination not found")
 	}
 	return d, nil
+}
+
+// requireMemoryAdmin rejects destination changes by collaborators who can see
+// the repository but do not administer it.
+func (h *Handler) requireMemoryAdmin(c echo.Context, repo string) error {
+	ok, err := h.callerCanAdminRepo(c, repo)
+	if err != nil {
+		return h.repoAccessError(err)
+	}
+	if !ok {
+		return echo.NewHTTPError(http.StatusForbidden, memoryAdminRequiredMessage)
+	}
+	return nil
 }
 
 func memoryConnectError(err error) error {
@@ -608,6 +642,10 @@ func (h *Handler) ProcessMemoryOutbox(ctx context.Context) {
 	for _, it := range items {
 		h.processMemoryOutboxItem(ctx, it)
 	}
+	// Deleted feedback leaves its link behind until the final writeback (for
+	// example capture_status=dismissed) has drained. Cleanup only removes links
+	// with no pending outbox row, so a failed/retried write keeps its link.
+	_ = h.Store.CleanupMemoryLinks(ctx)
 }
 
 // memoryTriageOwnedFields are the Issue properties the triage agent owns. A

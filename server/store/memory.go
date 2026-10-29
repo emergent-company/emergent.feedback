@@ -16,6 +16,10 @@ var ErrMemoryDestinationNotFound = errors.New("memory destination not found")
 // expired.
 var ErrMemoryOAuthStateNotFound = errors.New("memory oauth state not found")
 
+// ErrMemoryOAuthClientNotFound is returned when no dynamically registered OAuth
+// client exists for a Memory base URL and redirect URI pair.
+var ErrMemoryOAuthClientNotFound = errors.New("memory oauth client not found")
+
 // MemoryDestination is the per-repository connection to an emergent.memory
 // project. The Memory token is encrypted at rest with the feedback JWT secret.
 type MemoryDestination struct {
@@ -74,7 +78,9 @@ type MemoryOAuthState struct {
 }
 
 // MemoryOAuthClient is the dynamically registered OAuth client for a Memory
-// instance. One feedback instance registers once per Memory base URL.
+// instance. One feedback deployment registers once per (Memory base URL,
+// redirect URI) pair, so two deployments sharing a Memory server do not
+// overwrite each other's client registration.
 type MemoryOAuthClient struct {
 	BaseURL     string
 	ClientID    string
@@ -351,6 +357,26 @@ func (s *Store) DeleteMemoryOutbox(ctx context.Context, id int64) error {
 	return err
 }
 
+// CleanupMemoryLinks removes links whose feedback row is gone and which have no
+// pending outbox writes. The outbox guard keeps the last writeback (for example
+// capture_status=dismissed after a delete) working before the link is dropped.
+func (s *Store) CleanupMemoryLinks(ctx context.Context) error {
+	q := `
+DELETE FROM memory_links
+WHERE NOT EXISTS (
+    SELECT 1 FROM feedback WHERE feedback.id = memory_links.feedback_id
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM memory_outbox
+    WHERE memory_outbox.feedback_id = memory_links.feedback_id
+      AND memory_outbox.destination_id = memory_links.destination_id
+  )`
+	if _, err := s.db.ExecContext(ctx, s.bind(q)); err != nil {
+		return fmt.Errorf("store: cleanup memory links: %w", err)
+	}
+	return nil
+}
+
 // CreateMemoryOAuthState stores a short-lived PKCE state row.
 func (s *Store) CreateMemoryOAuthState(ctx context.Context, st MemoryOAuthState) error {
 	q := `INSERT INTO memory_oauth_states
@@ -409,14 +435,15 @@ func (s *Store) CleanupMemoryOAuthStates(ctx context.Context) error {
 	return err
 }
 
-// GetMemoryOAuthClient returns the registered client for a Memory base URL.
-func (s *Store) GetMemoryOAuthClient(ctx context.Context, baseURL string) (MemoryOAuthClient, error) {
-	q := `SELECT base_url, client_id, redirect_uri, created_at FROM memory_oauth_clients WHERE base_url = ?`
+// GetMemoryOAuthClient returns the registered client for a Memory base URL and
+// redirect URI pair.
+func (s *Store) GetMemoryOAuthClient(ctx context.Context, baseURL, redirectURI string) (MemoryOAuthClient, error) {
+	q := `SELECT base_url, client_id, redirect_uri, created_at FROM memory_oauth_clients WHERE base_url = ? AND redirect_uri = ?`
 	var c MemoryOAuthClient
 	var created string
-	err := s.db.QueryRowContext(ctx, s.bind(q), baseURL).Scan(&c.BaseURL, &c.ClientID, &c.RedirectURI, &created)
+	err := s.db.QueryRowContext(ctx, s.bind(q), baseURL, redirectURI).Scan(&c.BaseURL, &c.ClientID, &c.RedirectURI, &created)
 	if errors.Is(err, sql.ErrNoRows) {
-		return MemoryOAuthClient{}, sql.ErrNoRows
+		return MemoryOAuthClient{}, ErrMemoryOAuthClientNotFound
 	}
 	if err != nil {
 		return MemoryOAuthClient{}, err
@@ -425,12 +452,13 @@ func (s *Store) GetMemoryOAuthClient(ctx context.Context, baseURL string) (Memor
 	return c, nil
 }
 
-// UpsertMemoryOAuthClient stores/replaces the registered client for a base URL.
+// UpsertMemoryOAuthClient stores/replaces the registered client for a Memory
+// base URL and redirect URI pair.
 func (s *Store) UpsertMemoryOAuthClient(ctx context.Context, c MemoryOAuthClient) error {
-	q := `INSERT INTO memory_oauth_clients (base_url, client_id, redirect_uri)
+	q := `INSERT INTO memory_oauth_clients (base_url, redirect_uri, client_id)
 VALUES (?, ?, ?)
-ON CONFLICT(base_url) DO UPDATE SET client_id = excluded.client_id, redirect_uri = excluded.redirect_uri`
-	_, err := s.db.ExecContext(ctx, s.bind(q), c.BaseURL, c.ClientID, c.RedirectURI)
+ON CONFLICT(base_url, redirect_uri) DO UPDATE SET client_id = excluded.client_id`
+	_, err := s.db.ExecContext(ctx, s.bind(q), c.BaseURL, c.RedirectURI, c.ClientID)
 	if err != nil {
 		return fmt.Errorf("store: upsert memory oauth client: %w", err)
 	}

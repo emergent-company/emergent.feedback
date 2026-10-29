@@ -194,16 +194,86 @@ func TestMemoryOAuthClientUpsert(t *testing.T) {
 	if err := s.UpsertMemoryOAuthClient(ctx, c); err != nil {
 		t.Fatal(err)
 	}
-	got, err := s.GetMemoryOAuthClient(ctx, "https://m")
+	got, err := s.GetMemoryOAuthClient(ctx, "https://m", "https://f/cb")
 	if err != nil || got.ClientID != "c1" {
 		t.Fatalf("get: %v %+v", err, got)
 	}
-	c.ClientID = "c2"
+	if _, err := s.GetMemoryOAuthClient(ctx, "https://m", "https://other/cb"); !errors.Is(err, ErrMemoryOAuthClientNotFound) {
+		t.Fatalf("other redirect err = %v", err)
+	}
+
+	// A second deployment with a different redirect URI keeps its own row.
+	c2 := MemoryOAuthClient{BaseURL: "https://m", ClientID: "c2", RedirectURI: "https://other/cb"}
+	if err := s.UpsertMemoryOAuthClient(ctx, c2); err != nil {
+		t.Fatal(err)
+	}
+	got, err = s.GetMemoryOAuthClient(ctx, "https://m", "https://f/cb")
+	if err != nil || got.ClientID != "c1" {
+		t.Fatalf("first client after second upsert: %v %+v", err, got)
+	}
+	got, err = s.GetMemoryOAuthClient(ctx, "https://m", "https://other/cb")
+	if err != nil || got.ClientID != "c2" {
+		t.Fatalf("second client: %v %+v", err, got)
+	}
+
+	c.ClientID = "c1b"
 	if err := s.UpsertMemoryOAuthClient(ctx, c); err != nil {
 		t.Fatal(err)
 	}
-	got, _ = s.GetMemoryOAuthClient(ctx, "https://m")
-	if got.ClientID != "c2" {
+	got, _ = s.GetMemoryOAuthClient(ctx, "https://m", "https://f/cb")
+	if got.ClientID != "c1b" {
 		t.Fatalf("client id = %q", got.ClientID)
+	}
+}
+
+func TestCleanupMemoryLinks(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+	f, err := s.Create(ctx, CreateParams{
+		URL: "https://app/", Selector: "div", Comment: "broken",
+		ContextJSON: `{}`, GitHubUser: "alice", Repo: "org/repo",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := MemoryDestination{
+		Repo: "org/repo", BaseURL: "https://m", ProjectID: "p1",
+		TokenEncrypted: []byte("ciphertext"), CreatedBy: "alice",
+	}
+	if err := s.UpsertMemoryDestination(ctx, d); err != nil {
+		t.Fatal(err)
+	}
+	d, _ = s.GetMemoryDestination(ctx, "org/repo")
+	link := MemoryLink{FeedbackID: f.ID, DestinationID: d.ID, ObjectKey: "ef-x", CanonicalID: "canon1"}
+	if err := s.UpsertMemoryLink(ctx, link); err != nil {
+		t.Fatal(err)
+	}
+	outboxID, err := s.EnqueueMemoryOutbox(ctx, MemoryOutboxItem{
+		FeedbackID: f.ID, DestinationID: d.ID, Op: "patch", Payload: `{}`,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Delete(ctx, f.ID, "alice"); err != nil {
+		t.Fatal(err)
+	}
+
+	// A pending writeback keeps the link alive.
+	if err := s.CleanupMemoryLinks(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.GetMemoryLink(ctx, f.ID, d.ID); err != nil {
+		t.Fatalf("link removed with pending outbox: %v", err)
+	}
+
+	// Once the write drains, the orphaned link is removed.
+	if err := s.DeleteMemoryOutbox(ctx, outboxID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CleanupMemoryLinks(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.GetMemoryLink(ctx, f.ID, d.ID); err == nil {
+		t.Fatal("orphaned link still present")
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -104,22 +105,30 @@ func newMemoryTestHandler(t *testing.T, mem *fakeMemory) (*Handler, *store.Store
 	if err := s.UpsertUserToken(context.Background(), "bob", bobEnc); err != nil {
 		t.Fatal(err)
 	}
+	carolEnc, err := encryptToken("gho_carol", "secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpsertUserToken(context.Background(), "carol", carolEnc); err != nil {
+		t.Fatal(err)
+	}
 
 	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		bob := strings.Contains(r.Header.Get("Authorization"), "gho_bob")
+		carol := strings.Contains(r.Header.Get("Authorization"), "gho_carol")
 		switch r.URL.Path {
 		case "/repos/org/repo":
 			if bob {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
-			_, _ = w.Write([]byte(`{"full_name":"org/repo"}`))
+			_, _ = w.Write([]byte(`{"full_name":"org/repo","permissions":{"admin":` + strconv.FormatBool(!carol) + `}}`))
 		case "/user/repos":
 			if bob {
 				_, _ = w.Write([]byte(`[]`))
 				return
 			}
-			_, _ = w.Write([]byte(`[{"full_name":"org/repo"}]`))
+			_, _ = w.Write([]byte(`[{"full_name":"org/repo","permissions":{"admin":` + strconv.FormatBool(!carol) + `}}]`))
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -149,6 +158,7 @@ func newMemoryTestHandler(t *testing.T, mem *fakeMemory) (*Handler, *store.Store
 	e.POST("/api/memory/oauth/start", h.HandleMemoryOAuthStart)
 	e.GET("/oauth/memory/callback", h.HandleMemoryOAuthCallback)
 	e.POST("/feedback", h.HandleCreateFeedback)
+	e.DELETE("/feedback/:id", h.HandleDeleteFeedback)
 	return h, s, e
 }
 
@@ -239,6 +249,78 @@ func TestMemoryModeUpdate(t *testing.T) {
 	rec = doJSON(t, e, http.MethodPatch, "/api/memory/destinations", "alice", `{"repo":"org/repo","mode":"nope"}`)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("bad mode = %d", rec.Code)
+	}
+}
+
+func TestMemoryDestinationManagementRequiresRepoAdmin(t *testing.T) {
+	mem := &fakeMemory{}
+	srv := httptest.NewServer(mem.handler())
+	defer srv.Close()
+	_, s, e := newMemoryTestHandler(t, mem)
+	connectMemory(t, e, srv.URL)
+
+	rec := doJSON(t, e, http.MethodGet, "/api/memory/destinations", "carol", "")
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"repo":"org/repo"`) || !strings.Contains(rec.Body.String(), `"can_manage":false`) {
+		t.Fatalf("carol list = %d %s", rec.Code, rec.Body.String())
+	}
+	rec = doJSON(t, e, http.MethodGet, "/api/memory/destinations", "alice", "")
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"can_manage":true`) {
+		t.Fatalf("alice list = %d %s", rec.Code, rec.Body.String())
+	}
+
+	for _, tc := range []struct {
+		name, method, path, body string
+	}{
+		{"oauth", http.MethodPost, "/api/memory/oauth/start", `{"repo":"org/repo","base_url":"` + srv.URL + `"}`},
+		{"paste", http.MethodPost, "/api/memory/destinations", `{"repo":"org/repo","base_url":"` + srv.URL + `","project_id":"p1","token":"emt_test"}`},
+		{"mode", http.MethodPatch, "/api/memory/destinations", `{"repo":"org/repo","mode":"off"}`},
+		{"test", http.MethodPost, "/api/memory/destinations/test", `{"repo":"org/repo"}`},
+		{"delete", http.MethodDelete, "/api/memory/destinations?repo=org/repo", ""},
+	} {
+		rec := doJSON(t, e, tc.method, tc.path, "carol", tc.body)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("%s as collaborator = %d, want 403: %s", tc.name, rec.Code, rec.Body.String())
+		}
+	}
+
+	d, err := s.GetMemoryDestination(context.Background(), "org/repo")
+	if err != nil || d.Mode != "auto" {
+		t.Fatalf("destination changed by non-admin: %+v err=%v", d, err)
+	}
+}
+
+func TestMemoryDeleteFeedbackCleansLink(t *testing.T) {
+	mem := &fakeMemory{}
+	srv := httptest.NewServer(mem.handler())
+	defer srv.Close()
+	h, s, e := newMemoryTestHandler(t, mem)
+	connectMemory(t, e, srv.URL)
+
+	rec := doJSON(t, e, http.MethodPost, "/feedback", "alice", `{
+		"url":"https://app.example.com/","selector":"div","comment":"broken",
+		"repo":"org/repo","context":{}
+	}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("feedback = %d: %s", rec.Code, rec.Body.String())
+	}
+	var created struct {
+		ID int64 `json:"id"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &created)
+	h.ProcessMemoryOutbox(context.Background())
+	d, _ := s.GetMemoryDestination(context.Background(), "org/repo")
+	if _, err := s.GetMemoryLink(context.Background(), created.ID, d.ID); err != nil {
+		t.Fatalf("initial link: %v", err)
+	}
+
+	rec = doJSON(t, e, http.MethodDelete, "/feedback/"+strconv.FormatInt(created.ID, 10), "alice", "")
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("delete feedback = %d: %s", rec.Code, rec.Body.String())
+	}
+	h.ProcessMemoryOutbox(context.Background())
+
+	if _, err := s.GetMemoryLink(context.Background(), created.ID, d.ID); err == nil {
+		t.Fatal("orphaned Memory link still present after feedback delete")
 	}
 }
 

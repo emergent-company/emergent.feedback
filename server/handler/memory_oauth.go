@@ -84,12 +84,12 @@ func (h *Handler) HandleMemoryOAuthStart(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
-	ok, err := h.callerCanAccessRepo(c, req.Repo)
+	ok, err := h.callerCanAdminRepo(c, req.Repo)
 	if err != nil {
 		return h.repoAccessError(err)
 	}
 	if !ok {
-		return echo.NewHTTPError(http.StatusForbidden, "you do not have access to this repository")
+		return echo.NewHTTPError(http.StatusForbidden, memoryAdminRequiredMessage)
 	}
 
 	ctx, cancel := context.WithTimeout(c.Request().Context(), 20*time.Second)
@@ -99,8 +99,8 @@ func (h *Handler) HandleMemoryOAuthStart(c echo.Context) error {
 	feedbackBase := h.publicBaseURL(c)
 	redirectURI := feedbackBase + "/oauth/memory/callback"
 
-	client, err := h.Store.GetMemoryOAuthClient(ctx, base)
-	if err != nil || client.RedirectURI != redirectURI {
+	client, err := h.Store.GetMemoryOAuthClient(ctx, base, redirectURI)
+	if errors.Is(err, store.ErrMemoryOAuthClientNotFound) {
 		regEndpoint := memoryEndpoint(meta, "register", base, "/api/oauth/register")
 		clientID, rerr := memory.RegisterClient(ctx, regEndpoint, "emergent.feedback", []string{redirectURI}, memoryScopeString, h.MemoryHTTP)
 		if rerr != nil {
@@ -114,6 +114,8 @@ func (h *Handler) HandleMemoryOAuthStart(c echo.Context) error {
 		if err := h.Store.UpsertMemoryOAuthClient(ctx, client); err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to save the Memory client registration")
 		}
+	} else if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to load the Memory client registration")
 	}
 
 	state, err := randomURLToken(32)
@@ -188,7 +190,7 @@ func (h *Handler) HandleMemoryOAuthCallback(c echo.Context) error {
 		return memoryOAuthRedirectError(c, "Could not complete the connection.")
 	}
 
-	client, err := h.Store.GetMemoryOAuthClient(ctx, st.BaseURL)
+	client, err := h.Store.GetMemoryOAuthClient(ctx, st.BaseURL, st.RedirectURI)
 	if err != nil {
 		return memoryOAuthRedirectError(c, "The Memory client registration is missing. Try connecting again.")
 	}

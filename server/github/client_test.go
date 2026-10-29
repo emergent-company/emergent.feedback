@@ -75,7 +75,7 @@ func TestListUserReposPagination(t *testing.T) {
 		}
 		w.Header().Set("Link",
 			`<http://`+r.Host+`/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator,organization_member&page=2>; rel="next"`)
-		_, _ = io.WriteString(w, `[{"full_name":"a/repo1","name":"repo1"}]`)
+		_, _ = io.WriteString(w, `[{"full_name":"a/repo1","name":"repo1","permissions":{"admin":true,"push":true}}]`)
 	}))
 	defer srv.Close()
 
@@ -92,6 +92,9 @@ func TestListUserReposPagination(t *testing.T) {
 	}
 	if repos[0].FullName != "a/repo1" || repos[1].FullName != "b/repo2" {
 		t.Fatalf("unexpected repos %+v", repos)
+	}
+	if !repos[0].Permissions.Admin || repos[1].Permissions.Admin {
+		t.Fatalf("permissions not decoded: %+v", repos)
 	}
 }
 
@@ -116,6 +119,9 @@ func TestRepoAccessible(t *testing.T) {
 					t.Errorf("unexpected path %q", r.URL.Path)
 				}
 				w.WriteHeader(tc.status)
+				if tc.status == http.StatusOK {
+					_, _ = io.WriteString(w, `{"full_name":"org/repo","permissions":{"admin":true}}`)
+				}
 			}))
 			defer srv.Close()
 
@@ -152,6 +158,47 @@ func TestRepoAccessible(t *testing.T) {
 func TestRepoAccessibleInvalidRepo(t *testing.T) {
 	if _, err := RepoAccessible(context.Background(), "tok", "invalid"); err == nil {
 		t.Fatal("expected error for invalid repo")
+	}
+}
+
+func TestRepoAdmin(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+		want bool
+	}{
+		{"admin", `{"full_name":"org/repo","permissions":{"admin":true,"push":true}}`, true},
+		{"collaborator", `{"full_name":"org/repo","permissions":{"admin":false,"push":true}}`, false},
+		{"missing permissions", `{"full_name":"org/repo"}`, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = io.WriteString(w, tc.body)
+			}))
+			defer srv.Close()
+
+			prev := apiBase
+			SetBaseURLForTesting(srv.URL)
+			defer SetBaseURLForTesting(prev)
+
+			got, err := RepoAdmin(context.Background(), "tok", "org/repo")
+			if err != nil || got != tc.want {
+				t.Fatalf("RepoAdmin = %v, %v; want %v", got, err, tc.want)
+			}
+		})
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+	prev := apiBase
+	SetBaseURLForTesting(srv.URL)
+	defer SetBaseURLForTesting(prev)
+	if got, err := RepoAdmin(context.Background(), "tok", "org/repo"); err != nil || got {
+		t.Fatalf("RepoAdmin 404 = %v, %v; want false, nil", got, err)
 	}
 }
 
