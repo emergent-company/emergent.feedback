@@ -174,7 +174,7 @@ export function startVerifyLoop(api: APIClient, intervalMs = 15000): () => void 
   const tick = async () => {
     if (getMode() !== "active" || !api.isAuthenticated()) return;
     try {
-      const pending = await api.getVerifyPending(window.location.href);
+      const pending = await api.getVerifyPending(api.pageUrl());
       for (const item of pending) {
         try {
           const evaluation = evaluateContract(item.contract);

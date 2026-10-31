@@ -2,6 +2,7 @@
 
 import type { OverlayConfig } from "./config";
 import type { VerificationContract } from "./envelope";
+import { normalizeUrl, pageUrl as currentPageUrl, type UrlMode } from "./url";
 
 export class APIError extends Error {
   status: number;
@@ -125,6 +126,26 @@ export interface MemoryStatus {
   mode: "ask" | "auto" | "off";
 }
 
+/** One chat turn's message. The transcript is client-side only. */
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface ChatTurnParams {
+  repo: string;
+  messages: ChatMessage[];
+  /** Redacted capture context for the element under discussion. */
+  context?: Record<string, unknown>;
+  /** Optional Memory agent hint (data-chat-agent). */
+  agent?: string;
+}
+
+export type ChatStreamEvent =
+  | { type: "token"; text: string }
+  | { type: "done" }
+  | { type: "error"; message: string };
+
 export interface ExportIssueParams {
   ids: number[];
   repo: string;
@@ -146,11 +167,28 @@ export interface FeedbackStatus {
 
 export class APIClient {
   private base: string;
+  private urlMode: UrlMode;
   private token: string | null = null;
   private onUnauthorized: (() => void) | null = null;
 
   constructor(config: OverlayConfig) {
     this.base = config.apiBase;
+    this.urlMode = config.badgeUrlMode === "path" ? "path" : "exact";
+  }
+
+  /** The current page URL under the configured badge URL mode. */
+  pageUrl(): string {
+    return currentPageUrl(this.urlMode);
+  }
+
+  /**
+   * Build `name=value` for a URL query. In `path` mode the value is normalised
+   * and `url_mode=path` tells the server to include legacy hash-keyed rows.
+   */
+  private urlQuery(name: string, url: string): string {
+    const params = new URLSearchParams({ [name]: normalizeUrl(url, this.urlMode) });
+    if (this.urlMode === "path") params.set("url_mode", "path");
+    return params.toString();
   }
 
   /** Register a callback invoked when the server returns 401. */
@@ -226,21 +264,21 @@ export class APIClient {
   /** Returns badge counts keyed by CSS selector for the given page URL. */
   async listBadges(url: string): Promise<BadgeSummary[]> {
     return this.fetchJSON<BadgeSummary[]>(
-      `/feedback?url=${encodeURIComponent(url)}`
+      `/feedback?${this.urlQuery("url", url)}`
     );
   }
 
   /** Returns open GitHub issues recorded for the given page URL. */
   async listIssueBadges(url: string): Promise<IssueBadge[]> {
     return this.fetchJSON<IssueBadge[]>(
-      `/issues?url=${encodeURIComponent(url)}`
+      `/issues?${this.urlQuery("url", url)}`
     );
   }
 
   /** Returns full comment details for all open items on a page. */
   async listComments(url: string): Promise<FeedbackComment[]> {
     return this.fetchJSON<FeedbackComment[]>(
-      `/feedback/list?url=${encodeURIComponent(url)}`
+      `/feedback/list?${this.urlQuery("url", url)}`
     );
   }
 
@@ -248,7 +286,7 @@ export class APIClient {
   async createFeedback(p: CreateFeedbackParams): Promise<{ id: number }> {
     return this.fetchJSON<{ id: number }>("/feedback", {
       method: "POST",
-      body: JSON.stringify(p),
+      body: JSON.stringify({ ...p, url: normalizeUrl(p.url, this.urlMode) }),
     });
   }
 
@@ -257,6 +295,78 @@ export class APIClient {
     return this.fetchJSON<MemoryStatus>(
       `/api/memory/status?repo=${encodeURIComponent(repo)}`
     );
+  }
+
+  /**
+   * Streams one chat turn through the server's Memory-agent proxy.
+   *
+   * The proxy owns the prompt and the Memory credentials; the client only sends
+   * the conversation plus the capture context it already redacts for feedback.
+   * Events: token (incremental text), error (terminal), done (terminal).
+   */
+  async streamChat(
+    p: ChatTurnParams,
+    onEvent: (ev: ChatStreamEvent) => void,
+    signal?: AbortSignal
+  ): Promise<void> {
+    const resp = await fetch(this.base + "/api/memory/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...this.authHeaders() },
+      body: JSON.stringify(p),
+      signal,
+    });
+    if (!resp.ok) {
+      if (resp.status === 401 && this.onUnauthorized) this.onUnauthorized();
+      const text = await resp.text().catch(() => resp.statusText);
+      let body: unknown;
+      try {
+        body = JSON.parse(text);
+      } catch {
+        body = undefined;
+      }
+      const b = (body ?? {}) as Record<string, unknown>;
+      const message = String(b.message ?? b.error ?? text);
+      const code = typeof b.error === "string" ? b.error : undefined;
+      // Chat errors are shown to the reporter verbatim, so no status prefix.
+      throw new APIError(resp.status, message, code, body);
+    }
+    if (!resp.body) {
+      onEvent({ type: "done" });
+      return;
+    }
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let idx = buf.indexOf("\n\n");
+      while (idx >= 0) {
+        const frame = buf.slice(0, idx);
+        buf = buf.slice(idx + 2);
+        for (const line of frame.split("\n")) {
+          if (!line.startsWith("data:")) continue;
+          const raw = line.slice(5).trim();
+          if (!raw) continue;
+          let ev: Record<string, unknown>;
+          try {
+            ev = JSON.parse(raw) as Record<string, unknown>;
+          } catch {
+            continue;
+          }
+          if (ev.type === "token" && typeof ev.token === "string") {
+            onEvent({ type: "token", text: ev.token });
+          } else if (ev.type === "error") {
+            onEvent({ type: "error", message: String(ev.error ?? "The agent stopped.") });
+          } else if (ev.type === "done") {
+            onEvent({ type: "done" });
+          }
+          // meta / thinking / mcp_tool / citations are not rendered here.
+        }
+        idx = buf.indexOf("\n\n");
+      }
+    }
   }
 
   /** Deletes a feedback item. Requires authentication (own items only). */
@@ -301,7 +411,7 @@ export class APIClient {
   /** List feedback items on a page whose verification contract is awaiting re-check. */
   async getVerifyPending(url: string): Promise<VerifyPendingItem[]> {
     return this.fetchJSON<VerifyPendingItem[]>(
-      `/feedback/verify-pending?url=${encodeURIComponent(url)}`
+      `/feedback/verify-pending?${this.urlQuery("url", url)}`
     );
   }
 
@@ -313,7 +423,7 @@ export class APIClient {
   /** List feedback items + statuses for a page URL. */
   async listStatus(url: string): Promise<FeedbackStatus[]> {
     return this.fetchJSON<FeedbackStatus[]>(
-      `/feedback/status?url=${encodeURIComponent(url)}`
+      `/feedback/status?${this.urlQuery("url", url)}`
     );
   }
 

@@ -183,14 +183,36 @@ FROM feedback WHERE id = ?`
 	return f, nil
 }
 
+// urlMatch builds the page-identity predicate. In path mode it also matches
+// legacy rows stored under a fragment of the canonical URL, so existing
+// feedback made at /#how stays visible from /. The expression uses only
+// substr/length, which behave the same on SQLite and Postgres.
+func urlMatch(column, url string, pathMode bool) (string, []any) {
+	if !pathMode {
+		return column + " = ?", []any{url}
+	}
+	return "(" + column + " = ? OR (substr(" + column + ", 1, length(CAST(? AS TEXT))) = CAST(? AS TEXT) AND substr(" + column + ", length(CAST(? AS TEXT)) + 1, 1) = '#'))",
+		[]any{url, url, url, url}
+}
+
 // ListByURL returns all open feedback items for a given page URL, newest first.
 func (s *Store) ListByURL(ctx context.Context, url string) ([]Feedback, error) {
+	return s.listByURL(ctx, url, false)
+}
+
+// ListByURLPath is ListByURL with fragment-insensitive page matching.
+func (s *Store) ListByURLPath(ctx context.Context, url string) ([]Feedback, error) {
+	return s.listByURL(ctx, url, true)
+}
+
+func (s *Store) listByURL(ctx context.Context, url string, pathMode bool) ([]Feedback, error) {
+	where, args := urlMatch("url", url, pathMode)
 	q := `
 SELECT id, url, selector, comment, context_json, COALESCE(length(screenshot), 0), github_user, repo, label, status, COALESCE(issue_url,''), created_at
-FROM feedback WHERE url = ? AND status = 'open'
+FROM feedback WHERE ` + where + ` AND status = 'open'
 ORDER BY created_at DESC`
 
-	rows, err := s.db.QueryContext(ctx, s.bind(q), url)
+	rows, err := s.db.QueryContext(ctx, s.bind(q), args...)
 	if err != nil {
 		return nil, fmt.Errorf("store: list by url: %w", err)
 	}
@@ -215,13 +237,23 @@ ORDER BY created_at DESC`
 
 // ListByURLSummary returns per-selector badge counts for a given page URL.
 func (s *Store) ListByURLSummary(ctx context.Context, url string) ([]URLSummary, error) {
+	return s.listByURLSummary(ctx, url, false)
+}
+
+// ListByURLSummaryPath is ListByURLSummary with fragment-insensitive matching.
+func (s *Store) ListByURLSummaryPath(ctx context.Context, url string) ([]URLSummary, error) {
+	return s.listByURLSummary(ctx, url, true)
+}
+
+func (s *Store) listByURLSummary(ctx context.Context, url string, pathMode bool) ([]URLSummary, error) {
+	where, args := urlMatch("url", url, pathMode)
 	q := `
 SELECT selector, COUNT(*) as cnt, ` + s.d.groupConcat("id") + ` as ids
-FROM feedback WHERE url = ? AND status = 'open'
+FROM feedback WHERE ` + where + ` AND status = 'open'
 GROUP BY selector
 ORDER BY selector`
 
-	rows, err := s.db.QueryContext(ctx, s.bind(q), url)
+	rows, err := s.db.QueryContext(ctx, s.bind(q), args...)
 	if err != nil {
 		return nil, fmt.Errorf("store: summary by url: %w", err)
 	}
@@ -577,13 +609,23 @@ ORDER BY id DESC LIMIT 500`
 // ListVerifyPending returns items on a URL that are open or applied and have
 // no green verification result yet.
 func (s *Store) ListVerifyPending(ctx context.Context, url string) ([]VerifyPendingItem, error) {
+	return s.listVerifyPending(ctx, url, false)
+}
+
+// ListVerifyPendingPath is ListVerifyPending with fragment-insensitive matching.
+func (s *Store) ListVerifyPendingPath(ctx context.Context, url string) ([]VerifyPendingItem, error) {
+	return s.listVerifyPending(ctx, url, true)
+}
+
+func (s *Store) listVerifyPending(ctx context.Context, url string, pathMode bool) ([]VerifyPendingItem, error) {
+	where, args := urlMatch("url", url, pathMode)
 	q := `
 SELECT id, selector, context_json
 FROM feedback
-WHERE url = ? AND status IN ('open','applied')
+WHERE ` + where + ` AND status IN ('open','applied')
   AND (verification_result IS NULL OR verification_result != 'green')
 ORDER BY created_at DESC`
-	rows, err := s.db.QueryContext(ctx, s.bind(q), url)
+	rows, err := s.db.QueryContext(ctx, s.bind(q), args...)
 	if err != nil {
 		return nil, fmt.Errorf("store: list verify pending: %w", err)
 	}
@@ -656,8 +698,20 @@ type FeedbackStatusItem struct {
 
 // ListStatusByURLAndUser returns status info for the given user's items on a URL.
 func (s *Store) ListStatusByURLAndUser(ctx context.Context, url, githubUser string) ([]FeedbackStatusItem, error) {
-	q := `SELECT id, selector, status, COALESCE(issue_url,'') FROM feedback WHERE url = ? AND github_user = ? ORDER BY id`
-	rows, err := s.db.QueryContext(ctx, s.bind(q), url, githubUser)
+	return s.listStatusByURLAndUser(ctx, url, githubUser, false)
+}
+
+// ListStatusByURLAndUserPath is ListStatusByURLAndUser with fragment-insensitive
+// matching.
+func (s *Store) ListStatusByURLAndUserPath(ctx context.Context, url, githubUser string) ([]FeedbackStatusItem, error) {
+	return s.listStatusByURLAndUser(ctx, url, githubUser, true)
+}
+
+func (s *Store) listStatusByURLAndUser(ctx context.Context, url, githubUser string, pathMode bool) ([]FeedbackStatusItem, error) {
+	where, args := urlMatch("url", url, pathMode)
+	args = append(args, githubUser)
+	q := `SELECT id, selector, status, COALESCE(issue_url,'') FROM feedback WHERE ` + where + ` AND github_user = ? ORDER BY id`
+	rows, err := s.db.QueryContext(ctx, s.bind(q), args...)
 	if err != nil {
 		return nil, fmt.Errorf("store: list status: %w", err)
 	}

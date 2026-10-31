@@ -43,3 +43,40 @@ func TestGetGitHubIssueByNumber(t *testing.T) {
 		t.Fatal("expected error for missing issue, got nil")
 	}
 }
+
+func TestListOpenGitHubIssuesByURLPathIncludesFragment(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "test.db")
+	s, err := OpenSQLite(path)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer func() { _ = s.Close() }()
+
+	ctx := context.Background()
+	if err := s.CreateGitHubIssue(ctx, GitHubIssue{
+		IssueNumber: 8,
+		IssueURL:    "https://github.com/org/repo/issues/8",
+		Repo:        "org/repo",
+		Title:       "Feedback on the how section",
+		PageURL:     "https://app.example.com/#how",
+		Selector:    "section#how",
+	}); err != nil {
+		t.Fatalf("CreateGitHubIssue: %v", err)
+	}
+
+	exact, err := s.ListOpenGitHubIssuesByURL(ctx, "https://app.example.com/")
+	if err != nil {
+		t.Fatalf("ListOpenGitHubIssuesByURL: %v", err)
+	}
+	if len(exact) != 0 {
+		t.Fatalf("exact issues = %d, want 0", len(exact))
+	}
+
+	all, err := s.ListOpenGitHubIssuesByURLPath(ctx, "https://app.example.com/")
+	if err != nil {
+		t.Fatalf("ListOpenGitHubIssuesByURLPath: %v", err)
+	}
+	if len(all) != 1 || all[0].IssueNumber != 8 {
+		t.Fatalf("path issues = %+v, want issue 8", all)
+	}
+}

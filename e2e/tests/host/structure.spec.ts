@@ -69,6 +69,8 @@ test.describe("moving elements (structure fixture)", () => {
     await expect(page.locator(".ef-style-position")).toHaveText("2nd of 3 in #toolbar");
 
     // Listed as Position, from the first position to the latest — not a history.
+    await page.click("#__ef_tab_changes__");
+    await expect(page.locator("#__ef_panel_changes__")).toBeVisible();
     await expect(page.locator(".ef-changes-list")).toContainText("Position");
     await expect(page.locator(".ef-changes-list")).toContainText("3rd of 3 in #toolbar");
     await expect(page.locator(".ef-changes-list")).toContainText("2nd of 3 in #toolbar");
@@ -87,10 +89,10 @@ test.describe("moving elements (structure fixture)", () => {
     await activate(page);
     await page.locator("#btn-a").click();
     await expect(page.locator("#__ef_dialog__")).toBeVisible();
-    // Reopening lands on the issue modal; swap to the editor to reach the
-    // Committed-changes list.
-    await page.locator("#__ef_edit_element__").click();
-    await expect(page.locator("#__ef_style_editor__")).toBeVisible();
+    // Reopening lands on the Feedback tab; the Committed-changes list lives on
+    // the Changes tab.
+    await page.click("#__ef_tab_changes__");
+    await expect(page.locator("#__ef_panel_changes__")).toBeVisible();
     await page.click(".ef-committed-remove");
     expect(await children(page, "#toolbar")).toEqual(["btn-a", "btn-b", "btn-c"]);
   });

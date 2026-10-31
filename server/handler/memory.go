@@ -23,7 +23,7 @@ const (
 	memoryModeOff  = "off"
 
 	memoryIssueType   = "Issue"
-	memoryScopeString = "graph:read graph:write schema:read projects:read"
+	memoryScopeString = "graph:read graph:write schema:read projects:read chat:use"
 
 	memoryAdminRequiredMessage = "Only repository admins can manage the Memory connection."
 )
@@ -445,7 +445,7 @@ func memoryErrorMessage(err error) string {
 		case http.StatusUnauthorized:
 			return "Memory rejected the token (401). Reconnect with a valid token."
 		case http.StatusForbidden:
-			return "Memory token lacks the required scopes (graph:read, graph:write, projects:read)."
+			return "Memory token lacks a required scope (graph:read, graph:write, projects:read, chat:use). Reconnect to grant it."
 		case http.StatusNotFound:
 			return "The connected project or object no longer exists in Memory."
 		}

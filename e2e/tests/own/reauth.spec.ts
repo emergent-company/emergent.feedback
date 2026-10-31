@@ -71,7 +71,7 @@ test.describe("draft-safe re-auth (own)", () => {
     await page.click("#__ef_submit__");
     expect((await firstResponse).status()).toBe(401);
 
-    // The login layer appears over the still-mounted modal; the draft survives.
+    // The login layer appears over the still-mounted pane; the draft survives.
     await expect(page.locator("#__ef_auth_login__")).toBeVisible();
     await expect(page.locator("#__ef_comment__")).toHaveValue(draft);
 
@@ -82,8 +82,8 @@ test.describe("draft-safe re-auth (own)", () => {
     await page.click("#__ef_auth_login__");
     expect((await retryResponse).status()).toBe(201);
 
-    // Success closes the issue modal.
-    await expect(page.locator("#__ef_issue_modal__")).toBeHidden();
+    // Success closes the pane.
+    await expect(page.locator("#__ef_dialog__")).toBeHidden();
 
     // Exactly two attempts: one 401, one pass-through 201 — no duplicate.
     expect(postAttempts).toBe(2);

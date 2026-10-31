@@ -14,7 +14,7 @@ A lightweight, drop-in feedback tool for any web app. Users hold `Alt+Shift` (co
 - **GitHub OAuth** — users sign in with GitHub; session persists across page reloads (30-day JWT in `localStorage`)
 - **Export to GitHub Issues** — creates a well-structured issue with comments, selector, position, CSS framework, computed styles, and pretty-printed HTML
 - **Memory destinations** — optionally mirror reports into an `emergent.memory` project per repository, with an OAuth connect flow, token fallback and ask/auto/off modes
-- **Badge overlays** — elements with existing feedback show a count badge in selection mode; clicking a badge reopens the dialog for that element
+- **Badge overlays** — elements with existing feedback show count badges (one per selector, plus open GitHub issues) that stay aligned while the page or an ancestor scrolls. After the first activation badges persist across reloads; the top-bar switch hides or shows them, and clicking a badge reopens the dialog for that element.
 
 ---
 
@@ -43,8 +43,12 @@ Add the following snippet to your HTML, just before `</body>`:
 | `data-branch` | No | Git branch being tested. Shown in dialog and included in issue body |
 | `data-version` | No | App version being tested. Shown in dialog and included in issue body |
 | `data-environment` | No | Environment name (e.g. `staging`, `production`). Shown in the dialog and included in the issue body and Memory `Issue` |
+| `data-badge-url-mode` | No | `exact` (default) keys feedback by the full URL, including the fragment. `path` drops the fragment, so `/#how` and `/` share the same badges. Existing rows stored under a fragment URL are still included. |
+| `data-dashboard-url` | No | Target of the top-bar **Dashboard** link. Defaults to `${data-api}/panel`. |
 | `data-theme` | No | Overlay theme: `auto` (default), `light` or `dark`. `auto` detects the host page theme, then falls back to the OS `prefers-color-scheme`. |
 | `data-theme-url` | No | Absolute or same-origin URL of a JSON theme manifest (design-token groups) that powers the live style editor. See [Live style editing](#live-style-editing). When omitted, the overlay reads daisyUI color variables from the page and uses a built-in Tailwind/daisyUI utility set (spacing, layout, typography, colors, borders/effects, daisyUI components). |
+| `data-chat` | No | Adds the **Chat** tab to the pane: a report composer backed by the repository's connected Memory project. Off unless the attribute is present; `data-chat="false"` disables it. See [Chat tab](#chat-tab). |
+| `data-chat-agent` | No | Optional Memory agent name or id sent with each chat turn. Only meaningful with `data-chat`. |
 
 The overlay dialog, activation bar, badges and toasts follow the resolved theme. The server-rendered
 landing page and API-key panel share a persisted Light/Dark/System toggle (localStorage key
@@ -91,53 +95,104 @@ No build step, no npm install, no configuration file. The script self-initialise
 |--------|--------|
 | Hold `Alt+Shift` (or configured hotkey) | Enter element-selection mode (crosshair cursor + highlights) |
 | Hover an element | Tooltip shows element tag (or `data-component` name if set) |
-| Click an element | Opens the issue submission modal |
+| Click an element | Opens the feedback pane on its Feedback tab |
 | Release hotkey | Exits selection mode (dialog stays open if already clicked) |
 
-### Feedback dialog
+### Badges
 
-Clicking an element opens the **issue submission modal** first — the former
-**Send to GitHub** button is gone. To report feedback:
+Elements with feedback show a count badge at their top-right. Several badges
+on the same element sit in one row instead of overlapping. Badges follow the
+element through window and nested-container scrolling, resizes and DOM
+changes.
 
-1. In the modal, fill the comment (`#__ef_comment__`), issue title, type
-   (**Bug** / **Enhancement**) and intent, then **Create issue**
+After the first time comment mode is opened, badges are rendered on every page
+load until the visitor turns them off. The **Badges** switch in the top bar
+hides/shows the layer and remembers the choice in `localStorage`; hiding does
+not delete anything. The same bar links to the feedback dashboard (default
+`${data-api}/panel`).
+
+By default feedback is keyed by the exact URL. Set
+`data-badge-url-mode="path"` to ignore the fragment so `/#how` and `/` share
+one set of badges; legacy rows saved under a fragment URL are included too.
+
+### Feedback pane
+
+Clicking an element opens the **feedback pane** on its **Feedback** tab — the
+former **Send to GitHub** button is gone. The pane is one card with three tabs:
+
+- **Feedback** — the report form, and the live style editor for the selected
+  element(s).
+- **Changes** — every pending style edit, with revert actions.
+- **Chat** — opt-in report composer (see [Chat tab](#chat-tab)).
+
+To report feedback:
+
+1. On the **Feedback** tab, fill the comment (`#__ef_comment__`), report title,
+   type (**Bug** / **Enhancement**) and intent, then **Create issue**
    (`#__ef_issue_submit__`) to submit to GitHub, or **Save** (`#__ef_submit__`)
    to save the feedback locally without creating a GitHub issue.
-2. Optionally, **Edit element** (`#__ef_edit_element__` in the modal header, or
-   `#__ef_edit_element_foot__` in the footer) opens the style editor as a right
-   sidebar (docked, the default) or centered card. Restyle the selected
-   element(s) there, then **Back to issue** (`#__ef_back_to_issue__`) returns to
-   the modal — typed text and pending edits are preserved. In the editor,
-   **Cancel** (`#__ef_cancel__`) throws away the whole report.
-3. In the modal, **Cancel** (`#__ef_issue_cancel__`) discards the report and
-   closes the overlay. `Escape` does the same while the modal is up; in the
-   editor it returns to the modal instead. Clicking outside the issue card is
-   deliberately inert so a typed report is never discarded by a stray click.
+2. Optionally, **Edit element** (`#__ef_edit_element__`) swaps the Feedback tab
+   to the style editor (`#__ef_design__`). Restyle the selected element(s) there,
+   then **Back to feedback** (`#__ef_back_to_issue__`) returns to the form —
+   typed text and pending edits are preserved. In the editor, **Cancel**
+   (`#__ef_cancel__`) throws away the whole report.
+3. **Cancel** (`#__ef_issue_cancel__`) discards the report and closes the pane.
+   `Escape` steps back one level: an unfinished page pick ends, another tab
+   returns to Feedback, the style editor returns to the form, and only the form
+   itself cancels. Clicking outside the centered card is deliberately inert so a
+   typed report is never discarded by a stray click.
 
-### Docked panel
+### Docked pane
 
-Docking applies to the **style editor**, not the issue modal. The editor can
-dock to the right edge instead of rendering as a centered card. Docked mode sits
-**alongside** the page rather than over it: the editor reserves its rail width
-(`margin-right` on the document root), so the host content reflows and stays
-fully visible and undimmed — no overlay covering the page. Element picking,
-multi-select and live style editing all continue while the editor is open; the
-hover highlight is repainted after the reflow. Toggle dock/undock from the
-editor header (`#__ef_dock__`); the choice is persisted per browser (localStorage
-`__ef_dialog_docked__`) and docked is the default. On narrow viewports (≤ 520 px)
-the editor takes the full width and the page is not reflowed.
+Docking applies to the **whole pane**, including the report form. Docked is the
+default: the pane sits **alongside** the page rather than over it and reserves
+its rail width (`margin-right` on the document root), so host content reflows and
+stays fully visible and undimmed. Element picking, multi-select and live style
+editing all continue while the pane is open; the hover highlight is repainted
+after the reflow. Toggle dock/undock from the pane header (`#__ef_dock__`); the
+choice is persisted per browser (localStorage `__ef_dialog_docked__`). On narrow
+viewports (≤ 520 px) the pane takes the full width and the page is not reflowed.
 
-The **issue submission modal is always centered** — it never docks. In centered
-(undocked) mode the editor card takes roughly half the viewport width (50 vw,
-capped at 900 px, min 480 px). Because the centered backdrop blocks the page,
-pressing **Add element** hides the editor while you click the element to add,
-then brings it straight back; press `Escape` to cancel the pick and stay in the
-editor.
+In centered (undocked) mode the pane takes roughly half the viewport width
+(50 vw, capped at 900 px, min 480 px) and dims the page. Because the centered
+backdrop blocks the page, pressing **Add element** hides the pane while you
+click the element to add, then brings it straight back; press `Escape` to cancel
+the pick and stay in the editor.
 
 > Caveat: host elements positioned with `position: fixed` or `position: sticky`
 > are not shifted by the reserved rail width, and an explicitly sized `html`
 > (`width`/`min-width`) can defeat the reflow and produce a horizontal scrollbar
-> under the editor.
+> under the pane.
+
+### Chat tab
+
+`data-chat` adds a **Chat** tab that composes the report with an agent from the
+repository's connected Memory project. The scope is deliberately narrow:
+
+- The agent **writes feedback fields only** — title, type, action, expected,
+  actual, scope and comment. It cannot edit the page, the repository, the spec
+  or a revision, and the overlay's edit primitives are not reachable from the
+  chat.
+- It replies with a short paragraph plus one fenced JSON block. The client
+  parses that block, validates it against closed enums and caps every string
+  before it can touch a field.
+- Nothing is applied automatically. A **Use as report** button on the suggested
+  card fills the Feedback tab; the reporter reviews and presses **Save** or
+  **Create issue** themselves.
+- The transcript is client-side only, per element and per page (localStorage
+  `__ef_chat__:<url>|<selector>`). Only chat text is stored, never the context.
+- The context sent with each turn is redacted to the selector, a sanitised URL,
+  the component/tag, the source location, a fixed style allow-list and a
+  summary of pending edits. No HTML, snapshots, replay or user agent.
+
+The browser never sees the Memory token. The overlay posts to
+`POST /api/memory/chat`, which owns the credentials and the composer prompt and
+streams the Memory `ask` response back as SSE (`token` / `error` / `done`).
+
+Chat requires the `chat:use` scope on the destination's token. Destinations
+connected before the chat existed were granted
+`graph:read graph:write schema:read projects:read`, so **reconnect the
+destination** (or paste a token with `chat:use`) to enable it.
 
 ### Memory destinations
 
@@ -165,11 +220,12 @@ Memory instance on localhost or a private network, set
 
 ### Live style editing
 
-The style editor (`.ef-card`, opened via **Edit element**) shows only the
-**Design** editor (the former Design/Issues tabs are gone). Writing the report
-and viewing the captured context/HTML happen in the issue submission modal (see
-[Feedback dialog](#feedback-dialog)), not in the editor. `#__ef_change_count__`
-in the modal header shows the attached style-change count.
+The style editor (`.ef-design`, opened via **Edit element**) lives inside the
+pane's **Feedback** tab and shows only the **Design** editor. Writing the report
+and viewing the captured context/HTML happen in the same tab's report form (see
+[Feedback pane](#feedback-pane)), not in the editor. `#__ef_change_count__` in
+the pane header and the **Changes** tab badge both show the attached
+style-change count.
 
 With the editor open, click additional elements to add them to the selection (a
 click on an already-selected element toggles it off, and **Add element** enters a
@@ -250,7 +306,7 @@ report is cancelled or the editing session ends. Press **Commit** to freeze the
 pending edits — committed edits are written to localStorage and persist across
 closing/reopening the editor and page reloads. Manage them from the global
 **Committed changes** list (per-entry **Remove** plus **Remove all**); they are
-cleared only by explicit removal. The issue submission modal and the server
+cleared only by explicit removal. The **Changes** tab and the server
 panel preview render a **Requested changes** list (`target — group: before → after`).
 
 Tokens come from the project via `data-theme-url` (below). Placeholder choices

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -106,6 +107,73 @@ func (c *Client) PatchObject(ctx context.Context, projectID, objectID string, pr
 		return Object{}, err
 	}
 	return out, nil
+}
+
+// AskRequest is the body for POST /api/projects/:id/ask.
+type AskRequest struct {
+	Message string `json:"message"`
+}
+
+// AskStream starts one agent turn and returns the raw SSE body. The caller
+// owns the reader and must close it.
+//
+// Unlike doWithHeaders this does not buffer or decode: the overlay forwards the
+// tokens to the browser as they arrive. The shared HTTP client carries a 15s
+// timeout for request/response calls, so streaming uses a copy with no overall
+// deadline and the same guarded transport.
+func (c *Client) AskStream(ctx context.Context, projectID, message string) (io.ReadCloser, error) {
+	if projectID == "" {
+		return nil, fmt.Errorf("memory: project id is required")
+	}
+	if c.BaseURL == "" {
+		return nil, fmt.Errorf("memory: base url is required")
+	}
+	if c.Token == "" {
+		return nil, fmt.Errorf("memory: token is required")
+	}
+	body, err := json.Marshal(AskRequest{Message: message})
+	if err != nil {
+		return nil, fmt.Errorf("memory: encode request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		c.BaseURL+"/api/projects/"+url.PathEscape(projectID)+"/ask",
+		bytes.NewReader(body),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("memory: build request: %w", err)
+	}
+	req.Header.Set("Accept", "text/event-stream")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.Token)
+
+	stream := *c.HTTP
+	stream.Timeout = 0
+
+	res, err := stream.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("memory: request failed: %w", err)
+	}
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		raw, _ := io.ReadAll(io.LimitReader(res.Body, 8<<10))
+		_ = res.Body.Close()
+		apiErr := &APIError{Status: res.StatusCode, Body: string(raw)}
+		var parsed struct {
+			Message string `json:"message"`
+			Error   string `json:"error"`
+		}
+		if json.Unmarshal(raw, &parsed) == nil {
+			if parsed.Message != "" {
+				apiErr.Message = parsed.Message
+			} else {
+				apiErr.Message = parsed.Error
+			}
+		}
+		return nil, apiErr
+	}
+	return res.Body, nil
 }
 
 func (c *Client) doProject(ctx context.Context, method, path, projectID string, body, out any) error {

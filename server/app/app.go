@@ -205,6 +205,7 @@ func BuildRouter(opts Options) (*echo.Echo, error) {
 	auth.DELETE("/api/memory/destinations", h.HandleDeleteMemoryDestination)
 	auth.POST("/api/memory/destinations/test", h.HandleTestMemoryDestination)
 	auth.POST("/api/memory/sync", h.HandleSyncFeedbackToMemory)
+	auth.POST("/api/memory/chat", h.HandleMemoryChat)
 	auth.POST("/api/memory/oauth/start", h.HandleMemoryOAuthStart)
 
 	// Write endpoints are rate-limited per client IP to protect the SQLite DB and

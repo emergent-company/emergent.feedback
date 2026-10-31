@@ -16,6 +16,11 @@ let started = false;
 let lastInputKey = "";
 let lastInputTime = 0;
 
+type UrlChangeListener = (url: string) => void;
+const urlChangeListeners = new Set<UrlChangeListener>();
+let urlTrackingStarted = false;
+let lastTrackedUrl = "";
+
 function isOwnElement(el: Element): boolean {
   let node: Element | null = el;
   while (node && node !== document.documentElement) {
@@ -74,51 +79,83 @@ function clickIsSensitive(el: Element): boolean {
   return false;
 }
 
-export function startRecording(): void {
-  if (started) return;
-  if (window.top !== window.self) return;
-  started = true;
+/**
+ * Update `lastTrackedUrl`, record a navigation event (only when recording is
+ * active) and notify overlay listeners. Called by the history patches and by
+ * native popstate / hashchange / pageshow events.
+ */
+function notifyUrlChange(): void {
+  const nextUrl = window.location.href;
+  const prevUrl = lastTrackedUrl;
+  if (nextUrl === prevUrl) return;
+  lastTrackedUrl = nextUrl;
 
-  let currentUrl = window.location.href;
+  if (started) {
+    pushEvent("navigation", { url: sanitizeURL(nextUrl), previousUrl: sanitizeURL(prevUrl), title: document.title });
+  }
 
-  window.addEventListener("popstate", () => {
-    const newUrl = window.location.href;
-    if (newUrl !== currentUrl) {
-      pushEvent("navigation", { url: sanitizeURL(newUrl), previousUrl: sanitizeURL(currentUrl), title: document.title });
-      currentUrl = newUrl;
+  for (const cb of Array.from(urlChangeListeners)) {
+    try {
+      cb(nextUrl);
+    } catch {
+      // A listener must never break navigation tracking.
     }
-  });
+  }
+}
 
-  // Idempotent monkey-patching: wrap only once even if startRecording is
-  // re-entered, and preserve the original return values.
+/**
+ * Install URL tracking (including SPA pushState/replaceState) once. This is
+ * independent of session recording so badges still follow navigation in a
+ * frame or before startRecording flips `started`.
+ */
+function startUrlTracking(): void {
+  if (urlTrackingStarted) return;
+  urlTrackingStarted = true;
+  lastTrackedUrl = window.location.href;
+
+  window.addEventListener("popstate", notifyUrlChange);
+  window.addEventListener("hashchange", notifyUrlChange);
+  window.addEventListener("pageshow", notifyUrlChange);
+
+  // Idempotent monkey-patching: wrap only once even if this is re-entered, and
+  // preserve the original return values.
   const PATCHED = "__ef_history_patched__";
   if (!(history as unknown as Record<string, unknown>)[PATCHED]) {
     (history as unknown as Record<string, unknown>)[PATCHED] = true;
 
     const origPushState = history.pushState.bind(history);
     history.pushState = function (this: History, ...args: Parameters<History["pushState"]>) {
-      const prevUrl = window.location.href;
       const r = origPushState(...args);
-      const newUrl = window.location.href;
-      if (newUrl !== prevUrl) {
-        pushEvent("navigation", { url: sanitizeURL(newUrl), previousUrl: sanitizeURL(prevUrl), title: document.title });
-        currentUrl = newUrl;
-      }
+      notifyUrlChange();
       return r;
     };
 
     const origReplaceState = history.replaceState.bind(history);
     history.replaceState = function (this: History, ...args: Parameters<History["replaceState"]>) {
-      const prevUrl = window.location.href;
       const r = origReplaceState(...args);
-      const newUrl = window.location.href;
-      if (newUrl !== prevUrl) {
-        pushEvent("navigation", { url: sanitizeURL(newUrl), previousUrl: sanitizeURL(prevUrl), title: document.title });
-        currentUrl = newUrl;
-      }
+      notifyUrlChange();
       return r;
     };
   }
+}
+
+/**
+ * Subscribe to page URL changes (popstate, hashchange, pushState,
+ * replaceState). Returns an unsubscribe function.
+ */
+export function onUrlChange(cb: UrlChangeListener): () => void {
+  startUrlTracking();
+  urlChangeListeners.add(cb);
+  return () => {
+    urlChangeListeners.delete(cb);
+  };
+}
+
+export function startRecording(): void {
+  startUrlTracking();
+  if (started) return;
+  if (window.top !== window.self) return;
+  started = true;
 
   document.addEventListener("input", (e: Event) => {
     const target = e.target as HTMLElement;

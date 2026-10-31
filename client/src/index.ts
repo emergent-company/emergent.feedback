@@ -5,12 +5,11 @@ import { APIClient } from "./api";
 import { AuthManager } from "./auth";
 import { startActivationListener, onModeChange, forceMode, getMode } from "./activation";
 import { highlight, clearHighlight } from "./highlighter";
-import { renderBadges, clearBadges } from "./badge";
+import { renderBadges, clearBadges, isBadgesVisible, setBadgesVisible } from "./badge";
 import { showSubmitDialog, promptLogin, closeDialog, startDragVisual, updateDragVisual, endDragVisual, type FeedbackType } from "./dialog";
-import type { IssueBadge } from "./api";
 import { buildSelector } from "./selector";
 import { showIndicator, hideIndicator } from "./indicator";
-import { startRecording, getHistory } from "./history";
+import { startRecording, getHistory, onUrlChange } from "./history";
 import { getSessionId } from "./session";
 import { captureElement } from "./screenshot";
 import { captureSnapshot } from "./snapshot";
@@ -58,6 +57,26 @@ import { initTheme, onThemeChange, applyTheme } from "./theme";
  * crosses inside the same target.
  */
 let peekedEl: Element | null = null;
+
+// Badges stay hidden for first-time visitors. Entering comment mode once
+// records this flag; subsequent loads render badges until the switch is off.
+const BADGES_ACTIVATED_KEY = "__ef_badges_activated__";
+
+function badgesActivated(): boolean {
+  try {
+    return localStorage.getItem(BADGES_ACTIVATED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function markBadgesActivated(): void {
+  try {
+    localStorage.setItem(BADGES_ACTIVATED_KEY, "1");
+  } catch {
+    // Storage can be unavailable; badges still work for this session.
+  }
+}
 
 (function bootstrap() {
   if ((window as any).__feedbackOverlayLoaded) return;
@@ -118,10 +137,19 @@ let peekedEl: Element | null = null;
     if (mode === "active") {
       // Warm the theme-token cache so the first click opens instantly.
       void loadTokens(config);
-      showIndicator(config.hotkey);
+      markBadgesActivated();
+      showIndicator(config.hotkey, {
+        badgesVisible: isBadgesVisible(),
+        dashboardUrl: config.dashboardUrl,
+        onToggleBadges: (next) => {
+          setBadgesVisible(next);
+          if (next) void refreshBadges();
+        },
+      });
       activateOverlay();
       startVerifyLoop(api);
       startReporterNotify(api);
+      if (isBadgesVisible()) void refreshBadges();
     } else if (mode === "editing") {
       // Comment mode with the docked panel open: listeners stay attached so the
       // user can keep picking elements.
@@ -134,6 +162,32 @@ let peekedEl: Element | null = null;
     } else if (mode === "capturing" || mode === "commenting") {
       hideIndicator();
     }
+  });
+
+  // ── Persistent badges ───────────────────────────────────────────────────────
+  // After the first activation, render badges on every load until the visitor
+  // switches them off. Keep them in sync with SPA navigation.
+  let badgeRequest = 0;
+  let trackedBadgeUrl = api.pageUrl();
+
+  function renderPersistedBadges(): void {
+    if (badgesActivated() && isBadgesVisible()) void refreshBadges();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", renderPersistedBadges, { once: true });
+  } else {
+    renderPersistedBadges();
+  }
+
+  onUrlChange(() => {
+    const nextUrl = api.pageUrl();
+    if (nextUrl === trackedBadgeUrl) return;
+    trackedBadgeUrl = nextUrl;
+    // Invalidate any in-flight badges from the previous page before fetching.
+    badgeRequest++;
+    clearBadges();
+    if (badgesActivated() && isBadgesVisible()) void refreshBadges();
   });
 
   // ── Overlay activation ──────────────────────────────────────────────────────
@@ -151,7 +205,6 @@ let peekedEl: Element | null = null;
     document.addEventListener("pointercancel", cancelDrag, true);
     document.addEventListener("dragstart", onDragStart, true);
     document.addEventListener("keydown", onKeyDown, true);
-    refreshBadges();
   }
 
   function detachEditingListeners(): void {
@@ -172,12 +225,35 @@ let peekedEl: Element | null = null;
   }
 
   async function refreshBadges(): Promise<void> {
-    const url = window.location.href;
-    const [summaries, issues] = await Promise.all([
-      api.listBadges(url).catch((): never[] => []),
-      api.listIssueBadges(url).catch((): IssueBadge[] => []),
+    if (!isBadgesVisible()) return;
+
+    const requestId = ++badgeRequest;
+    const url = api.pageUrl();
+    const [summaryResult, issueResult] = await Promise.allSettled([
+      api.listBadges(url),
+      api.listIssueBadges(url),
     ]);
-    renderBadges(summaries, onBadgeClick, issues);
+
+    // A newer request, a navigation, or the switch being turned off wins.
+    if (
+      requestId !== badgeRequest ||
+      url !== api.pageUrl() ||
+      !isBadgesVisible()
+    ) {
+      return;
+    }
+
+    // Keep the current badges when the whole refresh failed (e.g. a transient
+    // network blip); render whatever half succeeded otherwise.
+    if (summaryResult.status === "rejected" && issueResult.status === "rejected") {
+      return;
+    }
+
+    renderBadges(
+      summaryResult.status === "fulfilled" ? summaryResult.value : [],
+      onBadgeClick,
+      issueResult.status === "fulfilled" ? issueResult.value : [],
+    );
   }
 
   function activateOverlay(): void {
@@ -186,7 +262,8 @@ let peekedEl: Element | null = null;
 
   function deactivateOverlay(): void {
     detachEditingListeners();
-    clearBadges();
+    // Badges persist after comment mode closes; visibility is controlled by
+    // the top-bar switch and remembered across sessions.
     // Undo only the uncommitted (pending) edits; committed edits stay on the
     // page AND in storage when the sidebar closes.
     revertPending();
@@ -383,7 +460,7 @@ function elementLabel(el: Element): string {
     const user = auth.getUser()!;
 
     // Fetch existing comments for the primary element.
-    const allComments = await api.listComments(window.location.href).catch(() => []);
+    const allComments = await api.listComments(api.pageUrl()).catch(() => []);
     const existingComments = allComments.filter((c) => c.selector === selector);
 
     const tokens = await loadTokens(config);
@@ -466,7 +543,7 @@ function elementLabel(el: Element): string {
           ),
         };
         const result = await api.createFeedback({
-          url: window.location.href,
+          url: api.pageUrl(),
           selector,
           comment,
           context: contextWithIntent,
@@ -505,8 +582,8 @@ function elementLabel(el: Element): string {
         clearSelection();
         forceMode("active");
       },
-      // The dialog owns which surface is showing. Only the Edit view makes the
-      // page pickable, so the issue card never fights hover/click handling.
+      // The dialog owns which surface is showing. Only the style editor makes the
+      // page pickable, so the report form never fights hover/click handling.
       onEditingChange: (view) => {
         if (view === "edit") {
           attachEditingListeners();
@@ -516,6 +593,15 @@ function elementLabel(el: Element): string {
           forceMode("commenting");
         }
       },
+      // Opt-in Chat tab (data-chat): a report composer, never an editor.
+      ...(config.chat
+        ? {
+            chat: {
+              api,
+              ...(config.chatAgent ? { agent: config.chatAgent } : {}),
+            },
+          }
+        : {}),
     });
   }
 

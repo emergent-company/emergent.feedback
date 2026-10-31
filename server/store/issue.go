@@ -67,13 +67,24 @@ ORDER BY id DESC LIMIT 1`
 
 // ListOpenGitHubIssuesByURL returns all open GitHub issues recorded for a page URL.
 func (s *Store) ListOpenGitHubIssuesByURL(ctx context.Context, pageURL string) ([]GitHubIssue, error) {
+	return s.listOpenGitHubIssuesByURL(ctx, pageURL, false)
+}
+
+// ListOpenGitHubIssuesByURLPath is ListOpenGitHubIssuesByURL with
+// fragment-insensitive matching.
+func (s *Store) ListOpenGitHubIssuesByURLPath(ctx context.Context, pageURL string) ([]GitHubIssue, error) {
+	return s.listOpenGitHubIssuesByURL(ctx, pageURL, true)
+}
+
+func (s *Store) listOpenGitHubIssuesByURL(ctx context.Context, pageURL string, pathMode bool) ([]GitHubIssue, error) {
+	where, args := urlMatch("page_url", pageURL, pathMode)
 	q := `
 SELECT id, issue_number, issue_url, repo, title, page_url, selector, state, created_at, synced_at
 FROM github_issues
-WHERE page_url = ? AND state = 'open'
+WHERE ` + where + ` AND state = 'open'
 ORDER BY issue_number DESC`
 
-	rows, err := s.db.QueryContext(ctx, s.bind(q), pageURL)
+	rows, err := s.db.QueryContext(ctx, s.bind(q), args...)
 	if err != nil {
 		return nil, fmt.Errorf("store: list github issues: %w", err)
 	}

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Host app fixture — nested scroll container</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 0; padding: 32px; background: #f8fafc; color: #0f172a; }
+      h1 { font-size: 28px; margin: 0 0 8px; }
+      .btn { padding: 8px 16px; border-radius: 8px; border: none; background: #4f46e5; color: #fff; cursor: pointer; font-size: 14px; }
+      #scroll-box { height: 200px; overflow-y: auto; border: 1px solid #cbd5e1; border-radius: 12px; background: #fff; }
+      .spacer-top { height: 60px; }
+      .spacer-bottom { height: 600px; }
+      .row { padding: 0 16px; }
+    </style>
+  </head>
+  <body data-testid="scroll-root">
+    <h1 id="scroll-heading">Nested scroll fixture</h1>
+    <p>Badges must follow an element inside a scrollable ancestor.</p>
+
+    <div id="scroll-box">
+      <div class="spacer-top"></div>
+      <div class="row">
+        <button id="scroll-target" type="button" class="btn" data-testid="scroll-target">Deep button</button>
+      </div>
+      <div class="spacer-bottom"></div>
+    </div>
+
+    <script
+      src="__API_URL__/emergent-feedback.js"
+      data-api="__API_URL__"
+      data-repo="e2e/host-fixture"
+      data-label="feedback"
+      data-branch="e2e"
+      data-version="0.0.0-test"
+      async
+    ></script>
+  </body>
+</html>

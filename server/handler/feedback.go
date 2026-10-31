@@ -196,6 +196,12 @@ func normalizePageURL(raw string) string {
 	return u.String()
 }
 
+// pathURLMode reports whether the caller opted into fragment-insensitive page
+// matching (?url_mode=path).
+func pathURLMode(c echo.Context) bool {
+	return c.QueryParam("url_mode") == "path"
+}
+
 // badgeSummary is the response shape for GET /feedback?url=...
 type badgeSummary struct {
 	Selector string  `json:"selector"`
@@ -211,7 +217,13 @@ func (h *Handler) HandleListFeedback(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "url query parameter is required")
 	}
 
-	summaries, err := h.Store.ListByURLSummary(c.Request().Context(), pageURL)
+	var summaries []store.URLSummary
+	var err error
+	if pathURLMode(c) {
+		summaries, err = h.Store.ListByURLSummaryPath(c.Request().Context(), pageURL)
+	} else {
+		summaries, err = h.Store.ListByURLSummary(c.Request().Context(), pageURL)
+	}
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to list feedback")
 	}
@@ -235,7 +247,13 @@ func (h *Handler) HandleListFeedbackByURL(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "url query parameter is required")
 	}
 
-	items, err := h.Store.ListByURL(c.Request().Context(), pageURL)
+	var items []store.Feedback
+	var err error
+	if pathURLMode(c) {
+		items, err = h.Store.ListByURLPath(c.Request().Context(), pageURL)
+	} else {
+		items, err = h.Store.ListByURL(c.Request().Context(), pageURL)
+	}
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to list feedback")
 	}
@@ -546,7 +564,13 @@ func (h *Handler) HandleVerifyPending(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "url query parameter is required")
 	}
 
-	items, err := h.Store.ListVerifyPending(c.Request().Context(), pageURL)
+	var items []store.VerifyPendingItem
+	var err error
+	if pathURLMode(c) {
+		items, err = h.Store.ListVerifyPendingPath(c.Request().Context(), pageURL)
+	} else {
+		items, err = h.Store.ListVerifyPending(c.Request().Context(), pageURL)
+	}
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to list pending")
 	}
@@ -580,7 +604,13 @@ func (h *Handler) HandleFeedbackStatus(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "url query parameter is required")
 	}
 
-	items, err := h.Store.ListStatusByURLAndUser(c.Request().Context(), pageURL, middleware.GetLogin(c))
+	var items []store.FeedbackStatusItem
+	var err error
+	if pathURLMode(c) {
+		items, err = h.Store.ListStatusByURLAndUserPath(c.Request().Context(), pageURL, middleware.GetLogin(c))
+	} else {
+		items, err = h.Store.ListStatusByURLAndUser(c.Request().Context(), pageURL, middleware.GetLogin(c))
+	}
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to list status")
 	}

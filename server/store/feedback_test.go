@@ -312,6 +312,72 @@ func TestExportedExcludedFromBadges(t *testing.T) {
 	}
 }
 
+func TestListByURLPathIncludesFragmentRows(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	create := func(pageURL, comment string) Feedback {
+		t.Helper()
+		f, err := s.Create(ctx, CreateParams{
+			URL:         pageURL,
+			Selector:    "button",
+			Comment:     comment,
+			ContextJSON: `{}`,
+			GitHubUser:  "alice",
+			Repo:        "org/repo",
+		})
+		if err != nil {
+			t.Fatalf("Create(%q): %v", pageURL, err)
+		}
+		return f
+	}
+
+	canonical := create("https://app.example.com/", "root")
+	hashed := create("https://app.example.com/#how", "hash")
+	other := create("https://app.example.com/other#how", "other page")
+
+	// Exact matching keeps the two fragment buckets separate.
+	exact, err := s.ListByURLSummary(ctx, "https://app.example.com/")
+	if err != nil {
+		t.Fatalf("ListByURLSummary: %v", err)
+	}
+	if len(exact) != 1 || exact[0].Count != 1 || len(exact[0].IDs) != 1 || exact[0].IDs[0] != canonical.ID {
+		t.Fatalf("exact summaries = %+v, want only %d", exact, canonical.ID)
+	}
+
+	// Path matching folds the fragment bucket in and still excludes /other.
+	path, err := s.ListByURLSummaryPath(ctx, "https://app.example.com/")
+	if err != nil {
+		t.Fatalf("ListByURLSummaryPath: %v", err)
+	}
+	if len(path) != 1 || path[0].Count != 2 || len(path[0].IDs) != 2 {
+		t.Fatalf("path summaries = %+v, want count=2", path)
+	}
+	ids := path[0].IDs
+	has := func(id int64) bool {
+		for _, got := range ids {
+			if got == id {
+				return true
+			}
+		}
+		return false
+	}
+	if !has(canonical.ID) || !has(hashed.ID) {
+		t.Fatalf("path ids = %v, want %d and %d", ids, canonical.ID, hashed.ID)
+	}
+	if has(other.ID) {
+		t.Fatalf("path ids = %v, must not include /other item %d", ids, other.ID)
+	}
+
+	items, err := s.ListByURLPath(ctx, "https://app.example.com/")
+	if err != nil {
+		t.Fatalf("ListByURLPath: %v", err)
+	}
+	if len(items) != 2 {
+		t.Fatalf("path items = %d, want 2", len(items))
+	}
+}
+
 func TestDedupeDuplicateLink(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()

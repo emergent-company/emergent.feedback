@@ -58,7 +58,7 @@ export function startReporterNotify(api: APIClient): void {
   const tick = async () => {
     if (getMode() !== "active") return;
     try {
-      const items = await api.listStatus(window.location.href);
+      const items = await api.listStatus(api.pageUrl());
       const seen = readSeen();
       let changed = false;
 

@@ -8,7 +8,7 @@ import {
   describeAPIError,
   withAuthRetry,
 } from "./api";
-import type { FeedbackComment, ExportIssueResult, MemoryStatus } from "./api";
+import type { APIClient, FeedbackComment, ExportIssueResult, MemoryStatus } from "./api";
 import type {
   FeedbackIntent,
   IntentAction,
@@ -17,6 +17,15 @@ import type {
 } from "./envelope";
 import { syncThemeTo } from "./theme";
 import { mountStyleEditor } from "./styleEditor";
+import {
+  buildChatContext,
+  loadChat,
+  mountChat,
+  saveChat,
+  type ChatPanel,
+  type ChatTurn,
+  type ReportSuggestion,
+} from "./chat";
 import { layoutAxis, type DropTarget } from "./structure";
 import type { ThemeTokens } from "./tokens";
 import {
@@ -194,15 +203,10 @@ function injectStyles(): void {
     /* Only the card of the active view is visible. Both stay mounted so typed
        text, chip state and live style edits survive a view swap. */
     #__ef_dialog__ .ef-card[hidden] { display: none !important; }
-    /* Submit view: the issue card is always centered and the modal layer draws
-       its own backdrop, so the root steps aside (no double dimming) and never
-       docks or reflows the host page. */
-    #__ef_dialog__[data-view="submit"] {
-      background: transparent;
-      pointer-events: none;
-    }
-    #__ef_dialog__[data-view="submit"] .ef-issue-modal { pointer-events: auto; }
-    /* Editor steps aside while the user picks an element on the page. */
+    /* The pane is always docked-capable; the root keeps a backdrop only when the
+       card is centered (undocked), where it behaves as a modal sheet. */
+    #__ef_dialog__.ef-docked { background: transparent; pointer-events: none; }
+    /* Pane steps aside while the user picks an element on the page. */
     #__ef_dialog__.ef-modal-picking { display: none !important; }
     /* Programmatic focus target — no visible ring on the card itself. */
     #__ef_dialog__ .ef-card:focus,
@@ -738,6 +742,266 @@ function injectStyles(): void {
     #__ef_dialog__ .ef-dock-btn:focus-visible {
       outline: none;
       box-shadow: 0 0 0 3px var(--ef-focus-ring-chip);
+    }
+
+    /* ── Pane tabs (Feedback · Changes · Chat) ─────────────────────────────── */
+    #__ef_dialog__ .ef-tabs {
+      display: flex;
+      gap: 2px;
+      padding: 0 12px;
+      border-bottom: 1px solid var(--ef-border);
+      background: var(--ef-surface);
+      flex-shrink: 0;
+    }
+    #__ef_dialog__ .ef-tab {
+      appearance: none;
+      border: 0;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      background: transparent;
+      color: var(--ef-muted-strong);
+      font: inherit;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      padding: 8px 10px 7px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      white-space: nowrap;
+    }
+    #__ef_dialog__ .ef-tab:hover { color: var(--ef-heading); }
+    #__ef_dialog__ .ef-tab[aria-selected="true"] {
+      color: var(--ef-primary);
+      border-bottom-color: var(--ef-primary);
+    }
+    #__ef_dialog__ .ef-tab:focus-visible {
+      outline: 2px solid var(--ef-primary);
+      outline-offset: -2px;
+      border-radius: 4px;
+    }
+    #__ef_dialog__ .ef-tab-count {
+      min-width: 15px;
+      height: 15px;
+      padding: 0 4px;
+      border-radius: 8px;
+      background: var(--ef-chip-on-bg);
+      color: var(--ef-chip-on-text);
+      font-size: 9px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #__ef_dialog__ .ef-tab-count[hidden] { display: none; }
+
+    /* Panels hold their own scroll region so a long report never scrolls the
+       tab bar out of reach. */
+    #__ef_dialog__ .ef-panels {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+    }
+    #__ef_dialog__ .ef-panel {
+      flex: 1;
+      min-width: 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    #__ef_dialog__ .ef-panel[hidden] { display: none; }
+    #__ef_dialog__ .ef-report,
+    #__ef_dialog__ .ef-design {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    #__ef_dialog__ .ef-report[hidden],
+    #__ef_dialog__ .ef-design[hidden] { display: none; }
+    /* The Changes panel owns the whole tab, so it scrolls itself. */
+    #__ef_dialog__ #__ef_panel_changes__ .ef-changes {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      border-top: 0;
+    }
+
+    /* ── Chat (report composer) ─────────────────────────────────────────────── */
+    #__ef_dialog__ .ef-chat {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    #__ef_dialog__ .ef-chat-ctx {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      padding: 7px 16px;
+      border-bottom: 1px solid var(--ef-border-subtle);
+      font-size: 10px;
+      color: var(--ef-muted);
+      flex-shrink: 0;
+    }
+    #__ef_dialog__ .ef-chat-ctx-label {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--ef-muted);
+      flex-shrink: 0;
+    }
+    #__ef_dialog__ .ef-chat-ctx-sel {
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      color: var(--ef-text-soft);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 46%;
+    }
+    #__ef_dialog__ .ef-chat-ctx-meta {
+      margin-left: auto;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    #__ef_dialog__ .ef-chat-log {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    #__ef_dialog__ .ef-chat-empty {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding-top: 6px;
+    }
+    #__ef_dialog__ .ef-chat-empty-title {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ef-heading);
+    }
+    #__ef_dialog__ .ef-chat-empty-sub {
+      margin: 0;
+      font-size: 11px;
+      line-height: 1.5;
+      color: var(--ef-muted-strong);
+    }
+    #__ef_dialog__ .ef-chat-suggest {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 2px;
+    }
+    #__ef_dialog__ .ef-chat-turn {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      min-width: 0;
+    }
+    #__ef_dialog__ .ef-chat-user { align-items: flex-end; }
+    #__ef_dialog__ .ef-chat-bubble {
+      font-size: 12px;
+      line-height: 1.5;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: var(--ef-surface);
+      color: var(--ef-text);
+      max-width: 92%;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    #__ef_dialog__ .ef-chat-user .ef-chat-bubble {
+      background: var(--ef-chip-on-bg);
+      color: var(--ef-chip-on-text);
+    }
+    #__ef_dialog__ .ef-chat-assistant .ef-chat-bubble {
+      background: transparent;
+      padding: 0;
+      max-width: 100%;
+    }
+    #__ef_dialog__ .ef-chat-error .ef-chat-bubble { color: var(--ef-error); }
+    #__ef_dialog__ .ef-report-card {
+      border: 1px solid var(--ef-border);
+      border-radius: 8px;
+      padding: 10px;
+      background: var(--ef-surface);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    #__ef_dialog__ .ef-report-card-head {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--ef-muted);
+    }
+    #__ef_dialog__ .ef-report-fields {
+      margin: 0;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 3px 10px;
+      font-size: 11px;
+    }
+    #__ef_dialog__ .ef-report-fields dt {
+      color: var(--ef-muted-strong);
+      font-weight: 600;
+    }
+    #__ef_dialog__ .ef-report-fields dd {
+      margin: 0;
+      color: var(--ef-text-soft);
+      word-break: break-word;
+    }
+    #__ef_dialog__ .ef-report-missing {
+      margin: 0;
+      font-size: 11px;
+      color: var(--ef-muted);
+      font-style: italic;
+    }
+    #__ef_dialog__ .ef-chat-compose {
+      border-top: 1px solid var(--ef-border);
+      padding: 10px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex-shrink: 0;
+      background: var(--ef-surface);
+    }
+    #__ef_dialog__ .ef-chat-compose textarea {
+      resize: vertical;
+      min-height: 44px;
+      max-height: 160px;
+    }
+    #__ef_dialog__ .ef-chat-actions {
+      display: flex;
+      gap: 6px;
+      justify-content: flex-end;
+    }
+    #__ef_dialog__ .ef-chat-note {
+      margin: 0;
+      padding: 0 16px 10px;
+      font-size: 10px;
+      color: var(--ef-muted);
+      flex-shrink: 0;
+    }
+    #__ef_dialog__ .ef-sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+      border: 0;
     }
 
     /* ── Shared section label ──────────────────────────────────────────────── */
@@ -1747,6 +2011,17 @@ function injectStyles(): void {
       gap: 8px;
       flex-shrink: 0;
     }
+    /* Labels stay whole; the row wraps between buttons, never inside one. */
+    #__ef_dialog__ .ef-issue-foot .ef-btn-secondary,
+    #__ef_dialog__ .ef-issue-foot .ef-btn-primary { white-space: nowrap; }
+    /* The 400px rail has ~370px of footer: tighten it so the four actions fit
+       on one line instead of stacking. */
+    #__ef_dialog__.ef-docked .ef-issue-foot { padding: 10px 14px; gap: 6px; }
+    #__ef_dialog__.ef-docked .ef-issue-foot .ef-btn-secondary,
+    #__ef_dialog__.ef-docked .ef-issue-foot .ef-btn-primary {
+      padding-left: 10px;
+      padding-right: 10px;
+    }
     #__ef_dialog__ .ef-memory-opt {
       display: inline-flex;
       align-items: center;
@@ -1772,7 +2047,10 @@ function injectStyles(): void {
         max-height: 100vh;
         border-radius: 0;
       }
-      #__ef_dialog__ .ef-issue-foot { flex-wrap: wrap; }
+      #__ef_dialog__ .ef-issue-foot { flex-wrap: wrap; row-gap: 8px; }
+      #__ef_dialog__ .ef-issue-foot .ef-footer-spacer { display: none; }
+      /* Primary action owns its own row on a phone. */
+      #__ef_dialog__ .ef-issue-foot #__ef_issue_submit__ { flex: 1 0 100%; }
       /* Title takes the full line so the chip + Edit element stay readable. */
       #__ef_dialog__ .ef-issue-head-row { flex-wrap: wrap; row-gap: 6px; }
       #__ef_dialog__ .ef-issue-head-row h2 { flex: 1 0 100%; }
@@ -1873,11 +2151,8 @@ let dialogKeydown: ((e: KeyboardEvent) => void) | null = null;
 let dialogKeyHandler: ((e: KeyboardEvent) => void) | null = null;
 // Teardown for the live selection subscription owned by the submit dialog.
 let dialogCleanup: (() => void) | null = null;
-// True while the issue submission card is the active view. The editor's Tab
-// trap and Escape handler stand down while the card owns the keyboard.
-let issueModalOpen = false;
-// True while an auth (login/grant) layer is shown. The panel and issue modal
-// keyboard traps stand down while the auth layer owns the keyboard.
+// True while an auth (login/grant) layer is shown. The pane's Tab trap stands
+// down while the auth layer owns the keyboard.
 let authLayerOpen = false;
 // Pending prompt layers (bottom → top). closeDialog() resolves every one as
 // cancelled so no caller is left hanging when the dialog is torn down.
@@ -1927,8 +2202,8 @@ function activateDialog(
   }
 
   dialogKeydown = (e: KeyboardEvent) => {
-    // The issue modal (and the auth layer) owns the keyboard while open.
-    if (issueModalOpen || authLayerOpen) return;
+    // The auth layer owns the keyboard while it is open.
+    if (authLayerOpen) return;
     if (e.key !== "Tab") return;
     const items = getFocusable(card);
     if (items.length === 0) { e.preventDefault(); card.focus(); return; }
@@ -1986,10 +2261,15 @@ export interface SubmitFeedbackOptions {
   /** Called after the dialog closes on a successful submit/export. */
   onComplete?: () => void;
   /**
-   * Called on every view change: "submit" (issue/submission card, page is not
-   * pickable) or "edit" (live style editor, page picking is active).
+   * Called on every mode change: "submit" (report form, page is not pickable)
+   * or "edit" (live style editor, page picking is active).
    */
   onEditingChange?: (view: "submit" | "edit") => void;
+  /**
+   * Opt-in Chat tab (report composer). Present only when the host sets
+   * `data-chat`; the pane then shows Feedback · Changes · Chat.
+   */
+  chat?: { api: APIClient; agent?: string };
 }
 
 // ── Intent micro-form helpers ────────────────────────────────────────────────
@@ -2046,12 +2326,10 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   injectStyles();
   const dialog = getOrCreateDialog();
 
-  // ── View + dock state (default docked; persisted across pages) ─────────────
-  // One DOM root holds both surfaces and swaps between them:
-  //   "submit" — the issue/submission card, always centered over the page.
-  //   "edit"   — the live style editor, docked to the side or centered.
-  // Swapping only flips attributes, so typed text and live edits survive.
-  let view: "submit" | "edit" = "submit";
+  // ── Pane + dock state (default docked; persisted across pages) ──────────────
+  // One docked pane holds three tabs — Feedback (report form + live style
+  // editor), Changes and (opt-in) Chat. Switching only flips attributes, so
+  // typed text, chip state and live edits survive.
   let docked = readDockedPref();
   // True between clicking "Add element" in the undocked editor and the pick
   // finishing. The dialog hides itself (ef-modal-picking) and suspends its Tab
@@ -2060,8 +2338,8 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   const DOCK_MAX = 400;
   const DOCK_MIN_WIDTH = 520;
   const dockWidth = () => Math.min(DOCK_MAX, window.innerWidth);
-  /** Dock applies to the editor view only — the issue card is always centered. */
-  const effectiveDock = () => view === "edit" && docked && window.innerWidth > DOCK_MIN_WIDTH;
+  /** Dock applies to the whole pane; below the breakpoint it becomes a sheet. */
+  const effectiveDock = () => docked && window.innerWidth > DOCK_MIN_WIDTH;
   const applyDockReflow = () => {
     const root = document.documentElement;
     if (effectiveDock()) {
@@ -2180,19 +2458,24 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
         </div>` : "";
 
   // Subtitle for the issue modal header: repo · element.
-  const issueSubParts: string[] = [];
-  if (opts.repo) issueSubParts.push(opts.repo);
-  issueSubParts.push(opts.selector);
-  const issueSub = issueSubParts.join(" · ");
   // "ask" is the only mode where the reporter chooses. "auto" syncs server-side
   // without a control; "off"/absent shows nothing.
   const memoryAsk = !!opts.memory && opts.memory.connected && opts.memory.mode === "ask";
 
+  // The Chat tab is opt-in per host (`data-chat`). Without it the pane keeps the
+  // two tabs it always had: Feedback and Changes.
+  const chatEnabled = !!opts.chat;
+  const tabsHTML = `
+    <button class="ef-tab" id="__ef_tab_feedback__" role="tab" data-tab="feedback" aria-selected="true" aria-controls="__ef_panel_feedback__" tabindex="0">Feedback${existing.length > 0 ? `<span class="ef-tab-count" title="${existing.length} existing comment${existing.length === 1 ? "" : "s"}">${existing.length}</span>` : ""}</button>
+    <button class="ef-tab" id="__ef_tab_changes__" role="tab" data-tab="changes" aria-selected="false" aria-controls="__ef_panel_changes__" tabindex="-1">Changes<span class="ef-tab-count" id="__ef_count_changes__" hidden></span></button>
+    ${chatEnabled ? `<button class="ef-tab" id="__ef_tab_chat__" role="tab" data-tab="chat" aria-selected="false" aria-controls="__ef_panel_chat__" tabindex="-1">Chat</button>` : ""}`;
+
   dialog.innerHTML = `
-    <div class="ef-card" role="dialog" aria-modal="true" aria-labelledby="__ef_title__" tabindex="-1" hidden inert aria-hidden="true">
+    <div class="ef-card" role="dialog" aria-modal="true" aria-labelledby="__ef_title__" tabindex="-1">
       <div class="ef-header">
         <div class="ef-header-top">
           <h2 id="__ef_title__">${title}</h2>
+          <span class="ef-change-chip" id="__ef_change_count__" hidden></span>
           <div class="ef-user-pill">
             <img src="${escapeHtml(opts.user.avatarUrl)}" alt="">
             <span>${escapeHtml(opts.user.login)}</span>
@@ -2201,95 +2484,99 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
         </div>
         <div class="ef-selector" id="__ef_editor_selector__" title="${escapeHtml(opts.selector)}">${escapeHtml(opts.selector)}</div>
       </div>
-      ${componentPickerHTML}
-      ${targetStripHTML}
-      <div class="ef-body">
-        <div class="ef-targets" id="__ef_targets__"></div>
-        <div class="ef-design-body">
-          <div id="__ef_style_editor__"></div>
-          <div class="ef-changes" id="__ef_changes__"></div>
-        </div>
-      </div>
-      <div class="ef-footer">
-        <div class="ef-footer-spacer"></div>
-        <button type="button" class="ef-btn-secondary" id="__ef_cancel__">Cancel</button>
-        <button type="button" class="ef-btn-primary" id="__ef_back_to_issue__">Back to issue</button>
-      </div>
-    </div>
-    <div class="ef-issue-modal" id="__ef_issue_modal__" hidden>
-      <div class="ef-issue-card" role="dialog" aria-modal="true" aria-labelledby="__ef_issue_title__" tabindex="-1">
-        <div class="ef-issue-head">
-          <div class="ef-issue-head-row">
-            <h2 id="__ef_issue_title__">Create GitHub issue</h2>
-            <span class="ef-change-chip" id="__ef_change_count__" hidden></span>
-            <button type="button" class="ef-btn-secondary ef-btn-sm" id="__ef_edit_element__" aria-label="Edit element styles">Edit element</button>
-          </div>
-          <p class="ef-issue-sub">${escapeHtml(issueSub)}</p>
-        </div>
-        <div class="ef-issue-body">
-          <div class="ef-issue-section">
-            ${commentsHTML}
-            <div class="ef-topic-row">
-              <label class="ef-topic-label" for="__ef_topic__">Issue title</label>
-              <input class="ef-topic-input" id="__ef_topic__" type="text" value="${escapeHtml(opts.defaultIssueTopic)}">
-            </div>
-            <div class="ef-type-toggle">
-              <input type="radio" name="__ef_type__" id="__ef_type_bug__" value="bug">
-              <label for="__ef_type_bug__">🐛 Bug</label>
-              <input type="radio" name="__ef_type__" id="__ef_type_enh__" value="enhancement" checked>
-              <label for="__ef_type_enh__">✨ Enhancement</label>
-            </div>
-            <div class="ef-intent">
-              <div class="ef-intent-row">
-                <span class="ef-intent-label">Action</span>
-                <div class="ef-chips" id="__ef_action__"></div>
-              </div>
-              ${expectedRowHTML}
-              <div class="ef-intent-row">
-                <span class="ef-intent-label">Scope</span>
-                <div class="ef-chips" id="__ef_scope__">
-                  <button type="button" class="ef-chip ef-chip-on" data-breadth="element" aria-pressed="true">This element</button>
-                  <button type="button" class="ef-chip" data-breadth="region" aria-pressed="false">Region</button>
-                  <button type="button" class="ef-chip" data-breadth="multi" aria-pressed="false">Multiple</button>
+      <div class="ef-tabs" role="tablist" aria-label="Overlay views">${tabsHTML}</div>
+      <div class="ef-panels">
+        <section class="ef-panel" id="__ef_panel_feedback__" role="tabpanel" aria-labelledby="__ef_tab_feedback__">
+          <div class="ef-report" id="__ef_report__">
+            <div class="ef-issue-body">
+              <div class="ef-issue-section">
+                ${commentsHTML}
+                <div class="ef-topic-row">
+                  <label class="ef-topic-label" for="__ef_topic__">Report title</label>
+                  <input class="ef-topic-input" id="__ef_topic__" type="text" value="${escapeHtml(opts.defaultIssueTopic)}">
                 </div>
-                <span class="ef-hint" id="__ef_scope_hint__"></span>
+                <div class="ef-type-toggle">
+                  <input type="radio" name="__ef_type__" id="__ef_type_bug__" value="bug">
+                  <label for="__ef_type_bug__">🐛 Bug</label>
+                  <input type="radio" name="__ef_type__" id="__ef_type_enh__" value="enhancement" checked>
+                  <label for="__ef_type_enh__">✨ Enhancement</label>
+                </div>
+                <div class="ef-intent">
+                  <div class="ef-intent-row">
+                    <span class="ef-intent-label">Action</span>
+                    <div class="ef-chips" id="__ef_action__"></div>
+                  </div>
+                  ${expectedRowHTML}
+                  <div class="ef-intent-row">
+                    <span class="ef-intent-label">Scope</span>
+                    <div class="ef-chips" id="__ef_scope__">
+                      <button type="button" class="ef-chip ef-chip-on" data-breadth="element" aria-pressed="true">This element</button>
+                      <button type="button" class="ef-chip" data-breadth="region" aria-pressed="false">Region</button>
+                      <button type="button" class="ef-chip" data-breadth="multi" aria-pressed="false">Multiple</button>
+                    </div>
+                    <span class="ef-hint" id="__ef_scope_hint__"></span>
+                  </div>
+                </div>
+                <textarea id="__ef_comment__" placeholder="Anything else? (optional)"></textarea>
+                <div class="ef-error" id="__ef_err__"></div>
+              </div>
+              <div class="ef-issue-section">
+                <details class="ef-meta-toggle" id="__ef_issue_context__">
+                  <summary>Context that will be attached</summary>
+                  <div class="ef-meta-grid">${metaHTML}</div>
+                </details>
+                <details class="ef-meta-toggle" id="__ef_issue_html__">
+                  <summary>Element HTML</summary>
+                  ${outerHTML
+                    ? `<pre class="ef-html-preview">${highlightHTML(outerHTML)}</pre>`
+                    : `<div class="ef-changes-empty">No element HTML captured.</div>`}
+                </details>
+                ${buildSessionHistoryHTML(ctx)}
               </div>
             </div>
-            <textarea id="__ef_comment__" placeholder="Anything else? (optional)"></textarea>
-            <div class="ef-error" id="__ef_err__"></div>
+            <div class="ef-issue-foot">
+              <button type="button" class="ef-btn-secondary" id="__ef_issue_cancel__">Cancel</button>
+              <button type="button" class="ef-btn-secondary" id="__ef_edit_element__" aria-label="Edit element styles">Edit element</button>
+              <div class="ef-footer-spacer"></div>
+              <label class="ef-memory-opt" id="__ef_memory_opt__" ${memoryAsk ? "" : "hidden"}>
+                <input type="checkbox" id="__ef_memory_sync__" checked />
+                <span>Send to Memory</span>
+              </label>
+              <button type="button" class="ef-btn-secondary" id="__ef_submit__">Save</button>
+              <button type="button" class="ef-btn-primary" id="__ef_issue_submit__">Create issue</button>
+            </div>
           </div>
-          <div class="ef-issue-section">
-            <details class="ef-meta-toggle" id="__ef_issue_context__">
-              <summary>Context that will be attached</summary>
-              <div class="ef-meta-grid">${metaHTML}</div>
-            </details>
-            <details class="ef-meta-toggle" id="__ef_issue_html__">
-              <summary>Element HTML</summary>
-              ${outerHTML
-                ? `<pre class="ef-html-preview">${highlightHTML(outerHTML)}</pre>`
-                : `<div class="ef-changes-empty">No element HTML captured.</div>`}
-            </details>
-            ${buildSessionHistoryHTML(ctx)}
+          <div class="ef-design" id="__ef_design__" hidden>
+            ${componentPickerHTML}
+            ${targetStripHTML}
+            <div class="ef-body">
+              <div class="ef-targets" id="__ef_targets__"></div>
+              <div class="ef-design-body">
+                <div id="__ef_style_editor__"></div>
+              </div>
+            </div>
+            <div class="ef-footer">
+              <div class="ef-footer-spacer"></div>
+              <button type="button" class="ef-btn-secondary" id="__ef_cancel__">Cancel</button>
+              <button type="button" class="ef-btn-primary" id="__ef_back_to_issue__">Back to feedback</button>
+            </div>
           </div>
-        </div>
-        <div class="ef-issue-foot">
-          <button type="button" class="ef-btn-secondary" id="__ef_issue_cancel__">Cancel</button>
-          <button type="button" class="ef-btn-secondary" id="__ef_edit_element_foot__" aria-label="Edit element styles">Edit element</button>
-          <div class="ef-footer-spacer"></div>
-          <label class="ef-memory-opt" id="__ef_memory_opt__" ${memoryAsk ? "" : "hidden"}>
-            <input type="checkbox" id="__ef_memory_sync__" checked />
-            <span>Send to Memory</span>
-          </label>
-          <button type="button" class="ef-btn-secondary" id="__ef_submit__">Save</button>
-          <button type="button" class="ef-btn-primary" id="__ef_issue_submit__">Create issue</button>
-        </div>
+        </section>
+        <section class="ef-panel" id="__ef_panel_changes__" role="tabpanel" aria-labelledby="__ef_tab_changes__" hidden>
+          <div class="ef-changes" id="__ef_changes__"></div>
+        </section>
+        ${chatEnabled
+          ? `<section class="ef-panel" id="__ef_panel_chat__" role="tabpanel" aria-labelledby="__ef_tab_chat__" hidden>
+               <div class="ef-chat" id="__ef_chat__"></div>
+             </section>`
+          : ""}
       </div>
     </div>
   `;
 
   const card = dialog.querySelector<HTMLElement>(".ef-card")!;
   // Remember where the reporter came from so closeDialog() restores focus.
-  // (View swaps pass preserveFocusReturn so they never overwrite this.)
+  // (Tab/panel swaps pass preserveFocusReturn so they never overwrite this.)
   focusReturnEl = (document.activeElement as HTMLElement | null) ?? null;
 
   // ── Dock toggle ─────────────────────────────────────────────────────────────
@@ -2305,7 +2592,6 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     docked = !docked;
     writeDockedPref(docked);
     renderDockBtn();
-    if (view !== "edit") return;
     applyDockState(card);
     // Re-arm the trap to match the new mode (docked = non-modal) but leave
     // focus on the toggle the user just pressed.
@@ -2323,44 +2609,24 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   const backToIssueBtn = dialog.querySelector<HTMLButtonElement>("#__ef_back_to_issue__")!;
   const errDiv = dialog.querySelector<HTMLElement>("#__ef_err__")!;
 
-  // ── Both surfaces live in the same root; only attributes swap ───────────────
-  const modal = dialog.querySelector<HTMLElement>("#__ef_issue_modal__")!;
-  const modalCard = dialog.querySelector<HTMLElement>(".ef-issue-card")!;
+  // ── One pane, three panels; only attributes/hidden states swap ──────────────
+  const reportEl = dialog.querySelector<HTMLElement>("#__ef_report__")!;
+  const designEl = dialog.querySelector<HTMLElement>("#__ef_design__")!;
   const issueCancelBtn = dialog.querySelector<HTMLButtonElement>("#__ef_issue_cancel__")!;
   const issueSubmitBtn = dialog.querySelector<HTMLButtonElement>("#__ef_issue_submit__")!;
   const memorySyncInput = dialog.querySelector<HTMLInputElement>("#__ef_memory_sync__");
   const memorySyncRequested = (): boolean => memoryAsk && !!memorySyncInput?.checked;
   const editBtn = dialog.querySelector<HTMLButtonElement>("#__ef_edit_element__")!;
-  const editFootBtn = dialog.querySelector<HTMLButtonElement>("#__ef_edit_element_foot__")!;
   const changeChip = dialog.querySelector<HTMLElement>("#__ef_change_count__")!;
   const editorSelector = dialog.querySelector<HTMLElement>("#__ef_editor_selector__")!;
 
-  // Tab containment + Escape for the modal layer. Capture phase so it runs
-  // ahead of the editor's own handlers. Only bound while the submit view is up.
-  const modalKey = (e: KeyboardEvent): void => {
-    // The auth layer owns the keyboard while it is up.
-    if (authLayerOpen) return;
-    if (e.key === "Escape") {
-      e.preventDefault();
-      e.stopPropagation();
-      // The issue card is the whole report: Escape cancels it.
-      cancelReport();
-      return;
-    }
-    if (e.key !== "Tab") return;
-    const items = getFocusable(modalCard);
-    if (items.length === 0) { e.preventDefault(); modalCard.focus(); return; }
-    const first = items[0];
-    const last = items[items.length - 1];
-    const active = document.activeElement as HTMLElement | null;
-    if (!active || active === modalCard || !modalCard.contains(active)) {
-      e.preventDefault();
-      (e.shiftKey ? last : first).focus();
-      return;
-    }
-    if (e.shiftKey && active === first) { e.preventDefault(); last.focus(); }
-    else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
-  };
+  type TabKey = "feedback" | "changes" | "chat";
+  let tab: TabKey = "feedback";
+  let designMode = false;
+
+  const tabButtons = Array.from(dialog.querySelectorAll<HTMLButtonElement>(".ef-tab"));
+  const panelFor = (key: TabKey): HTMLElement | null =>
+    dialog.querySelector<HTMLElement>(`#__ef_panel_${key}__`);
 
   /** Live count of style edits that will ride along with this report. */
   const renderChangeCount = (): void => {
@@ -2369,56 +2635,98 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     changeChip.textContent = n === 0 ? "" : label;
     changeChip.hidden = n === 0;
     changeChip.title = n === 0 ? "" : `${label} included with this report`;
+
+    // The Changes tab carries the same count as a badge.
+    const badge = dialog.querySelector<HTMLElement>("#__ef_count_changes__");
+    if (badge) {
+      badge.textContent = String(n);
+      badge.hidden = n === 0;
+    }
+  };
+
+  /** Filled in once the chat panel mounts (it needs the live change list). */
+  let refreshChat = (): void => {};
+
+  /**
+   * Switch the visible tab. Panels stay mounted, so typed text, chip state and
+   * live style edits survive a switch in either direction.
+   */
+  const setTab = (next: TabKey, focusPanel = false): void => {
+    if (tab === next) return;
+    tab = next;
+    dialog.dataset.tab = next;
+    for (const btn of tabButtons) {
+      const on = btn.dataset.tab === next;
+      btn.setAttribute("aria-selected", on ? "true" : "false");
+      btn.tabIndex = on ? 0 : -1;
+    }
+    for (const btn of tabButtons) {
+      const panel = panelFor(btn.dataset.tab as TabKey);
+      if (panel) panel.hidden = btn.dataset.tab !== next;
+    }
+    if (next === "chat") refreshChat();
+    // Page picking follows the Feedback tab: reviewing changes or talking to
+    // the agent must not add elements when the reporter clicks the page.
+    if (next !== "feedback") opts.onEditingChange?.("submit");
+    else if (designMode) opts.onEditingChange?.("edit");
+    // The rail stays reserved across tabs; focus follows only if asked.
+    if (focusPanel) {
+      const panel = panelFor(next);
+      panel?.querySelector<HTMLElement>(
+        "textarea:not([disabled]), input:not([disabled]), button:not([disabled])"
+      )?.focus();
+    }
   };
 
   /**
-   * Swap between the issue card and the style editor. Nothing inside either
-   * surface is re-rendered, so typed text, chips and live edits survive.
+   * Toggle the Feedback tab between the report form and the live style editor.
+   * Nothing is re-rendered, so typed text, chips and live edits survive.
    */
-  const setView = (next: "submit" | "edit"): void => {
-    view = next;
-    dialog.dataset.view = next;
-
-    if (next === "submit") {
-      // The editor trap goes first: the issue card owns Tab while it is up.
-      deactivateFocusTrap();
-      // Bring the modal online before moving focus into it.
-      modal.hidden = false;
-      modal.removeAttribute("aria-hidden");
-      modal.toggleAttribute("inert", false);
-      issueModalOpen = true;
-      // The issue card is never docked and never reflows the host page.
-      applyDockState(card);
-      modalCard.focus();
-      // Only now take the editor out of the accessibility tree.
-      card.setAttribute("aria-hidden", "true");
-      card.toggleAttribute("inert", true);
-      card.hidden = true;
-      document.addEventListener("keydown", modalKey, true);
-      renderChangeCount();
-    } else {
-      document.removeEventListener("keydown", modalKey, true);
-      issueModalOpen = false;
-      // Bring the editor online before the modal leaves the a11y tree.
-      card.hidden = false;
-      card.removeAttribute("aria-hidden");
-      card.toggleAttribute("inert", false);
-      applyDockState(card);
-      // Docked = non-modal (page stays interactive); centered = modal + trap.
-      activateDialog(card, { modal: !effectiveDock(), preserveFocusReturn: true });
-      modal.setAttribute("aria-hidden", "true");
-      modal.toggleAttribute("inert", true);
-      modal.hidden = true;
+  const setDesign = (on: boolean): void => {
+    designMode = on;
+    dialog.dataset.design = on ? "true" : "false";
+    reportEl.hidden = on;
+    designEl.hidden = !on;
+    applyDockState(card);
+    // Docked = non-modal (page stays interactive); centered = modal + trap.
+    activateDialog(card, {
+      modal: !effectiveDock(),
+      preserveFocusReturn: true,
+      focus: false,
+    });
+    if (on) {
+      renderSelection();
       renderEditorSelector();
+    } else if (isPickMode()) {
+      setPickMode(false);
     }
-    opts.onEditingChange?.(next);
+    opts.onEditingChange?.(on ? "edit" : "submit");
   };
 
-  /** Return to the issue card, keeping every typed field and pending edit. */
+  // Tab bar: click + roving-tabindex arrow keys.
+  tabButtons.forEach((btn) => {
+    btn.addEventListener("click", () => setTab(btn.dataset.tab as TabKey, true));
+    btn.addEventListener("keydown", (e) => {
+      const keys = ["ArrowLeft", "ArrowRight", "Home", "End"];
+      if (!keys.includes(e.key)) return;
+      e.preventDefault();
+      const idx = tabButtons.indexOf(btn);
+      let nextIdx = idx;
+      if (e.key === "ArrowLeft") nextIdx = (idx - 1 + tabButtons.length) % tabButtons.length;
+      else if (e.key === "ArrowRight") nextIdx = (idx + 1) % tabButtons.length;
+      else if (e.key === "Home") nextIdx = 0;
+      else if (e.key === "End") nextIdx = tabButtons.length - 1;
+      const target = tabButtons[nextIdx];
+      setTab(target.dataset.tab as TabKey);
+      target.focus();
+    });
+  });
+
+  /** Return to the report form, keeping every typed field and pending edit. */
   const backToSubmit = (): void => {
-    if (view !== "edit") return;
+    if (!designMode) return;
     if (isPickMode()) setPickMode(false);
-    setView("submit");
+    setDesign(false);
     // Round trip: land back on the button that opened the editor.
     editBtn.focus();
   };
@@ -2784,6 +3092,9 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   let actionTouched = false;
   let expected = "";
   let breadth: ScopeBreadth = "element";
+  // "Actual" has no free-text field in the form: the UI infers it. A chat
+  // proposal may supply one, and it rides along in the intent when it does.
+  let agentActual = "";
 
   const renderActions = () => {
     actionWrap.innerHTML = INTENT_ACTIONS.map((a) =>
@@ -2868,6 +3179,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
       kind: getType(),
       action,
       expected: expected.trim() || undefined,
+      actual: agentActual.trim() || undefined,
       scope: {
         // Multi-target editing is a genuine multi selection; otherwise honour
         // the user's own scope chip.
@@ -2901,16 +3213,165 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     return parts.join(" — ");
   };
 
+  // ── Chat tab (opt-in): a report composer, not an editor ────────────────────
+  // The agent fills the same fields the form already has. It never touches the
+  // page: this module's edit primitives (applyTokenToTarget, setTextForTarget,
+  // commitChanges) are not reachable from here, and the transcript is local.
+
+  /** Selector whose transcript this pane is showing. */
+  const chatKey = (): string => currentTargets()[0]?.selector ?? opts.selector;
+  let chatTurns: ChatTurn[] = [];
+  let chatLoadedFor = "";
+  let chatPanel: ChatPanel | null = null;
+  let chatLastCount = -1;
+
+  /** Redacted, field-level context sent with each turn. */
+  const chatContext = (): Record<string, unknown> => {
+    const t = currentTargets()[0];
+    const el: Element | null = t?.el ?? null;
+    const computed: Record<string, string> = {};
+    if (el) {
+      const cs = getComputedStyle(el);
+      for (const key of [
+        "display",
+        "position",
+        "color",
+        "backgroundColor",
+        "fontSize",
+        "fontWeight",
+        "padding",
+        "margin",
+        "borderRadius",
+      ]) {
+        const css = key.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
+        const v = cs.getPropertyValue(css);
+        if (v) computed[key] = v;
+      }
+    }
+    const raw = (opts.context ?? {}) as Record<string, unknown>;
+    const src = raw.source as Record<string, unknown> | undefined;
+    return buildChatContext({
+      selector: t?.selector ?? opts.selector,
+      url: typeof raw.url === "string" ? raw.url : window.location.href,
+      tagName: el?.tagName,
+      dataComponent:
+        el?.closest("[data-component]")?.getAttribute("data-component") ?? undefined,
+      source: src
+        ? {
+            file: typeof src.file === "string" ? src.file : undefined,
+            line: typeof src.line === "number" ? src.line : undefined,
+            component: typeof src.component === "string" ? src.component : undefined,
+            confidence: typeof src.confidence === "string" ? src.confidence : undefined,
+          }
+        : undefined,
+      computedStyles: computed,
+      changes: (t ? getChangesFor(t.el) : []).map((c) => ({
+        group: c.group,
+        before: c.before,
+        after: c.after,
+      })),
+      targetCount: currentTargets().length,
+    });
+  };
+
+  /**
+   * Apply a validated proposal to the form and return the reporter to it.
+   * Nothing is submitted: the reporter reviews, edits and presses Save or
+   * Create issue themselves.
+   */
+  const applyReport = (r: ReportSuggestion): void => {
+    if (designMode) setDesign(false);
+    setTab("feedback");
+
+    const radio = dialog.querySelector<HTMLInputElement>(
+      `input[name="__ef_type__"][value="${r.type}"]`
+    );
+    if (radio) radio.checked = true;
+
+    action = r.action;
+    actionTouched = true;
+    renderActions();
+
+    if (r.expected !== undefined) {
+      expected = r.expected;
+      // The agent's sentence is free text; drop any chip that no longer matches.
+      expectedWrap
+        ?.querySelectorAll<HTMLButtonElement>("[data-expected]")
+        .forEach((b) => {
+          b.classList.remove("ef-chip-on");
+          b.setAttribute("aria-pressed", "false");
+        });
+    }
+    agentActual = r.actual ?? "";
+    if (r.comment !== undefined) textarea.value = r.comment;
+    if (r.title !== undefined && topicInput) topicInput.value = r.title;
+    if (r.scope?.breadth) {
+      breadth = r.scope.breadth;
+      scopeWrap.querySelectorAll<HTMLButtonElement>("[data-breadth]").forEach((b) => {
+        const on = b.dataset.breadth === breadth;
+        b.classList.toggle("ef-chip-on", on);
+        b.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+      renderScopeHint();
+    }
+
+    errDiv.textContent = "";
+    scheduleDraftSave();
+    showToast("Report filled from chat");
+    textarea.focus();
+  };
+
+  const mountChatPanel = (): void => {
+    if (!chatEnabled || !opts.chat) return;
+    const host = dialog.querySelector<HTMLElement>("#__ef_chat__");
+    if (!host) return;
+    chatLoadedFor = chatKey();
+    chatTurns = loadChat(chatLoadedFor);
+    chatPanel = mountChat(host, {
+      api: opts.chat.api,
+      repo: opts.repo,
+      ...(opts.chat.agent ? { agent: opts.chat.agent } : {}),
+      getContext: chatContext,
+      getSummary: () => ({
+        selector: currentTargets()[0]?.selector ?? opts.selector,
+        pendingChanges: allChanges().length,
+      }),
+      getTurns: () => chatTurns,
+      setTurns: (turns) => {
+        chatTurns = turns;
+        saveChat(chatLoadedFor, turns);
+      },
+      onUseReport: applyReport,
+    });
+    chatLastCount = allChanges().length;
+  };
+
+  refreshChat = () => {
+    if (!chatEnabled) return;
+    // A different element has its own conversation: remount rather than
+    // carrying a transcript across a context boundary.
+    if (chatPanel && chatKey() !== chatLoadedFor) {
+      chatPanel.destroy();
+      chatPanel = null;
+      mountChatPanel();
+      return;
+    }
+    if (!chatPanel || chatPanel.isBusy()) return;
+    const n = allChanges().length;
+    if (n === chatLastCount) return;
+    chatLastCount = n;
+    chatPanel.render();
+  };
+
   // No autofocus: the intent chips are the primary surface, and focusing the
   // (now last) textarea would scroll them out of view and pop the mobile keyboard.
 
-  // Escape follows the current view: the issue card cancels the whole report,
-  // the editor steps back to the card, and an unfinished page pick just ends.
+  // Escape steps back one level: an unfinished page pick ends, another tab
+  // returns to Feedback, the style editor returns to the report, and only the
+  // report itself (the whole thing) cancels.
   const onKey = (e: KeyboardEvent) => {
-    // The issue card owns Escape while it is up (its capture handler also stops
-    // propagation, but guard here too in case of ordering). The auth layer
-    // likewise owns Escape.
-    if (issueModalOpen || authLayerOpen) return;
+    // The auth layer owns Escape while it is up.
+    if (authLayerOpen) return;
     if (e.key !== "Escape") return;
     if (awaitingPick) {
       // Cancel the pick but keep the dialog: the selection subscription
@@ -2918,8 +3379,12 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
       setPickMode(false);
       return;
     }
-    if (view === "edit") {
-      // Keep every pending edit; just return to the issue card.
+    if (tab !== "feedback") {
+      setTab("feedback");
+      return;
+    }
+    if (designMode) {
+      // Keep every pending edit; just return to the report.
       backToSubmit();
       return;
     }
@@ -2942,12 +3407,9 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     backToSubmit();
   });
 
-  // Issue card: "Edit element" opens the style editor (header + footer).
+  // Report panel: "Edit element" opens the style editor for the target.
   editBtn.addEventListener("click", () => {
-    setView("edit");
-  });
-  editFootBtn.addEventListener("click", () => {
-    setView("edit");
+    setDesign(true);
   });
 
   // Issue card: Cancel throws away the whole report, same as the editor's.
@@ -3079,8 +3541,8 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     prevTargetCount = count;
     renderSelection();
     renderScopeHint();
-    // Keep the issue card's edit count live while the editor is open.
-    if (view === "edit") renderChangeCount();
+    // Keep the pane's edit count live whatever tab is showing.
+    renderChangeCount();
     // A pick just finished: show the editor again and restore modal focus.
     if (awaitingPick && !isPickMode()) {
       awaitingPick = false;
@@ -3108,7 +3570,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     const dockedNow = effectiveDock();
     const changed = dockedNow !== lastEffectiveDock;
     lastEffectiveDock = dockedNow;
-    if (changed && view === "edit" && !awaitingPick) {
+    if (changed && !awaitingPick) {
       applyDockState(card);
       activateDialog(card, { modal: !dockedNow, preserveFocusReturn: true, focus: false });
       return;
@@ -3122,27 +3584,39 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     unsubSelection();
     unsubHighlight();
     unsubActionSeed();
+    chatPanel?.destroy();
+    chatPanel = null;
     setHighlight(null);
     endDragVisual();
     window.removeEventListener("resize", onResize);
-    document.removeEventListener("keydown", modalKey, true);
     deactivateFocusTrap();
   };
 
-  // Backdrop click cancels the report — centered editor only. The docked rail
-  // and the submit view are click-through at the root (pointer-events: none),
-  // so this never fires while docked.
+  // Backdrop click closes the centered pane. It never fires while docked (the
+  // rail is click-through at the root), and it cancels only from the style
+  // editor — a typed report is never discarded by a stray click.
   dialog.addEventListener("click", (e) => {
-    if (e.target === dialog && view === "edit" && !effectiveDock() && !awaitingPick) {
+    if (e.target === dialog && designMode && !effectiveDock() && !awaitingPick) {
       cancelReport();
     }
   });
 
   // Restore the persisted draft exactly once per open. Doing it here (instead of
-  // on every view swap) keeps newer text intact when returning from the editor.
+  // on every tab switch) keeps newer text intact when returning from the editor.
   restoreDraft();
   renderChangeCount();
-  setView("submit");
+  // Open on the report tab, form mode. The rail is installed before the first
+  // paint so a docked pane never flashes centered.
+  dialog.dataset.tab = "feedback";
+  dialog.dataset.design = "false";
+  reportEl.hidden = false;
+  designEl.hidden = true;
+  applyDockState(card);
+  activateDialog(card, { modal: !effectiveDock(), preserveFocusReturn: true });
+  renderEditorSelector();
+  mountChatPanel();
+  // The report form is showing: the page must not be pickable yet.
+  opts.onEditingChange?.("submit");
 }
 
 // ── Auth layer (overlay, not innerHTML replacement) ──────────────────────────
@@ -3317,8 +3791,7 @@ export function closeDialog(): void {
   root.classList.remove("ef-dock-active");
   root.style.removeProperty("--ef-dock-w");
 
-  // Drop the issue-modal keyboard state so a later reopen starts clean.
-  issueModalOpen = false;
+  // Drop the auth keyboard state so a later reopen starts clean.
   authLayerOpen = false;
 
   // Prompt layers still waiting for input must resolve rather than leak their

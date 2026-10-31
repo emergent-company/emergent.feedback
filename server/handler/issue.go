@@ -870,7 +870,13 @@ func (h *Handler) HandleListIssues(c echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
-	issues, err := h.Store.ListOpenGitHubIssuesByURL(ctx, pageURL)
+	var issues []store.GitHubIssue
+	var err error
+	if pathURLMode(c) {
+		issues, err = h.Store.ListOpenGitHubIssuesByURLPath(ctx, pageURL)
+	} else {
+		issues, err = h.Store.ListOpenGitHubIssuesByURL(ctx, pageURL)
+	}
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to list issues")
 	}

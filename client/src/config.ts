@@ -33,6 +33,18 @@ export interface OverlayConfig {
   /** Explicit URL for the lazy replay bundle. Set via data-replay-src. */
   replaySrc?: string;
   /**
+   * Page-identity mode for badges and feedback. `"exact"` (default) keys
+   * items by the full URL, including the fragment. `"path"` drops the
+   * fragment so `/#how` and `/` share the same badges. Set via
+   * data-badge-url-mode.
+   */
+  badgeUrlMode?: "exact" | "path";
+  /**
+   * Link target for the top-bar "Dashboard" action. Set via
+   * data-dashboard-url. Defaults to `${apiBase}/panel`.
+   */
+  dashboardUrl?: string;
+  /**
    * Opt-in full text masking for replay. When set (data-replay-mask-text), all
    * page text is masked (not just inputs + `[data-fo-redact]` + `.fo-block`).
    * Defaults to false — by default page text IS captured so replays stay useful.
@@ -49,6 +61,14 @@ export interface OverlayConfig {
    * falls back to daisyUI CSS variables read from the host document.
    */
   themeUrl?: string;
+  /**
+   * Opt-in AI chat tab (`data-chat`). The chat is a report composer: it turns a
+   * conversation plus the captured element context into feedback fields. It
+   * never edits the page or the repository. Off by default.
+   */
+  chat: boolean;
+  /** Optional Memory agent name/id hint sent with each chat turn. */
+  chatAgent?: string;
 }
 
 function getScriptTag(): HTMLScriptElement | null {
@@ -103,6 +123,14 @@ export function readConfig(): OverlayConfig {
 
   const themeUrl = tag?.dataset.themeUrl?.trim() || undefined;
 
+  // Opt-in chat tab: presence of data-chat enables it; data-chat="false" disables.
+  const chat = tag?.dataset.chat !== undefined && tag?.dataset.chat !== "false";
+  const chatAgent = tag?.dataset.chatAgent?.trim() || undefined;
+
+  const badgeUrlMode: NonNullable<OverlayConfig["badgeUrlMode"]> =
+    tag?.dataset.badgeUrlMode?.trim().toLowerCase() === "path" ? "path" : "exact";
+  const dashboardUrl = tag?.dataset.dashboardUrl?.trim() || `${apiBase}/panel`;
+
   return {
     apiBase,
     repo,
@@ -119,5 +147,9 @@ export function readConfig(): OverlayConfig {
     replayMaskText,
     theme,
     ...(themeUrl !== undefined ? { themeUrl } : {}),
+    chat,
+    ...(chatAgent !== undefined ? { chatAgent } : {}),
+    badgeUrlMode,
+    dashboardUrl,
   };
 }
