@@ -13,6 +13,7 @@ import (
 	"github.com/emergent-company/emergent.feedback/server/github"
 	"github.com/emergent-company/emergent.feedback/server/store"
 	mcpauth "github.com/modelcontextprotocol/go-sdk/auth"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // newHandlerStore builds a Handler backed by a temp-store.
@@ -40,9 +41,9 @@ func withMCPAuth(t *testing.T, scopes []string, userID string, h http.HandlerFun
 	mw(h).ServeHTTP(rec, req)
 }
 
-func callFeedbackList(t *testing.T, h *Handler, scopes []string, in feedbackListInput) ([]feedbackListItem, error) {
+func callFeedbackList(t *testing.T, h *Handler, scopes []string, in feedbackListInput) (feedbackListOutput, error) {
 	t.Helper()
-	var out []feedbackListItem
+	var out feedbackListOutput
 	var callErr error
 	withMCPAuth(t, scopes, "test-key", func(w http.ResponseWriter, r *http.Request) {
 		_, out, callErr = h.toolFeedbackList(r.Context(), nil, in)
@@ -99,11 +100,11 @@ func TestFeedbackListAllStatusesByDefault(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(out) != 3 {
-		t.Fatalf("items = %d, want 3: %v", len(out), out)
+	if len(out.Feedback) != 3 {
+		t.Fatalf("items = %d, want 3: %v", len(out.Feedback), out)
 	}
 	ids := map[int64]bool{}
-	for _, it := range out {
+	for _, it := range out.Feedback {
 		ids[it.ID] = true
 	}
 	for _, want := range []int64{openF.ID, appliedF.ID, exportedF.ID} {
@@ -132,8 +133,8 @@ func TestFeedbackListStatusFilter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(out) != 1 || out[0].ID != appliedF.ID {
-		t.Fatalf("status filter items = %v, want only applied id %d", out, appliedF.ID)
+	if len(out.Feedback) != 1 || out.Feedback[0].ID != appliedF.ID {
+		t.Fatalf("status filter items = %v, want only applied id %d", out.Feedback, appliedF.ID)
 	}
 }
 
@@ -153,8 +154,8 @@ func TestFeedbackListSinceIncludesUnparseableTimestamp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(out) != 1 || out[0].ID != f.ID {
-		t.Fatalf("unparseable-timestamp item dropped by since filter: %v", out)
+	if len(out.Feedback) != 1 || out.Feedback[0].ID != f.ID {
+		t.Fatalf("unparseable-timestamp item dropped by since filter: %v", out.Feedback)
 	}
 }
 
@@ -170,8 +171,8 @@ func TestFeedbackListSinceDropsOldItems(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(out) != 0 {
-		t.Fatalf("expected 0 items for far-future since, got %d", len(out))
+	if len(out.Feedback) != 0 {
+		t.Fatalf("expected 0 items for far-future since, got %d", len(out.Feedback))
 	}
 }
 
@@ -244,5 +245,53 @@ func TestMCPMarkAppliedRecordsActor(t *testing.T) {
 	}
 	if actor != "test-key" {
 		t.Fatalf("applied event actor = %q, want test-key", actor)
+	}
+}
+
+// TestMCPServerOutputSchemasAreObjects guards a client-side requirement: MCP
+// clients such as OpenCode reject a tools/list result whose outputSchema is not
+// an object. Every advertised tool must declare either no schema or an object
+// schema (see feedbackListOutput).
+func TestMCPServerOutputSchemasAreObjects(t *testing.T) {
+	h, _ := newHandlerStore(t)
+	ctx := context.Background()
+
+	cts, sts := mcp.NewInMemoryTransports()
+	ss, err := h.MCPServer().Connect(ctx, sts, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	defer ss.Close()
+
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "1.0.0"}, nil).Connect(ctx, cts, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	defer cs.Close()
+
+	res, err := cs.ListTools(ctx, nil)
+	if err != nil {
+		t.Fatalf("list tools: %v", err)
+	}
+	if len(res.Tools) == 0 {
+		t.Fatal("no tools advertised")
+	}
+	for _, tool := range res.Tools {
+		if tool.OutputSchema == nil {
+			continue
+		}
+		raw, err := json.Marshal(tool.OutputSchema)
+		if err != nil {
+			t.Fatalf("%s: marshal output schema: %v", tool.Name, err)
+		}
+		var schema struct {
+			Type any `json:"type"`
+		}
+		if err := json.Unmarshal(raw, &schema); err != nil {
+			t.Fatalf("%s: parse output schema: %v", tool.Name, err)
+		}
+		if schema.Type != "object" {
+			t.Errorf("%s: outputSchema.type = %v, want \"object\"", tool.Name, schema.Type)
+		}
 	}
 }

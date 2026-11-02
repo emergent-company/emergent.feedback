@@ -353,7 +353,7 @@ Existing (`server/handler/mcp.go`): `feedback_get_snapshot`, `feedback_get_scree
 
 | Tool | Input | Output | Purpose |
 |---|---|---|---|
-| `feedback_list` | repo?, status?, url?, type?, since? | `[{id, summary, type, status, source_confidence, issue_url}]` | cheap discovery, sorted by `source_confidence` desc |
+| `feedback_list` | repo?, status?, url?, type?, since? | `{feedback: [{id, summary, type, status, source_confidence, issue_url}]}` | cheap discovery, sorted by `source_confidence` desc |
 | `feedback_get` | feedback_id, response_format? | full envelope JSON | the context bundle (replaces piecemeal get_context) |
 | `feedback_mark_applied` | feedback_id, summary? | `{status:"applied"}` | record the edit |
 | `feedback_verify` | feedback_id | `{status, contract_result: green\|amber\|red, detail}` | run the verification contract |

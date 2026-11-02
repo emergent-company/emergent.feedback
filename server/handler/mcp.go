@@ -279,17 +279,24 @@ type feedbackListItem struct {
 // toolFeedbackList lists feedback for the key's repo scope via a lightweight
 // store query (no screenshot/snapshot blobs) across all lifecycle statuses,
 // then sorts by source confidence descending (exact first).
-func (h *Handler) toolFeedbackList(ctx context.Context, _ *mcp.CallToolRequest, in feedbackListInput) (*mcp.CallToolResult, []feedbackListItem, error) {
+// feedbackListOutput wraps the list in an object: MCP clients (including
+// OpenCode) reject a bare array output schema, so the tool output is an object
+// with a "feedback" array, mirroring feedback_list_for_issue.
+type feedbackListOutput struct {
+	Feedback []feedbackListItem `json:"feedback"`
+}
+
+func (h *Handler) toolFeedbackList(ctx context.Context, _ *mcp.CallToolRequest, in feedbackListInput) (*mcp.CallToolResult, feedbackListOutput, error) {
 	ti := auth.TokenInfoFromContext(ctx)
 	if ti == nil {
-		return nil, nil, fmt.Errorf("unauthenticated")
+		return nil, feedbackListOutput{}, fmt.Errorf("unauthenticated")
 	}
 
 	var repos []string
 	wildcard := false
 	if in.Repo != "" {
 		if !repoInScope(in.Repo, ti.Scopes) {
-			return nil, nil, fmt.Errorf("repo %s not in key scope", in.Repo)
+			return nil, feedbackListOutput{}, fmt.Errorf("repo %s not in key scope", in.Repo)
 		}
 		repos = []string{in.Repo}
 	} else {
@@ -307,14 +314,14 @@ func (h *Handler) toolFeedbackList(ctx context.Context, _ *mcp.CallToolRequest, 
 		items, err = h.Store.ListLite(ctx, repos, in.Status)
 	}
 	if err != nil {
-		return nil, nil, err
+		return nil, feedbackListOutput{}, err
 	}
 
 	var since time.Time
 	if in.Since != "" {
 		since, err = time.Parse(time.RFC3339, in.Since)
 		if err != nil {
-			return nil, nil, fmt.Errorf("invalid since: %v", err)
+			return nil, feedbackListOutput{}, fmt.Errorf("invalid since: %v", err)
 		}
 	}
 
@@ -346,7 +353,7 @@ func (h *Handler) toolFeedbackList(ctx context.Context, _ *mcp.CallToolRequest, 
 		return confidenceRank(out[i].SourceConfidence) > confidenceRank(out[j].SourceConfidence)
 	})
 
-	return nil, out, nil
+	return nil, feedbackListOutput{Feedback: out}, nil
 }
 
 type markInput struct {

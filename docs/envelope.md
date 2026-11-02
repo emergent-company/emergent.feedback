@@ -221,7 +221,7 @@ state** — freshly-created (`open`) items are readable/verifiable/markable.
 
 | Tool | Input | Output |
 |---|---|---|
-| `feedback_list` | `{ repo?, status?, type?, since? (RFC3339) }` | `[{ id, summary, type, status, source_confidence, issue_url }]`, sorted by `source_confidence` desc (exact first) |
+| `feedback_list` | `{ repo?, status?, type?, since? (RFC3339) }` | `{ feedback: [{ id, summary, type, status, source_confidence, issue_url }] }`, sorted by `source_confidence` desc (exact first) |
 | `feedback_get` | `{ feedback_id, response_format? = "concise" \| "detailed" }` | envelope (concise or full) |
 | `feedback_verify` | `{ feedback_id }` | `{ status, contract, last_result, last_detail }` (+ text instruction when the contract is `human`) |
 | `feedback_mark_applied` | `{ feedback_id, summary? }` | `{ id, status: "applied" }` |
