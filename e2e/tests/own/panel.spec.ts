@@ -48,4 +48,23 @@ test.describe("panel — signed in", () => {
     await expect(page.locator("#app")).toBeVisible();
     await expect(page.locator("#user-login")).toHaveText(TEST_USER.login);
   });
+
+  test("dogfoods the overlay: navbar button picks panel elements", async ({ page }) => {
+    await page.goto("/panel");
+    await expect(page.locator("#app")).toBeVisible();
+
+    // The overlay bundle is installed on the panel itself, and the navbar
+    // button enters picking mode without the Alt+Shift hotkey.
+    await expect(page.locator('script[src="/emergent-feedback.js"]')).toHaveCount(1);
+    await page.waitForFunction(
+      () => !!(window as unknown as { EmergentFeedback?: unknown }).EmergentFeedback,
+    );
+    await page.locator("#panel-feedback").click();
+    await expect(page.locator("#__ef_indicator__")).toBeVisible();
+
+    // Picking a dashboard element opens the pane with the shared session.
+    await page.locator("#overview h1").click();
+    await expect(page.locator("#__ef_report__")).toBeVisible();
+    await expect(page.locator("#__ef_dialog__ .ef-user-pill")).toContainText(TEST_USER.login);
+  });
 });

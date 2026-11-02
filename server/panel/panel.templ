@@ -140,6 +140,20 @@ templ panelSpotlightTrigger() {
 templ panelNavbar() {
 	<div class="bg-base-100 border-base-content/5 z-10 h-14 shrink-0 border-b">
 		@layout.Navbar("emergent.feedback", panelSpotlightTrigger()) {
+		@ui.Button(ui.ButtonProps{
+			Type:      ui.ButtonTypeButton,
+			Variant:   ui.ButtonGhost,
+			Size:      ui.ButtonSM,
+			Shape:     ui.ButtonShapeCircle,
+			Icon:      "lucide--message-square",
+			AriaLabel: "Send feedback",
+			Attrs: templ.Attributes{
+				"id":    "panel-feedback",
+				"title": "Send feedback",
+				// The overlay bundle loads async; ignore clicks until it is ready.
+				"onclick": "window.EmergentFeedback && window.EmergentFeedback.start()",
+			},
+		})
 		@theme.Toggle()
 		<span id="user-login" class="hidden max-w-[10rem] truncate text-sm font-medium sm:block"></span>
 		@ui.Dropdown(ui.DropdownEnd, templ.Attributes{"data-testid": "account-menu"}) {
@@ -219,6 +233,10 @@ templ panelShell(title string, active string) {
 		@ui.ToastScript()
 		@panelScript()
 		<script src="/static/js/htmx.js"></script>
+		<!-- Dogfood: the overlay runs on the panel itself so dashboard feedback
+		     lands in the same repo. Same-origin API, and the panel and overlay
+		     share the __ef_token__ session. -->
+		<script src="/emergent-feedback.js" data-api="" data-repo="emergent-company/emergent.feedback" data-label="feedback" async></script>
 	</body>
 	</html>
 }
