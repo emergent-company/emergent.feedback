@@ -232,8 +232,10 @@ repository admins can connect, change the mode, test, or disconnect it. Use
 project on the consent screen), or expand **Advanced** to paste a
 project-scoped `emt_…` token. Each repository has a submit mode:
 
-- **Ask** (default) — the feedback dialog shows a **Send to Memory** checkbox,
-  so each reporter decides per report.
+- **Ask** (default) — the feedback dialog shows a **GitHub / Memory**
+  destination dropdown (GitHub is the default; the last choice is remembered),
+  so each reporter decides per report whether to create a GitHub issue or send
+  the report to the connected Memory project.
 - **Auto** — every report is mirrored automatically.
 - **Off** — keep the connection but stop syncing.
 

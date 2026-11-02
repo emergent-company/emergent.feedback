@@ -76,6 +76,10 @@ import {
 const DIALOG_ID = "__ef_dialog__";
 const STYLE_ID = "__ef_styles__";
 const DOCKED_KEY = "__ef_dialog_docked__";
+const DESTINATION_KEY = "__ef_report_destination__";
+
+/** Where the primary report action sends the feedback. */
+type ReportDestination = "github" | "memory";
 
 /** Persisted dock preference. Defaults to docked (true). */
 function readDockedPref(): boolean {
@@ -91,6 +95,28 @@ function readDockedPref(): boolean {
 function writeDockedPref(docked: boolean): void {
   try {
     localStorage.setItem(DOCKED_KEY, docked ? "true" : "false");
+  } catch {
+    // Storage may be unavailable (private mode / sandboxed iframe).
+  }
+}
+
+/**
+ * Persisted report destination. Memory is only a valid remembered value while
+ * the repository's destination is in Ask mode; otherwise fall back to GitHub.
+ */
+function readDestinationPref(allowMemory: boolean): ReportDestination {
+  try {
+    const v = localStorage.getItem(DESTINATION_KEY);
+    if (v === "memory" && allowMemory) return "memory";
+  } catch {
+    // Storage may be unavailable (private mode / sandboxed iframe).
+  }
+  return "github";
+}
+
+function writeDestinationPref(destination: ReportDestination): void {
+  try {
+    localStorage.setItem(DESTINATION_KEY, destination);
   } catch {
     // Storage may be unavailable (private mode / sandboxed iframe).
   }
@@ -2030,21 +2056,58 @@ function injectStyles(): void {
       padding-left: 10px;
       padding-right: 10px;
     }
-    #__ef_dialog__ .ef-memory-opt {
+    #__ef_dialog__ .ef-destination {
+      position: relative;
+      display: inline-flex;
+      margin-right: 2px;
+    }
+    #__ef_dialog__ .ef-destination[hidden] { display: none; }
+    #__ef_dialog__ .ef-destination-trigger {
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      margin-right: 2px;
-      font-size: 12px;
-      color: var(--ef-muted);
-      cursor: pointer;
-      user-select: none;
-      white-space: nowrap;
+      padding-right: 10px;
     }
-    #__ef_dialog__ .ef-memory-opt[hidden] { display: none; }
-    #__ef_dialog__ .ef-memory-opt input {
-      accent-color: var(--ef-primary);
+    #__ef_dialog__ .ef-destination-caret {
+      font-size: 10px;
+      line-height: 1;
+      color: var(--ef-muted);
+    }
+    #__ef_dialog__ .ef-destination-menu {
+      position: absolute;
+      left: 0;
+      bottom: calc(100% + 6px);
+      z-index: 20;
+      min-width: 148px;
+      margin: 0;
+      padding: 4px;
+      list-style: none;
+      border: 1px solid var(--ef-border);
+      border-radius: 10px;
+      background: var(--ef-card-bg);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+    }
+    #__ef_dialog__ .ef-destination-menu[hidden] { display: none; }
+    #__ef_dialog__ .ef-destination-menu [role="option"] {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 8px 10px;
+      border-radius: 7px;
+      color: var(--ef-text);
+      font-size: 13px;
       cursor: pointer;
+      outline: none;
+    }
+    #__ef_dialog__ .ef-destination-menu [role="option"]:hover,
+    #__ef_dialog__ .ef-destination-menu [role="option"]:focus-visible {
+      background: var(--ef-hover-bg);
+    }
+    #__ef_dialog__ .ef-destination-menu [role="option"][aria-selected="true"]::after {
+      content: "✓";
+      color: var(--ef-primary);
+      font-weight: 600;
     }
     @media (max-width: 520px) {
       #__ef_dialog__ .ef-issue-modal { padding: 0; }
@@ -2466,6 +2529,15 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   // without a control; "off"/absent shows nothing.
   const memoryAsk = !!opts.memory && opts.memory.connected && opts.memory.mode === "ask";
 
+  // The dropdown is the single choice for where the primary action sends the
+  // report: GitHub (issue export) or Memory (the connected destination). The
+  // last choice is remembered per browser; Memory is only offered in Ask mode.
+  let destination: ReportDestination = readDestinationPref(memoryAsk);
+  const destinationLabel = (value: ReportDestination): string =>
+    value === "memory" ? "Memory" : "GitHub";
+  const primaryLabel = (): string =>
+    destination === "memory" ? "Send to Memory" : "Create issue";
+
   // The Chat tab is opt-in per host (`data-chat`). Without it the pane keeps the
   // two tabs it always had: Feedback and Changes.
   const chatEnabled = !!opts.chat;
@@ -2528,12 +2600,18 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
             <div class="ef-issue-foot">
               <button type="button" class="ef-btn-secondary" id="__ef_issue_cancel__">Cancel</button>
               <div class="ef-footer-spacer"></div>
-              <label class="ef-memory-opt" id="__ef_memory_opt__" ${memoryAsk ? "" : "hidden"}>
-                <input type="checkbox" id="__ef_memory_sync__" checked />
-                <span>Send to Memory</span>
-              </label>
               <button type="button" class="ef-btn-secondary" id="__ef_submit__">Save</button>
-              <button type="button" class="ef-btn-primary" id="__ef_issue_submit__">Create issue</button>
+              <div class="ef-destination" id="__ef_destination__" ${memoryAsk ? "" : "hidden"}>
+                <button type="button" class="ef-btn-secondary ef-destination-trigger" id="__ef_destination_trigger__" aria-haspopup="listbox" aria-expanded="false" aria-label="Report destination">
+                  <span class="ef-destination-value">${destinationLabel(destination)}</span>
+                  <span class="ef-destination-caret" aria-hidden="true">▾</span>
+                </button>
+                <ul class="ef-destination-menu" id="__ef_destination_menu__" role="listbox" aria-label="Report destination" hidden>
+                  <li role="option" data-destination="github" aria-selected="${destination === "github"}" tabindex="-1">GitHub</li>
+                  <li role="option" data-destination="memory" aria-selected="${destination === "memory"}" tabindex="-1">Memory</li>
+                </ul>
+              </div>
+              <button type="button" class="ef-btn-primary" id="__ef_issue_submit__">${primaryLabel()}</button>
             </div>
           </div>
         </section>
@@ -2602,8 +2680,96 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   // ── One pane, four panels; only attributes/hidden states swap ──────────────
   const issueCancelBtn = dialog.querySelector<HTMLButtonElement>("#__ef_issue_cancel__")!;
   const issueSubmitBtn = dialog.querySelector<HTMLButtonElement>("#__ef_issue_submit__")!;
-  const memorySyncInput = dialog.querySelector<HTMLInputElement>("#__ef_memory_sync__");
-  const memorySyncRequested = (): boolean => memoryAsk && !!memorySyncInput?.checked;
+  const destinationWrap = dialog.querySelector<HTMLElement>("#__ef_destination__");
+  const destinationTrigger = dialog.querySelector<HTMLButtonElement>("#__ef_destination_trigger__");
+  const destinationMenu = dialog.querySelector<HTMLUListElement>("#__ef_destination_menu__");
+  const destinationValue = dialog.querySelector<HTMLElement>(".ef-destination-value");
+
+  const closeDestinationMenu = (focusTrigger = false): void => {
+    if (!destinationMenu || !destinationTrigger || destinationMenu.hidden) return;
+    destinationMenu.hidden = true;
+    destinationTrigger.setAttribute("aria-expanded", "false");
+    if (focusTrigger) destinationTrigger.focus();
+  };
+
+  const destinationOptions = (): HTMLElement[] =>
+    destinationMenu
+      ? Array.from(destinationMenu.querySelectorAll<HTMLElement>('[role="option"]'))
+      : [];
+
+  const openDestinationMenu = (focus: "selected" | "first" | "last" = "selected"): void => {
+    if (!destinationMenu || !destinationTrigger) return;
+    destinationMenu.hidden = false;
+    destinationTrigger.setAttribute("aria-expanded", "true");
+    const options = destinationOptions();
+    const selected = options.find((o) => o.getAttribute("aria-selected") === "true");
+    const target = focus === "last"
+      ? options[options.length - 1]
+      : focus === "first"
+        ? options[0]
+        : selected ?? options[0];
+    target?.focus();
+  };
+
+  const setDestination = (next: ReportDestination): void => {
+    // The primary action is in flight; keep its destination stable.
+    if (issueSubmitBtn.disabled) return;
+    destination = next;
+    writeDestinationPref(destination);
+    if (destinationValue) destinationValue.textContent = destinationLabel(destination);
+    for (const option of destinationOptions()) {
+      option.setAttribute("aria-selected", option.dataset.destination === destination ? "true" : "false");
+    }
+    issueSubmitBtn.textContent = primaryLabel();
+    closeDestinationMenu(true);
+  };
+
+  if (destinationWrap && destinationTrigger && destinationMenu) {
+    destinationTrigger.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (destinationMenu.hidden) openDestinationMenu("selected");
+      else closeDestinationMenu(true);
+    });
+    destinationTrigger.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        openDestinationMenu(event.key === "ArrowUp" ? "last" : "selected");
+      }
+    });
+    destinationMenu.addEventListener("click", (event) => {
+      const option = (event.target as Element).closest<HTMLElement>('[role="option"]');
+      if (!option || !destinationMenu.contains(option)) return;
+      const next = option.dataset.destination;
+      if (next === "github" || next === "memory") setDestination(next);
+    });
+    destinationMenu.addEventListener("keydown", (event) => {
+      const options = destinationOptions();
+      const current = options.indexOf(document.activeElement as HTMLElement);
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        if (!options.length) return;
+        const delta = event.key === "ArrowDown" ? 1 : -1;
+        options[(current + delta + options.length) % options.length].focus();
+      } else if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        const active = document.activeElement as HTMLElement | null;
+        if (!active || active.getAttribute("role") !== "option") return;
+        const next = active.dataset.destination;
+        if (next === "github" || next === "memory") setDestination(next);
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        closeDestinationMenu(true);
+      } else if (event.key === "Tab") {
+        closeDestinationMenu(false);
+      }
+    });
+    dialog.addEventListener("click", (event) => {
+      if (!destinationMenu.hidden && !destinationWrap.contains(event.target as Node)) {
+        closeDestinationMenu(false);
+      }
+    });
+  }
+
   const changeChip = dialog.querySelector<HTMLElement>("#__ef_change_count__")!;
   const discardBtn = dialog.querySelector<HTMLButtonElement>("#__ef_discard_draft__")!;
 
@@ -3524,7 +3690,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     errDiv.textContent = "";
     try {
       await withAuthRetry(
-        () => opts.onSubmit(comment, getType(), buildIntent(), memorySyncRequested()),
+        () => opts.onSubmit(comment, getType(), buildIntent(), false),
         opts.ensureAuth
       )();
       finishReport();
@@ -3545,6 +3711,39 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   // first (when there is one), then export the parent comment IDs. Nothing is
   // closed until the export actually succeeds.
   issueSubmitBtn.addEventListener("click", async () => {
+    // Memory is an alternative destination, not a mirror of the GitHub export:
+    // send the current note to the connected project and stop there.
+    if (destination === "memory") {
+      const comment = collectComment();
+      if (!comment) {
+        errDiv.textContent = "Add a note describing the problem.";
+        return;
+      }
+      issueSubmitBtn.disabled = true;
+      submitBtn.disabled = true;
+      issueSubmitBtn.textContent = "Sending…";
+      errDiv.textContent = "";
+      try {
+        await withAuthRetry(
+          () => opts.onSubmit(comment, getType(), buildIntent(), true),
+          opts.ensureAuth
+        )();
+        finishReport();
+        showToast("Sent to Memory.");
+        opts.onComplete?.();
+      } catch (err) {
+        if (err instanceof AuthCancelledError) {
+          errDiv.textContent = "Sign in to continue";
+        } else {
+          errDiv.textContent = describeAPIError(err);
+        }
+        issueSubmitBtn.disabled = false;
+        submitBtn.disabled = false;
+        issueSubmitBtn.textContent = primaryLabel();
+      }
+      return;
+    }
+
     issueSubmitBtn.disabled = true;
     issueSubmitBtn.textContent = "Creating…";
     submitBtn.disabled = true;
@@ -3562,7 +3761,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
       if (comment && comment !== submittedComment) {
         // Submit the new comment first, then include its ID in the export.
         const newId = await withAuthRetry(
-          () => opts.onSubmit(comment, type, buildIntent(), memorySyncRequested()),
+          () => opts.onSubmit(comment, type, buildIntent(), false),
           opts.ensureAuth
         )();
         if (typeof newId === "number") ids = [...ids, newId];
@@ -3573,7 +3772,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
       if (ids.length === 0) {
         errDiv.textContent = "Nothing to export — add a note or choose what you expected.";
         issueSubmitBtn.disabled = false;
-        issueSubmitBtn.textContent = "Create issue";
+        issueSubmitBtn.textContent = primaryLabel();
         submitBtn.disabled = false;
         return;
       }
@@ -3590,7 +3789,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
       if (err instanceof AuthCancelledError) {
         errDiv.textContent = "Sign in to continue";
         issueSubmitBtn.disabled = false;
-        issueSubmitBtn.textContent = "Create issue";
+        issueSubmitBtn.textContent = primaryLabel();
         submitBtn.disabled = false;
         return;
       }
@@ -3610,14 +3809,14 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
           opts.onComplete?.();
         } else {
           issueSubmitBtn.disabled = false;
-          issueSubmitBtn.textContent = "Create issue";
+          issueSubmitBtn.textContent = primaryLabel();
           submitBtn.disabled = false;
         }
         return;
       }
       errDiv.textContent = describeAPIError(err);
       issueSubmitBtn.disabled = false;
-      issueSubmitBtn.textContent = "Create issue";
+      issueSubmitBtn.textContent = primaryLabel();
       submitBtn.disabled = false;
     }
   });
