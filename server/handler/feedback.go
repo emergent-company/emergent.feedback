@@ -264,6 +264,8 @@ func (h *Handler) HandleListFeedbackByURL(c echo.Context) error {
 		Comment    string `json:"comment"`
 		GitHubUser string `json:"github_user"`
 		CreatedAt  string `json:"created_at"`
+		Status     string `json:"status"`
+		IssueURL   string `json:"issue_url,omitempty"`
 	}
 	out := make([]item, 0, len(items))
 	for _, f := range items {
@@ -273,6 +275,8 @@ func (h *Handler) HandleListFeedbackByURL(c echo.Context) error {
 			Comment:    redactSecrets(f.Comment),
 			GitHubUser: f.GitHubUser,
 			CreatedAt:  f.CreatedAt.Format("2006-01-02 15:04"),
+			Status:     string(f.Status),
+			IssueURL:   f.IssueURL,
 		})
 	}
 	return c.JSON(http.StatusOK, out)

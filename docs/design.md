@@ -302,15 +302,14 @@ No storage change: metadata rides in `context_json` under `context.app`.
 
 ## Live style editing (v5, implemented)
 
-Clicking an element opens the **issue submission modal** first — the former
-"Send to GitHub" step is gone. The reporter fills the comment, title, type and
-intent, then **Create issue** or **Save**. **Edit element** (header or footer)
-swaps to the style editor, which the reporter can dock to the side of the page
-(non-modal, page undimmed and interactive) or keep centered, to restyle one or
-more selected elements by choosing tokens from a project-provided theme. The
-editor shows only the **Design** editor — the former Design/Issues tabs are gone;
-the report form and the captured context/HTML live in the issue submission modal
-instead. Tokens cover the common Tailwind and daisyUI utilities —
+Clicking an element opens the **feedback pane** first — the former "Send to
+GitHub" step is gone. The pane has four tabs, in order **Feedback · Edit ·
+Changes · Chat** (Chat is opt-in): the reporter fills the comment, title, type
+and intent on **Feedback**, or switches to **Edit** to restyle the selected
+element(s). **Edit** is the full style editor; it can be docked to the side of
+the page (non-modal, page undimmed and interactive) or kept centered. The report
+form and the captured context/HTML live on the **Feedback** tab, not in the
+editor. Tokens cover the common Tailwind and daisyUI utilities —
 spacing (padding/margin/gap), layout (max-width, width/height, display, flex),
 typography (text size, font weight), colors, borders/effects and daisyUI
 button/badge modifiers — organised into collapsible sections named like a design
@@ -346,18 +345,24 @@ all** toggle reveals them. On failure (no computed style, detached element, or a
 style-read error) the editor shows everything rather than hiding settings by
 mistake.
 
-**View model.** Both surfaces live in one root (`#__ef_dialog__`) and swap via a
-`data-view` attribute: `data-view="submit"` shows the issue modal,
-`data-view="edit"` shows the style editor (`.ef-card`). Nothing inside either
-surface is re-rendered on the swap, so typed text, chips and pending edits
-survive the round trip. **Edit element** (`#__ef_edit_element__` in the header,
-`#__ef_edit_element_foot__` in the footer) sets `edit`; **Back to issue**
-(`#__ef_back_to_issue__`) sets `submit`. The editor's **Cancel**
-(`#__ef_cancel__`) discards the whole report (draft + uncommitted edits); the
-modal's **Cancel** (`#__ef_issue_cancel__`) does the same. `Escape` cancels the
-report while the modal is up, and returns to the modal while the editor is up.
-`#__ef_change_count__` in the modal header shows the attached style-change count.
-The dock toggle (`#__ef_dock__`) applies to the editor only — the modal is
+**View model.** Everything lives in one root (`#__ef_dialog__`). `data-tab`
+selects the visible panel (Feedback, Edit, Changes, Chat); `data-view` selects a
+report context (`report`) or the page-level registry (`reports`). Panels stay
+mounted, so typed text, chips and live edits survive tab switches — there is no
+in-panel footer: **Edit** is reached through the tab bar, and its only footer
+button is **Discard draft** (`#__ef_discard_draft__`). `#__ef_change_count__` in
+the pane header shows the current draft's style-change count. `Escape` steps
+back one level: page pick → Edit/Changes/Chat → Feedback → All reports →
+close; the centered backdrop does the same without discarding anything. The
+modal's **Cancel** (`#__ef_issue_cancel__`) discards the draft. Every open report
+is a **draft** (`client/src/drafts.ts`, `sessionStorage`, page-scoped): text,
+type, targets and the ids of its style records. Leaving a draft suspends it —
+its live edits revert to the committed baseline — and reopening re-applies them.
+`#__ef_all_reports__` (header breadcrumb) shows the master list: in-progress
+drafts (resume / two-step Cancel), submitted feedback for the page (status +
+issue link, opens the element), and **Clear applied changes** for the committed
+baseline. The dock toggle (`#__ef_dock__`) applies to the whole pane — the
+report is
 always centered.
 
 Every field also carries a **reset** control — the ↺ that appears at the end of
@@ -386,9 +391,9 @@ onto overlay chrome, or onto the page root are refused.
 Each move is recorded per element as an anchor pair (`from` → `to`) rather than a
 node reference, so it survives a page reload and is replayed on boot alongside
 committed style edits; repeated moves of one element collapse into a single
-record that keeps the original from-position. Moves join the same pending /
-Commit / Committed-changes lifecycle as style edits (Default does not touch them —
-they are undone with Remove or revert), and the editor's **Position** row shows
+record that keeps the original from-position. Moves join the same draft lifecycle as
+style edits (Default does not touch them — they are undone with revert), and the
+editor's **Position** row shows
 where the active element currently sits (`2nd of 3 in .toolbar`).
 
 When more than one element is selected they are presented as **per-element tabs**
@@ -404,10 +409,12 @@ number matching its tab — and a short **select flash** confirms which element 
 click just bound the editor to. Hovering a selected element on the page outlines
 it too and peeks its tab in the editor (reverse hover).
 
-Edits start **pending** — applied live but reverted on Cancel/close. The
-**Commit** button freezes pending edits and persists them (localStorage) across
-sidebar close, reopen and page reload until explicitly removed from the global
-**Committed changes** list (per-entry Remove + Remove all).
+Edits belong to the current **draft**: applied live while it is open, reverted
+when it is suspended (All reports / pane close), and re-applied when it is
+resumed. **Save** / **Create issue** commits the draft's records into the
+permanent baseline (localStorage), so they replay on reload; **Clear applied
+changes** in All reports drops that baseline. The Changes tab lists only the
+current draft's edits and offers **Revert all**.
 
 Docked mode reserves the rail width (document-root `margin-right`), so the host
 page reflows alongside the editor instead of being overlaid; the hover highlight
@@ -447,11 +454,12 @@ No storage schema change — everything rides inside `context_json`.
 
 | Surface | Change |
 |---|---|
-| `client/src/dialog.ts` | submission-first view model (`data-view="submit"|"edit"`): issue modal opens on click; **Edit element** (header/footer) → style editor (`.ef-card`), **Back to issue** → modal; modal Cancel/Escape cancel the report, editor Escape returns; dock toggle applies to the editor only. Design editor (no Issues tab), Commit + persistent Committed-changes list (localStorage, per-entry Remove / Remove all), context/HTML rendered in the modal only, per-element target tabs, token palette, per-target changes summary, drag ghost/insertion-line/container layers |
+| `client/src/dialog.ts` | tabbed pane (`data-tab="feedback|edit|changes|chat"`, `data-view="report|reports"`): report form and style editor as peers, **Discard draft**, header **All reports** breadcrumb, full-panel draft/submitted registry (resume / Cancel / Clear applied changes); Escape and backdrop step back without discarding; dock toggle applies to the whole pane. Design editor (no Issues tab), context/HTML on the Feedback tab, per-element target tabs, token palette, per-target changes summary, drag ghost/insertion-line/container layers |
+| `client/src/drafts.ts` | page-scoped draft registry (`sessionStorage`): create / list / find by selector / update / delete, lazy creation on first edit, one draft per selector, legacy `__ef_draft__:` migration |
 | `client/src/styleEditor.ts` | single-target property inspector: collapsible sections in `SECTION_ORDER` (Position, Auto layout, Appearance, Fill, Typography, daisyUI), label-above fields in a two-column grid (`ROW_PAIRS`), segmented icon groups for spatial enums, value fields for the rest, per-field + per-section reset, custom-class affordance, direct-text row |
-| `client/src/selection.ts` | per-target apply/change/revert API (`applyTokenToTarget`, `recordMove`, `getChangesFor`, `getChangeCountFor`, `revertChangesFor`, `clearTokenForTarget`), hover-driven highlight, `position` records |
+| `client/src/selection.ts` | per-target apply/change/revert API (`applyTokenToTarget`, `recordMove`, `getChangesFor`, `getChangeCountFor`, `revertChangesFor`, `clearTokenForTarget`), draft-scoped change sets (`beginDraft` / `suspendDraft` / `discardDraft` / `commitDraft`, per-draft `sessionStorage`), committed baseline replay, hover-driven highlight, `position` records |
 | `client/src/structure.ts` | drop resolution (`computeDrop`), `moveElement`, replay (`placeAt`), `describePosition`/`ordinal` |
-| `client/src/index.ts` | `editing` mode; picking stays live; always-on drag to move (5px threshold, click swallowed after a drop); pending edits revert on cancel/close; Commit freezes + persists in localStorage until removed |
+| `client/src/index.ts` | `editing` mode; picking stays live; always-on drag to move (5px threshold, click swallowed after a drop); opening another element suspends the current draft; Save/Create issue commits the draft to the local baseline; All reports loads submitted feedback + issue badges for the page |
 | `server/handler/issue.go` | `## Requested changes` (`buildSingleItem`) / `### Requested changes` (`buildMultiItem`) incl. `move:` lines; `whatToDo` clause distinguishes style edits from moves |
 | `server/handler/envelope.go` | `buildIntent` surfaces `changes`; `buildTarget` surfaces `targets` |
 | `server/panel/panel.templ` | "Requested changes" list + `Targets (N)` row in `contextSection` |

@@ -55,21 +55,21 @@ test.describe("overlay on the landing page (own)", () => {
     await expect(page.locator("#__ef_type_bug__")).toBeChecked();
 
     // "Edit element" swaps the form for the style editor; the form hides.
-    await page.locator("#__ef_edit_element__").click();
+    await page.locator("#__ef_tab_edit__").click();
     await expect(page.locator("#__ef_style_editor__")).toBeVisible();
     await expect(page.locator("#__ef_report__")).toBeHidden();
 
     // "Back to feedback" returns to the form with the draft intact.
-    await page.locator("#__ef_back_to_issue__").click();
+    await page.locator("#__ef_tab_feedback__").click();
     await expect(page.locator("#__ef_report__")).toBeVisible();
     await expect(page.locator("#__ef_comment__")).toHaveValue(draft);
     await expect(page.locator("#__ef_topic__")).toHaveValue("Round-trip title");
     await expect(page.locator("#__ef_type_bug__")).toBeChecked();
 
     // A second round trip must not reset anything either.
-    await page.locator("#__ef_edit_element__").click();
+    await page.locator("#__ef_tab_edit__").click();
     await expect(page.locator("#__ef_style_editor__")).toBeVisible();
-    await page.locator("#__ef_back_to_issue__").click();
+    await page.locator("#__ef_tab_feedback__").click();
     await expect(page.locator("#__ef_report__")).toBeVisible();
     await expect(page.locator("#__ef_comment__")).toHaveValue(draft);
     await expect(page.locator("#__ef_topic__")).toHaveValue("Round-trip title");

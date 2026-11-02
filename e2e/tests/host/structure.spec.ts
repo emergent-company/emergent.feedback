@@ -34,7 +34,7 @@ test.describe("moving elements (structure fixture)", () => {
     await page.locator(selector).click();
     await expect(page.locator("#__ef_dialog__")).toBeVisible();
     // Submission-first: "Edit element" swaps the issue modal for the editor.
-    await page.locator("#__ef_edit_element__").click();
+    await page.locator("#__ef_tab_edit__").click();
     await expect(page.locator("#__ef_style_editor__")).toBeVisible();
   }
 
@@ -51,7 +51,7 @@ test.describe("moving elements (structure fixture)", () => {
     await page.mouse.up();
   }
 
-  test("drags a button twice, records one move, and replays it after commit + reload", async ({ page }) => {
+  test("drags a button twice, records one move, and replays it after save + reload", async ({ page }) => {
     await openEditorOn(page, "#btn-c");
     await expect(page.locator(".ef-style-position")).toHaveText("3rd of 3 in #toolbar");
 
@@ -76,24 +76,30 @@ test.describe("moving elements (structure fixture)", () => {
     await expect(page.locator(".ef-changes-list")).toContainText("2nd of 3 in #toolbar");
     await expect(page.locator(".ef-changes-list li")).toHaveCount(1);
 
-    // Commit → the anchors are persisted, not just the live DOM order.
-    await page.click("#__ef_commit__");
-    await expect(page.locator(".ef-committed-list")).toContainText("Position");
+    // Saving the report commits the draft's edits to the baseline.
+    await page.click("#__ef_tab_feedback__");
+    await page.fill("#__ef_comment__", "moved button");
+    const [saved] = await Promise.all([
+      page.waitForResponse(
+        (r) => r.url().includes("/feedback") && r.request().method() === "POST",
+      ),
+      page.click("#__ef_submit__"),
+    ]);
+    expect(saved.ok()).toBeTruthy();
+    await expect(page.locator("#__ef_dialog__")).toHaveCount(0);
 
     // Reload: the committed move replays from localStorage before any clicking.
     await page.reload();
     await page.waitForFunction(() => !!(window as unknown as { EmergentFeedback?: unknown }).EmergentFeedback);
     expect(await children(page, "#toolbar")).toEqual(["btn-a", "btn-c", "btn-b"]);
 
-    // Remove the committed move → the original order comes back.
+    // Remove the committed move from All reports → the original order comes back.
     await activate(page);
     await page.locator("#btn-a").click();
     await expect(page.locator("#__ef_dialog__")).toBeVisible();
-    // Reopening lands on the Feedback tab; the Committed-changes list lives on
-    // the Changes tab.
-    await page.click("#__ef_tab_changes__");
-    await expect(page.locator("#__ef_panel_changes__")).toBeVisible();
-    await page.click(".ef-committed-remove");
+    await page.click("#__ef_all_reports__");
+    await expect(page.locator("#__ef_reports__")).toBeVisible();
+    await page.click("#__ef_clear_applied__");
     expect(await children(page, "#toolbar")).toEqual(["btn-a", "btn-b", "btn-c"]);
   });
 

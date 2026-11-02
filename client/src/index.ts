@@ -6,7 +6,7 @@ import { AuthManager } from "./auth";
 import { startActivationListener, onModeChange, forceMode, getMode } from "./activation";
 import { highlight, clearHighlight } from "./highlighter";
 import { renderBadges, clearBadges, isBadgesVisible, setBadgesVisible } from "./badge";
-import { showSubmitDialog, promptLogin, closeDialog, startDragVisual, updateDragVisual, endDragVisual, type FeedbackType } from "./dialog";
+import { showSubmitDialog, promptLogin, closeDialog, showToast, startDragVisual, updateDragVisual, endDragVisual, type FeedbackType } from "./dialog";
 import { buildSelector } from "./selector";
 import { showIndicator, hideIndicator } from "./indicator";
 import { startRecording, getHistory, onUrlChange } from "./history";
@@ -30,9 +30,8 @@ import {
   toggleTarget as toggleSelectionTarget,
   pickTarget as pickSelectionTarget,
   getTargets as getSelectionTargets,
-  getAllChanges as getAllSelectionChanges,
   clear as clearSelection,
-  revertPending,
+  suspendDraft,
   markSent,
   loadCommitted,
   reapplyCommitted,
@@ -264,11 +263,12 @@ function markBadgesActivated(): void {
     detachEditingListeners();
     // Badges persist after comment mode closes; visibility is controlled by
     // the top-bar switch and remembered across sessions.
-    // Undo only the uncommitted (pending) edits; committed edits stay on the
-    // page AND in storage when the sidebar closes.
-    revertPending();
-    clearSelection();
+    // Keep the draft (text + edits) for next time; the page returns to the
+    // committed baseline. Close before clearing the selection so the dialog's
+    // cleanup snapshots the full target list, not an empty one.
+    suspendDraft();
     closeDialog();
+    clearSelection();
   }
 
   // ── Mouse tracking ──────────────────────────────────────────────────────────
@@ -467,10 +467,9 @@ function elementLabel(el: Element): string {
     // One public probe per dialog open; failures must never block feedback.
     const memory = await api.getMemoryStatus(config.repo).catch(() => undefined);
 
-    // Seed the multi-select set with the clicked element (revert any pending
-    // edits left over from a previous target so the page is clean; committed
-    // edits are preserved).
-    revertPending();
+    // Suspend the previous draft (persist + revert its live edits) before
+    // seeding the clicked element; committed edits are preserved.
+    suspendDraft();
     clearSelection();
     // The panel is open with the DOM fully mounted — retry any committed
     // entries that were stale when the overlay first booted.
@@ -510,7 +509,28 @@ function elementLabel(el: Element): string {
       },
       tokens,
       getTargets: getSelectionTargets,
-      getChanges: () => getAllSelectionChanges(),
+      pageKey: api.pageUrl(),
+      loadPageReports: async () => {
+        const [comments, issues] = await Promise.all([
+          api.listComments(api.pageUrl()).catch(() => []),
+          api.listIssueBadges(api.pageUrl()).catch(() => []),
+        ]);
+        return { comments, issues };
+      },
+      onOpenReport: (selector) => {
+        let el: Element | null = null;
+        try {
+          el = document.querySelector(selector);
+        } catch {
+          el = null;
+        }
+        if (!el) {
+          showToast("That element is no longer on the page.");
+          return;
+        }
+        closeDialog();
+        void openEditor(el);
+      },
       ensureAuth,
       onSubmit: async (comment, type: FeedbackType, intent: FeedbackIntent, memorySync?: boolean) => {
         const screenshot = await captureElement(target);
@@ -576,9 +596,8 @@ function elementLabel(el: Element): string {
         forceMode("active");
       },
       onCancel: () => {
-        // Drop pending edits + selection (committed edits survive), then return
-        // to comment mode.
-        revertPending();
+        // The dialog already suspended (or discarded) its draft; just release
+        // the selection and return to comment mode.
         clearSelection();
         forceMode("active");
       },

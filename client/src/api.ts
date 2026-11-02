@@ -90,6 +90,10 @@ export interface FeedbackComment {
   comment: string;
   github_user: string;
   created_at: string;
+  /** Lifecycle status (open/applied/verified/resolved/exported). */
+  status?: string;
+  /** GitHub issue URL when the item has been exported. */
+  issue_url?: string;
 }
 
 export interface BadgeSummary {

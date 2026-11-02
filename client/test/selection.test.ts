@@ -30,6 +30,12 @@ import {
   commitChanges,
   markSent,
   revertPending,
+  beginDraft,
+  suspendDraft,
+  discardDraft,
+  commitDraft,
+  activeDraft,
+  getDraftChangeCount,
   loadCommitted,
   reapplyCommitted,
   getCommittedEntries,
@@ -98,7 +104,7 @@ const textGroup: TokenGroup = {
   ],
 };
 
-function makeLocalStorage(): Storage {
+function makeStorage(): Storage {
   const map = new Map<string, string>();
   const storage = {
     getItem: (k: string): string | null => (map.has(k) ? map.get(k)! : null),
@@ -111,8 +117,11 @@ function makeLocalStorage(): Storage {
   return storage as unknown as Storage;
 }
 
+const makeLocalStorage = makeStorage;
+
 beforeEach(() => {
-  (globalThis as unknown as { localStorage: Storage }).localStorage = makeLocalStorage();
+  (globalThis as unknown as { localStorage: Storage }).localStorage = makeStorage();
+  (globalThis as unknown as { sessionStorage: Storage }).sessionStorage = makeStorage();
   clear();
   clearCommitted();
 });
@@ -1000,4 +1009,87 @@ test("text edits: commit persists, reload replays, and entries are labelled Text
 
   assert.equal(textValue(reloaded), "Alpha", "committed text replayed on load");
   assert.equal(getCommittedEntries()[0].stale, false);
+});
+
+// ── Draft-scoped changes ──────────────────────────────────────────────────────
+
+test("draft changes: suspend persists + reverts, begin re-applies, discard drops", () => {
+  const a = el(["p-0"]);
+  addTarget(a, "#a");
+  beginDraft("draft-1");
+  assert.equal(activeDraft(), "draft-1");
+
+  applyTokenToTarget(a, paddingGroup, { id: "md", label: "Medium", className: "p-4" });
+  assert.equal(getChangeCount(), 1);
+  assert.equal(a.classList.contains("p-4"), true);
+  assert.equal(a.classList.contains("p-0"), false);
+
+  suspendDraft();
+  assert.equal(activeDraft(), null);
+  assert.equal(getChangeCount(), 0);
+  assert.equal(a.classList.contains("p-4"), false);
+  assert.equal(a.classList.contains("p-0"), true, "page returned to baseline");
+  assert.equal(getDraftChangeCount("draft-1"), 1, "edits kept for the draft");
+
+  // Reopening loads the records. (No document in this harness, so the DOM is
+  // not touched; the change list is what matters.)
+  beginDraft("draft-1");
+  assert.equal(activeDraft(), "draft-1");
+  assert.equal(getChangeCount(), 1);
+  assert.deepEqual(getChanges().map((c) => c.after), ["p-4"]);
+
+  discardDraft("draft-1");
+  assert.equal(activeDraft(), null);
+  assert.equal(getChangeCount(), 0);
+  assert.equal(getDraftChangeCount("draft-1"), 0);
+  assert.equal(a.classList.contains("p-0"), true);
+});
+
+test("draft changes: switching drafts never leaks the previous draft's edits", () => {
+  const a = el(["p-0"]);
+  const b = el(["p-0"]);
+  addTarget(a, "#a");
+  addTarget(b, "#b");
+
+  beginDraft("draft-a");
+  applyTokenToTarget(a, paddingGroup, { id: "md", label: "Medium", className: "p-4" });
+  suspendDraft();
+
+  beginDraft("draft-b");
+  assert.equal(getChangeCount(), 0, "other draft's edits are not live");
+  applyTokenToTarget(b, paddingGroup, { id: "lg", label: "Large", className: "p-6" });
+  assert.deepEqual(getChanges().map((c) => c.after), ["p-6"]);
+  suspendDraft();
+
+  beginDraft("draft-a");
+  assert.deepEqual(getChanges().map((c) => c.after), ["p-4"]);
+  discardDraft("draft-a");
+  discardDraft("draft-b");
+});
+
+test("commitDraft: promotes the live edits to the baseline and clears draft storage", () => {
+  const a = el(["p-0"]);
+  addTarget(a, "#a");
+  beginDraft("draft-commit");
+  applyTokenToTarget(a, paddingGroup, { id: "md", label: "Medium", className: "p-4" });
+  assert.equal(getCommittedCount(), 0);
+
+  commitDraft();
+
+  assert.equal(activeDraft(), null);
+  assert.equal(getChangeCount(), 0);
+  assert.equal(getCommittedCount(), 1);
+  assert.equal(getCommittedEntries()[0].after, "p-4");
+  assert.equal(getDraftChangeCount("draft-commit"), 0, "draft storage removed");
+  assert.equal(a.classList.contains("p-4"), true, "DOM keeps the committed edit");
+});
+
+test("markSent commits the live draft like commitDraft", () => {
+  const a = el(["p-0"]);
+  addTarget(a, "#a");
+  beginDraft("draft-sent");
+  applyTokenToTarget(a, paddingGroup, { id: "lg", label: "Large", className: "p-6" });
+  markSent();
+  assert.equal(getCommittedCount(), 1);
+  assert.equal(activeDraft(), null);
 });

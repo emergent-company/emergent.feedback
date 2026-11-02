@@ -8,7 +8,24 @@ import {
   describeAPIError,
   withAuthRetry,
 } from "./api";
-import type { APIClient, FeedbackComment, ExportIssueResult, MemoryStatus } from "./api";
+import type {
+  APIClient,
+  FeedbackComment,
+  ExportIssueResult,
+  IssueBadge,
+  MemoryStatus,
+} from "./api";
+import {
+  deleteDraft,
+  emptyDraft,
+  findDraftBySelector,
+  listDrafts,
+  migrateLegacyDrafts,
+  saveDraft,
+  updateDraft,
+  type DraftRecord,
+  type FeedbackType,
+} from "./drafts";
 import type {
   FeedbackIntent,
   IntentAction,
@@ -29,29 +46,31 @@ import {
 import { layoutAxis, type DropTarget } from "./structure";
 import type { ThemeTokens } from "./tokens";
 import {
+  addTarget as addSelectionTarget,
   applyTokenToTarget,
+  beginDraft,
   clearCommitted,
   clearTextForTarget,
   clearTokenForTarget,
-  commitChanges,
+  discardDraft,
   flash as flashTarget,
-  getAllChanges,
-  getChangeCount,
   getChangeCountFor,
+  getChanges,
   getChangesFor,
   getCommittedEntries,
+  getDraftChangeCount,
   getTargets as getSelectionTargets,
   isPickMode,
   notifySelectionChange,
   onHighlightChange,
   onSelectionChange,
   refreshOutlines,
-  removeCommittedAt,
   removeTarget as removeSelectionTarget,
   revertPending,
   setHighlight,
   setPickMode,
   setTextForTarget,
+  suspendDraft,
   type TargetEntry,
 } from "./selection";
 
@@ -78,49 +97,8 @@ function writeDockedPref(docked: boolean): void {
   }
 }
 
-// ── Draft persistence (in-memory + sessionStorage) ────────────────────────────
-// Persists only the text fields (comment, issue title, type) keyed by page URL
-// + selector. Storage is best-effort: failures never break submission.
-
-interface DraftState {
-  comment: string;
-  title: string;
-  type: FeedbackType;
-}
-
-function draftKey(selector: string): string {
-  try {
-    return `__ef_draft__:${window.location.href}|${selector}`;
-  } catch {
-    return `__ef_draft__:${selector}`;
-  }
-}
-
-function saveDraft(selector: string, draft: DraftState): void {
-  try {
-    sessionStorage.setItem(draftKey(selector), JSON.stringify(draft));
-  } catch { /* storage unavailable */ }
-}
-
-function loadDraft(selector: string): DraftState | null {
-  try {
-    const raw = sessionStorage.getItem(draftKey(selector));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<DraftState> | null;
-    if (!parsed || typeof parsed !== "object") return null;
-    return {
-      comment: typeof parsed.comment === "string" ? parsed.comment : "",
-      title: typeof parsed.title === "string" ? parsed.title : "",
-      type: parsed.type === "bug" ? "bug" : "enhancement",
-    };
-  } catch {
-    return null;
-  }
-}
-
-function clearDraft(selector: string): void {
-  try { sessionStorage.removeItem(draftKey(selector)); } catch { /* ignore */ }
-}
+// Draft text/targets live in ./drafts (page-scoped registry); live style edits
+// are owned by ./selection and suspended/resumed per draft id.
 
 function injectStyles(): void {
   if (document.getElementById(STYLE_ID)) return;
@@ -744,7 +722,7 @@ function injectStyles(): void {
       box-shadow: 0 0 0 3px var(--ef-focus-ring-chip);
     }
 
-    /* ── Pane tabs (Feedback · Changes · Chat) ─────────────────────────────── */
+    /* ── Pane tabs (Feedback · Edit · Changes · Chat) ─────────────────────── */
     #__ef_dialog__ .ef-tabs {
       display: flex;
       gap: 2px;
@@ -752,7 +730,10 @@ function injectStyles(): void {
       border-bottom: 1px solid var(--ef-border);
       background: var(--ef-surface);
       flex-shrink: 0;
+      overflow-x: auto;
+      scrollbar-width: none;
     }
+    #__ef_dialog__ .ef-tabs::-webkit-scrollbar { display: none; }
     #__ef_dialog__ .ef-tab {
       appearance: none;
       border: 0;
@@ -770,6 +751,7 @@ function injectStyles(): void {
       align-items: center;
       gap: 5px;
       white-space: nowrap;
+      flex-shrink: 0;
     }
     #__ef_dialog__ .ef-tab:hover { color: var(--ef-heading); }
     #__ef_dialog__ .ef-tab[aria-selected="true"] {
@@ -795,6 +777,159 @@ function injectStyles(): void {
       justify-content: center;
     }
     #__ef_dialog__ .ef-tab-count[hidden] { display: none; }
+    #__ef_dialog__ .ef-tabs[hidden] { display: none; }
+
+    /* Breadcrumb back to the page-level report list. */
+    #__ef_dialog__ .ef-header-crumb {
+      display: flex;
+      margin-bottom: 4px;
+    }
+    #__ef_dialog__ .ef-header-crumb[hidden] { display: none; }
+    #__ef_dialog__ .ef-crumbs {
+      appearance: none;
+      border: 1px solid var(--ef-control-border);
+      background: var(--ef-btn-secondary-bg);
+      color: var(--ef-text-soft);
+      border-radius: 6px;
+      font: inherit;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 3px 7px;
+      cursor: pointer;
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+    #__ef_dialog__ .ef-crumbs:hover {
+      background: var(--ef-btn-secondary-hover-bg);
+      color: var(--ef-heading);
+    }
+    #__ef_dialog__ .ef-crumbs[hidden] { display: none; }
+
+    /* ── All reports (page-level master list) ──────────────────────────────── */
+    #__ef_dialog__ .ef-reports {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+    #__ef_dialog__ .ef-reports[hidden] { display: none; }
+    #__ef_dialog__ .ef-reports-body {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      padding: 14px 16px;
+    }
+    #__ef_dialog__ .ef-reports-empty {
+      font-size: 11px;
+      line-height: 1.55;
+      color: var(--ef-muted-strong);
+      padding: 6px 0;
+    }
+    #__ef_dialog__ .ef-report-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    #__ef_dialog__ .ef-report-item {
+      display: flex;
+      align-items: stretch;
+      gap: 4px;
+      border: 1px solid var(--ef-border);
+      border-radius: 8px;
+      background: var(--ef-control-bg);
+      overflow: hidden;
+    }
+    #__ef_dialog__ .ef-report-main {
+      appearance: none;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      text-align: left;
+      padding: 8px 10px;
+      cursor: pointer;
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    #__ef_dialog__ .ef-report-main:hover { background: var(--ef-hover-bg); }
+    #__ef_dialog__ .ef-report-main:disabled { cursor: default; opacity: 0.6; }
+    #__ef_dialog__ .ef-report-main:focus-visible {
+      outline: 2px solid var(--ef-primary);
+      outline-offset: -2px;
+    }
+    #__ef_dialog__ .ef-report-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--ef-heading);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #__ef_dialog__ .ef-report-meta {
+      font-size: 10px;
+      color: var(--ef-muted-strong);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: baseline;
+    }
+    #__ef_dialog__ .ef-report-sel {
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 9px;
+      color: var(--ef-muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #__ef_dialog__ .ef-report-cancel {
+      appearance: none;
+      border: 0;
+      border-left: 1px solid var(--ef-border);
+      background: transparent;
+      color: var(--ef-muted-strong);
+      font: inherit;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 0 10px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    #__ef_dialog__ .ef-report-cancel:hover {
+      background: var(--ef-bug-bg);
+      color: var(--ef-bug);
+    }
+    #__ef_dialog__ .ef-report-cancel[data-confirm="true"] {
+      background: var(--ef-bug-bg);
+      color: var(--ef-bug);
+    }
+    #__ef_dialog__ .ef-report-cancel:disabled { opacity: 0.5; cursor: default; }
+    #__ef_dialog__ .ef-report-status {
+      font-weight: 700;
+      color: var(--ef-accent);
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    #__ef_dialog__ .ef-report-issue {
+      color: var(--ef-primary);
+      font-weight: 600;
+      text-decoration: none;
+    }
+    #__ef_dialog__ .ef-report-issue:hover { text-decoration: underline; }
+    #__ef_dialog__ .ef-reports-foot {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px 14px;
+      border-top: 1px solid var(--ef-border-subtle);
+    }
 
     /* Panels hold their own scroll region so a long report never scrolls the
        tab bar out of reach. */
@@ -811,6 +946,7 @@ function injectStyles(): void {
       flex-direction: column;
     }
     #__ef_dialog__ .ef-panel[hidden] { display: none; }
+    #__ef_dialog__ .ef-panels[hidden] { display: none; }
     #__ef_dialog__ .ef-report,
     #__ef_dialog__ .ef-design {
       flex: 1;
@@ -1831,98 +1967,6 @@ function injectStyles(): void {
       font-style: italic;
     }
 
-    /* ── Committed changes (global) ─────────────────────────────────────────
-       Always rendered — every committed edit across all elements, independent
-       of the active target. */
-    #__ef_dialog__ .ef-committed {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      border-top: 1px solid var(--ef-border-subtle);
-      padding-top: 16px;
-    }
-    #__ef_dialog__ .ef-committed-list {
-      margin: 0;
-      padding: 0;
-      list-style: none;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      max-height: 220px;
-      overflow-y: auto;
-    }
-    #__ef_dialog__ .ef-committed-item {
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-      border: 1px solid var(--ef-border-subtle);
-      border-radius: 7px;
-      padding: 6px 8px;
-      background: var(--ef-surface);
-    }
-    #__ef_dialog__ .ef-committed-item.ef-stale {
-      border-style: dashed;
-      border-color: var(--ef-error);
-    }
-    #__ef_dialog__ .ef-committed-meta {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      min-width: 0;
-    }
-    #__ef_dialog__ .ef-committed-sel {
-      flex: 1;
-      min-width: 0;
-      font-family: ui-monospace, "SF Mono", Menlo, monospace;
-      font-size: 11px;
-      color: var(--ef-text-soft);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    #__ef_dialog__ .ef-committed-badge {
-      flex-shrink: 0;
-      font-size: 9px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      color: var(--ef-error);
-      border: 1px solid var(--ef-error);
-      border-radius: 4px;
-      padding: 0 4px;
-      line-height: 1.5;
-    }
-    #__ef_dialog__ .ef-committed-remove {
-      flex-shrink: 0;
-      background: transparent;
-      border: none;
-      color: var(--ef-muted);
-      cursor: pointer;
-      font-size: 15px;
-      line-height: 1;
-      padding: 0 4px;
-      border-radius: 4px;
-      font-family: inherit;
-    }
-    #__ef_dialog__ .ef-committed-remove:hover {
-      color: var(--ef-error);
-      background: var(--ef-hover-bg);
-    }
-    #__ef_dialog__ .ef-committed-remove:focus-visible {
-      outline: none;
-      box-shadow: 0 0 0 3px var(--ef-focus-ring-chip);
-    }
-    #__ef_dialog__ .ef-committed-diff {
-      display: flex;
-      gap: 5px;
-      align-items: baseline;
-      flex-wrap: wrap;
-      font-family: ui-monospace, "SF Mono", Menlo, monospace;
-      font-size: 11px;
-      color: var(--ef-text-soft);
-    }
-    #__ef_dialog__ .ef-arrow { color: var(--ef-muted); }
-
     /* ── Issue submission card (primary view) ───────────────────────────────
        The report opens here first. Reuses the card language of the login/grant
        cards (centered, --ef-card-bg, --ef-card-shadow). */
@@ -2223,7 +2267,13 @@ function activateDialog(
   if (opts?.focus !== false) card.focus();
 }
 
-export type FeedbackType = "bug" | "enhancement";
+export type { FeedbackType } from "./drafts";
+
+/** Submitted feedback + open GitHub issues for the current page. */
+export interface PageReports {
+  comments: FeedbackComment[];
+  issues: IssueBadge[];
+}
 
 export interface SubmitFeedbackOptions {
   selector: string;
@@ -2247,8 +2297,15 @@ export interface SubmitFeedbackOptions {
    * so index.ts can pass it explicitly without duplicating state.
    */
   getTargets?: () => TargetEntry[];
-  /** Live applied style changes. Defaults to the selection module. */
-  getChanges?: () => StyleChange[];
+  /**
+   * Stable page key used by the draft registry (matches the API's page URL
+   * matching mode). Defaults to the current document href.
+   */
+  pageKey?: string;
+  /** Submitted feedback + issues for the All reports list. */
+  loadPageReports?: () => Promise<PageReports>;
+  /** Re-bind the pane to another element after picking a report from the list. */
+  onOpenReport?: (selector: string) => void;
   /** Submits a comment; resolves with the new feedback ID when known. */
   onSubmit: (comment: string, type: FeedbackType, intent: FeedbackIntent, memorySync?: boolean) => Promise<number | void>;
   onExport: (ids: number[], type: FeedbackType, issueTopic: string) => Promise<ExportIssueResult>;
@@ -2335,6 +2392,9 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   // finishing. The dialog hides itself (ef-modal-picking) and suspends its Tab
   // trap so the host page is clickable; the selection subscription restores it.
   let awaitingPick = false;
+  // True once the report is deliberately discarded or submitted — the cleanup
+  // hook must not re-persist a draft that no longer exists.
+  let discarding = false;
   const DOCK_MAX = 400;
   const DOCK_MIN_WIDTH = 520;
   const dockWidth = () => Math.min(DOCK_MAX, window.innerWidth);
@@ -2365,9 +2425,45 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   // Live accessors — default to the selection module singletons.
   const currentTargets = (): TargetEntry[] =>
     opts.getTargets ? opts.getTargets() : getSelectionTargets();
-  // All applied changes across every target — pending + committed — so the
-  // feedback record and the fallback comment include frozen edits too.
-  const allChanges = (): StyleChange[] => getAllChanges();
+  // Changes belonging to the live draft only. Committed edits from earlier
+  // reports are the baseline and never ride along with this one.
+  const allChanges = (): StyleChange[] => getChanges();
+
+  // ── Draft identity ────────────────────────────────────────────────────────
+  // Every open report is backed by a draft record. Reopening the same element
+  // resumes its draft; otherwise a fresh record is created on first edit.
+  const pageKey =
+    opts.pageKey ?? (typeof window !== "undefined" ? window.location.href : "");
+  migrateLegacyDrafts(pageKey, typeof window !== "undefined" ? [window.location.href] : []);
+
+  const collectTargets = (): DraftRecord["targets"] =>
+    currentTargets().map((t) => ({
+      selector: t.selector,
+      ...(t.dataComponent ? { dataComponent: t.dataComponent } : {}),
+    }));
+
+  const existingDraft = findDraftBySelector(pageKey, opts.selector);
+  let draft: DraftRecord =
+    existingDraft ??
+    emptyDraft(pageKey, opts.selector, collectTargets(), opts.defaultIssueTopic);
+  let draftStored = !!existingDraft;
+  beginDraft(draft.id);
+
+  // Re-select every element the draft touched. index.ts seeds the element that
+  // was clicked; the rest of the multi-selection lives in the draft.
+  if (existingDraft) {
+    for (const t of existingDraft.targets) {
+      if (t.selector === opts.selector) continue;
+      if (currentTargets().some((x) => x.selector === t.selector)) continue;
+      let targetEl: Element | null = null;
+      try {
+        targetEl = typeof document !== "undefined" ? document.querySelector(t.selector) : null;
+      } catch {
+        targetEl = null;
+      }
+      if (targetEl) addSelectionTarget(targetEl, t.selector, t.dataComponent);
+    }
+  }
 
   const existing = opts.existingComments;
   const existingIds = existing.map((c) => c.id);
@@ -2467,12 +2563,16 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   const chatEnabled = !!opts.chat;
   const tabsHTML = `
     <button class="ef-tab" id="__ef_tab_feedback__" role="tab" data-tab="feedback" aria-selected="true" aria-controls="__ef_panel_feedback__" tabindex="0">Feedback${existing.length > 0 ? `<span class="ef-tab-count" title="${existing.length} existing comment${existing.length === 1 ? "" : "s"}">${existing.length}</span>` : ""}</button>
+    <button class="ef-tab" id="__ef_tab_edit__" role="tab" data-tab="edit" aria-selected="false" aria-controls="__ef_panel_edit__" tabindex="-1" aria-label="Edit element styles" title="Edit element styles">Edit</button>
     <button class="ef-tab" id="__ef_tab_changes__" role="tab" data-tab="changes" aria-selected="false" aria-controls="__ef_panel_changes__" tabindex="-1">Changes<span class="ef-tab-count" id="__ef_count_changes__" hidden></span></button>
     ${chatEnabled ? `<button class="ef-tab" id="__ef_tab_chat__" role="tab" data-tab="chat" aria-selected="false" aria-controls="__ef_panel_chat__" tabindex="-1">Chat</button>` : ""}`;
 
   dialog.innerHTML = `
     <div class="ef-card" role="dialog" aria-modal="true" aria-labelledby="__ef_title__" tabindex="-1">
       <div class="ef-header">
+        <div class="ef-header-crumb" id="__ef_header_crumb__">
+          <button type="button" class="ef-crumbs" id="__ef_all_reports__">← All reports</button>
+        </div>
         <div class="ef-header-top">
           <h2 id="__ef_title__">${title}</h2>
           <span class="ef-change-chip" id="__ef_change_count__" hidden></span>
@@ -2536,7 +2636,6 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
             </div>
             <div class="ef-issue-foot">
               <button type="button" class="ef-btn-secondary" id="__ef_issue_cancel__">Cancel</button>
-              <button type="button" class="ef-btn-secondary" id="__ef_edit_element__" aria-label="Edit element styles">Edit element</button>
               <div class="ef-footer-spacer"></div>
               <label class="ef-memory-opt" id="__ef_memory_opt__" ${memoryAsk ? "" : "hidden"}>
                 <input type="checkbox" id="__ef_memory_sync__" checked />
@@ -2546,7 +2645,9 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
               <button type="button" class="ef-btn-primary" id="__ef_issue_submit__">Create issue</button>
             </div>
           </div>
-          <div class="ef-design" id="__ef_design__" hidden>
+        </section>
+        <section class="ef-panel" id="__ef_panel_edit__" role="tabpanel" aria-labelledby="__ef_tab_edit__" hidden>
+          <div class="ef-design" id="__ef_design__">
             ${componentPickerHTML}
             ${targetStripHTML}
             <div class="ef-body">
@@ -2556,9 +2657,8 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
               </div>
             </div>
             <div class="ef-footer">
+              <button type="button" class="ef-btn-secondary" id="__ef_discard_draft__" title="Delete this draft and revert its live edits">Discard draft</button>
               <div class="ef-footer-spacer"></div>
-              <button type="button" class="ef-btn-secondary" id="__ef_cancel__">Cancel</button>
-              <button type="button" class="ef-btn-primary" id="__ef_back_to_issue__">Back to feedback</button>
             </div>
           </div>
         </section>
@@ -2571,6 +2671,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
              </section>`
           : ""}
       </div>
+      <div class="ef-reports" id="__ef_reports__" role="region" aria-label="All reports on this page" hidden></div>
     </div>
   `;
 
@@ -2605,24 +2706,28 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
 
   const textarea = dialog.querySelector<HTMLTextAreaElement>("#__ef_comment__")!;
   const submitBtn = dialog.querySelector<HTMLButtonElement>("#__ef_submit__")!;
-  const cancelBtn = dialog.querySelector<HTMLButtonElement>("#__ef_cancel__")!;
-  const backToIssueBtn = dialog.querySelector<HTMLButtonElement>("#__ef_back_to_issue__")!;
   const errDiv = dialog.querySelector<HTMLElement>("#__ef_err__")!;
 
-  // ── One pane, three panels; only attributes/hidden states swap ──────────────
-  const reportEl = dialog.querySelector<HTMLElement>("#__ef_report__")!;
-  const designEl = dialog.querySelector<HTMLElement>("#__ef_design__")!;
+  // ── One pane, four panels; only attributes/hidden states swap ──────────────
   const issueCancelBtn = dialog.querySelector<HTMLButtonElement>("#__ef_issue_cancel__")!;
   const issueSubmitBtn = dialog.querySelector<HTMLButtonElement>("#__ef_issue_submit__")!;
   const memorySyncInput = dialog.querySelector<HTMLInputElement>("#__ef_memory_sync__");
   const memorySyncRequested = (): boolean => memoryAsk && !!memorySyncInput?.checked;
-  const editBtn = dialog.querySelector<HTMLButtonElement>("#__ef_edit_element__")!;
   const changeChip = dialog.querySelector<HTMLElement>("#__ef_change_count__")!;
   const editorSelector = dialog.querySelector<HTMLElement>("#__ef_editor_selector__")!;
+  const discardBtn = dialog.querySelector<HTMLButtonElement>("#__ef_discard_draft__")!;
 
-  type TabKey = "feedback" | "changes" | "chat";
+  type TabKey = "feedback" | "edit" | "changes" | "chat";
   let tab: TabKey = "feedback";
-  let designMode = false;
+  type ViewKey = "report" | "reports";
+  let view: ViewKey = "report";
+
+  const tabsEl = dialog.querySelector<HTMLElement>(".ef-tabs")!;
+  const panelsEl = dialog.querySelector<HTMLElement>(".ef-panels")!;
+  const reportsEl = dialog.querySelector<HTMLElement>("#__ef_reports__")!;
+  const backToReportsBtn = dialog.querySelector<HTMLButtonElement>("#__ef_all_reports__")!;
+  const crumbRow = dialog.querySelector<HTMLElement>("#__ef_header_crumb__")!;
+  const titleEl = dialog.querySelector<HTMLElement>("#__ef_title__")!;
 
   const tabButtons = Array.from(dialog.querySelectorAll<HTMLButtonElement>(".ef-tab"));
   const panelFor = (key: TabKey): HTMLElement | null =>
@@ -2651,7 +2756,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
    * Switch the visible tab. Panels stay mounted, so typed text, chip state and
    * live style edits survive a switch in either direction.
    */
-  const setTab = (next: TabKey, focusPanel = false): void => {
+  const setTab = (next: TabKey): void => {
     if (tab === next) return;
     tab = next;
     dialog.dataset.tab = next;
@@ -2665,47 +2770,266 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
       if (panel) panel.hidden = btn.dataset.tab !== next;
     }
     if (next === "chat") refreshChat();
-    // Page picking follows the Feedback tab: reviewing changes or talking to
-    // the agent must not add elements when the reporter clicks the page.
-    if (next !== "feedback") opts.onEditingChange?.("submit");
-    else if (designMode) opts.onEditingChange?.("edit");
-    // The rail stays reserved across tabs; focus follows only if asked.
-    if (focusPanel) {
-      const panel = panelFor(next);
-      panel?.querySelector<HTMLElement>(
-        "textarea:not([disabled]), input:not([disabled]), button:not([disabled])"
-      )?.focus();
-    }
-  };
-
-  /**
-   * Toggle the Feedback tab between the report form and the live style editor.
-   * Nothing is re-rendered, so typed text, chips and live edits survive.
-   */
-  const setDesign = (on: boolean): void => {
-    designMode = on;
-    dialog.dataset.design = on ? "true" : "false";
-    reportEl.hidden = on;
-    designEl.hidden = !on;
-    applyDockState(card);
-    // Docked = non-modal (page stays interactive); centered = modal + trap.
-    activateDialog(card, {
-      modal: !effectiveDock(),
-      preserveFocusReturn: true,
-      focus: false,
-    });
-    if (on) {
+    if (next === "edit") {
+      // Entering the editor must show the live target set and selector.
       renderSelection();
-      renderEditorSelector();
     } else if (isPickMode()) {
       setPickMode(false);
     }
-    opts.onEditingChange?.(on ? "edit" : "submit");
+    // Page picking follows the Edit tab: reviewing changes or talking to the
+    // agent must not add elements when the reporter clicks the page.
+    opts.onEditingChange?.(next === "edit" ? "edit" : "submit");
   };
+
+  // ── Page-level report registry (master list) ────────────────────────────────
+  let pageReports: PageReports | null = null;
+  let pageReportsError = false;
+  let reportsLoading = false;
+  let reportsArmed: string | null = null;
+  let reportsArmTimer: number | null = null;
+
+  const relativeTime = (ts: number): string => {
+    const diff = Math.max(0, Date.now() - ts);
+    const min = Math.round(diff / 60000);
+    if (min < 1) return "just now";
+    if (min < 60) return `${min}m ago`;
+    const hrs = Math.round(min / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.round(hrs / 24)}d ago`;
+  };
+
+  const draftHeadline = (d: DraftRecord): string => {
+    const line = d.comment.split("\n").map((l) => l.trim()).find(Boolean);
+    return line || d.title.trim() || "Untitled draft";
+  };
+
+  const elementExists = (selector: string): boolean => {
+    try {
+      return typeof document !== "undefined" && !!document.querySelector(selector);
+    } catch {
+      return false;
+    }
+  };
+
+  const draftRowsHTML = (drafts: DraftRecord[]): string => {
+    if (drafts.length === 0) {
+      return `<div class="ef-reports-empty">No drafts in progress.</div>`;
+    }
+    return `<ul class="ef-report-list">
+      ${drafts.map((d) => {
+        const changes = getDraftChangeCount(d.id);
+        const found = elementExists(d.selector);
+        const meta = [
+          d.type === "bug" ? "🐛 Bug" : "✨ Enhancement",
+          `${d.targets.length} element${d.targets.length === 1 ? "" : "s"}`,
+          `${changes} change${changes === 1 ? "" : "s"}`,
+          relativeTime(d.updatedAt),
+        ];
+        if (!found) meta.push("element not found");
+        return `<li class="ef-report-item" data-kind="draft">
+          <button type="button" class="ef-report-main" data-resume="${escapeHtml(d.id)}" ${found ? "" : "disabled"} title="${escapeHtml(d.selector)}">
+            <span class="ef-report-title">${escapeHtml(draftHeadline(d))}</span>
+            <span class="ef-report-meta">${meta.map((m) => `<span>${escapeHtml(m)}</span>`).join("")}</span>
+            <span class="ef-report-sel">${escapeHtml(d.selector)}</span>
+          </button>
+          <button type="button" class="ef-report-cancel" data-cancel="${escapeHtml(d.id)}" ${reportsArmed === d.id ? 'data-confirm="true"' : ""} aria-label="${reportsArmed === d.id ? "Confirm delete draft" : "Delete draft"}">${reportsArmed === d.id ? "Confirm" : "Cancel"}</button>
+        </li>`;
+      }).join("")}
+    </ul>`;
+  };
+
+  const submittedRowsHTML = (): string => {
+    if (opts.loadPageReports && pageReports === null) {
+      return `<div class="ef-reports-empty">${pageReportsError ? "Could not load submitted reports." : "Loading submitted reports…"}</div>`;
+    }
+    if (!pageReports) return "";
+    const { comments, issues } = pageReports;
+    if (comments.length === 0 && issues.length === 0) {
+      return `<div class="ef-reports-empty">Nothing submitted on this page yet.</div>`;
+    }
+    const rows: string[] = [];
+    for (const c of comments) {
+      const issue = issues.find((i) => i.selector === c.selector);
+      const status = c.status && c.status !== "open"
+        ? `<span class="ef-report-status">${escapeHtml(c.status)}</span>`
+        : "";
+      const issueLink = (c.issue_url || issue?.issue_url)
+        ? `<a class="ef-report-issue" href="${escapeHtml(c.issue_url ?? issue!.issue_url)}" target="_blank" rel="noopener noreferrer">Issue${issue ? ` #${issue.issue_number}` : ""}</a>`
+        : "";
+      const excerpt = c.comment.length > 140 ? `${c.comment.slice(0, 137)}…` : c.comment;
+      rows.push(`<li class="ef-report-item" data-kind="submitted">
+        <button type="button" class="ef-report-main" data-open="${escapeHtml(c.selector)}" title="${escapeHtml(c.selector)}">
+          <span class="ef-report-title">${escapeHtml(excerpt)}</span>
+          <span class="ef-report-meta">
+            <span>@${escapeHtml(c.github_user)}</span>
+            <span>${escapeHtml(c.created_at)}</span>
+            ${status}
+            ${issueLink}
+          </span>
+          <span class="ef-report-sel">${escapeHtml(c.selector)}</span>
+        </button>
+      </li>`);
+    }
+    // Issues that exist without a matching feedback row still deserve a line.
+    for (const i of issues) {
+      if (comments.some((c) => c.selector === i.selector)) continue;
+      rows.push(`<li class="ef-report-item" data-kind="submitted">
+        <button type="button" class="ef-report-main" data-open="${escapeHtml(i.selector)}" title="${escapeHtml(i.selector)}">
+          <span class="ef-report-title">${escapeHtml(i.title)}</span>
+          <span class="ef-report-meta">
+            <span class="ef-report-status">issue</span>
+            <a class="ef-report-issue" href="${escapeHtml(i.issue_url)}" target="_blank" rel="noopener noreferrer">#${i.issue_number}</a>
+          </span>
+          <span class="ef-report-sel">${escapeHtml(i.selector)}</span>
+        </button>
+      </li>`);
+    }
+    return `<ul class="ef-report-list">${rows.join("")}</ul>`;
+  };
+
+  const bindReports = (drafts: DraftRecord[]): void => {
+    reportsEl.querySelectorAll<HTMLButtonElement>("[data-resume]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.dataset.resume ?? "";
+        const target = drafts.find((d) => d.id === id);
+        if (!target) return;
+        if (!opts.onOpenReport) return;
+        opts.onOpenReport(target.selector);
+      });
+    });
+    reportsEl.querySelectorAll<HTMLButtonElement>("[data-cancel]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.dataset.cancel ?? "";
+        if (reportsArmed !== id) {
+          reportsArmed = id;
+          renderReports();
+          if (reportsArmTimer !== null) window.clearTimeout(reportsArmTimer);
+          reportsArmTimer = window.setTimeout(() => {
+            reportsArmTimer = null;
+            if (reportsArmed === id) {
+              reportsArmed = null;
+              renderReports();
+            }
+          }, 4000);
+          return;
+        }
+        if (reportsArmTimer !== null) {
+          window.clearTimeout(reportsArmTimer);
+          reportsArmTimer = null;
+        }
+        reportsArmed = null;
+        deleteDraft(pageKey, id);
+        discardDraft(id);
+        renderReports();
+      });
+    });
+    reportsEl.querySelectorAll<HTMLButtonElement>("[data-open]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const selector = btn.dataset.open ?? "";
+        opts.onOpenReport?.(selector);
+      });
+    });
+    reportsEl.querySelector<HTMLButtonElement>("#__ef_clear_applied__")?.addEventListener("click", () => {
+      clearCommitted();
+      renderReports();
+    });
+    reportsEl.querySelector<HTMLButtonElement>("#__ef_reports_close__")?.addEventListener("click", () => {
+      closeDialog();
+      opts.onCancel();
+    });
+  };
+
+  const renderReports = (): void => {
+    if (view !== "reports") return;
+    if (reportsArmed && !listDrafts(pageKey).some((d) => d.id === reportsArmed)) {
+      reportsArmed = null;
+    }
+    const drafts = listDrafts(pageKey);
+    const committed = getCommittedEntries();
+    reportsEl.innerHTML = `
+      <div class="ef-reports-body">
+        <section>
+          <div class="ef-changes-head">
+            <div class="ef-section-label">In progress (${drafts.length})</div>
+          </div>
+          ${draftRowsHTML(drafts)}
+        </section>
+        <section>
+          <div class="ef-changes-head">
+            <div class="ef-section-label">Submitted</div>
+          </div>
+          ${submittedRowsHTML()}
+        </section>
+      </div>
+      <div class="ef-reports-foot">
+        ${committed.length > 0
+          ? `<button type="button" class="ef-btn-secondary ef-btn-sm" id="__ef_clear_applied__">Clear applied changes (${committed.length})</button>
+             <span class="ef-hint">Committed style edits from earlier reports</span>`
+          : ""}
+        <div class="ef-footer-spacer"></div>
+        <button type="button" class="ef-btn-secondary" id="__ef_reports_close__">Close</button>
+      </div>`;
+    bindReports(drafts);
+
+    if (opts.loadPageReports && pageReports === null && !reportsLoading) {
+      reportsLoading = true;
+      void opts.loadPageReports()
+        .then((r) => { pageReports = r; })
+        .catch(() => { pageReportsError = true; })
+        .finally(() => {
+          reportsLoading = false;
+          if (view === "reports") renderReports();
+        });
+    }
+  };
+
+  /** Suspend the live draft: persist text + edits, revert the page to baseline. */
+  const suspendActiveDraft = (): void => {
+    if (draftTimer !== null) { window.clearTimeout(draftTimer); draftTimer = null; }
+    syncDraft();
+    if (isPickMode()) setPickMode(false);
+    suspendDraft();
+  };
+
+  const setView = (next: ViewKey): void => {
+    view = next;
+    dialog.dataset.view = next;
+    const listing = next === "reports";
+    crumbRow.hidden = listing;
+    tabsEl.hidden = listing;
+    panelsEl.hidden = listing;
+    reportsEl.hidden = !listing;
+    titleEl.textContent = listing ? "All reports" : title;
+    editorSelector.hidden = listing;
+    if (listing) {
+      suspendActiveDraft();
+      // Reset tab state without firing another mode change.
+      tab = "feedback";
+      dialog.dataset.tab = "feedback";
+      for (const btn of tabButtons) {
+        const on = btn.dataset.tab === "feedback";
+        btn.setAttribute("aria-selected", on ? "true" : "false");
+        btn.tabIndex = on ? 0 : -1;
+      }
+      for (const btn of tabButtons) {
+        const panel = panelFor(btn.dataset.tab as TabKey);
+        if (panel) panel.hidden = btn.dataset.tab !== "feedback";
+      }
+      opts.onEditingChange?.("submit");
+      renderReports();
+    } else {
+      reportsArmed = null;
+      if (tab === "edit") opts.onEditingChange?.("edit");
+    }
+  };
+
+  backToReportsBtn.addEventListener("click", () => setView("reports"));
 
   // Tab bar: click + roving-tabindex arrow keys.
   tabButtons.forEach((btn) => {
-    btn.addEventListener("click", () => setTab(btn.dataset.tab as TabKey, true));
+    // Keep focus on the tab: moving it into the panel would fire the target
+    // label's focus handler and leave a permanent outline over the page.
+    btn.addEventListener("click", () => setTab(btn.dataset.tab as TabKey));
     btn.addEventListener("keydown", (e) => {
       const keys = ["ArrowLeft", "ArrowRight", "Home", "End"];
       if (!keys.includes(e.key)) return;
@@ -2722,24 +3046,16 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     });
   });
 
-  /** Return to the report form, keeping every typed field and pending edit. */
-  const backToSubmit = (): void => {
-    if (!designMode) return;
-    if (isPickMode()) setPickMode(false);
-    setDesign(false);
-    // Round trip: land back on the button that opened the editor.
-    editBtn.focus();
-  };
-
   /**
-   * Cancel the whole report from either view: drop the persisted draft, undo
-   * uncommitted edits and close. Committed edits stay on the page.
+   * Cancel the whole report: drop the draft record, revert its live edits and
+   * close. Committed edits from earlier reports stay on the page.
    */
   const cancelReport = (): void => {
     if (draftTimer !== null) { window.clearTimeout(draftTimer); draftTimer = null; }
-    clearDraft(opts.selector);
+    discarding = true;
+    deleteDraft(pageKey, draft.id);
+    discardDraft(draft.id);
     removeKey();
-    revertPending();
     closeDialog();
     opts.onCancel();
   };
@@ -2762,10 +3078,9 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   };
 
   // ── Draft persistence wiring ────────────────────────────────────────────────
-  // Debounced save of the text fields (comment / title / type) on input, and a
-  // single restore when the dialog is built. Storage is best-effort only.
-  // Crucially the restore does NOT run on view swaps, so returning from the
-  // editor can never overwrite text typed more recently than the saved draft.
+  // The draft record is created lazily on the first meaningful edit, so merely
+  // reading comments never litters the All reports list. Once stored, text and
+  // targets are updated on a short debounce.
   const topicInput = dialog.querySelector<HTMLInputElement>("#__ef_topic__");
   let draftTimer: number | null = null;
   // Comment text that was already POSTed by the create-issue flow. Kept across
@@ -2774,26 +3089,50 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   let submittedComment: string | null = null;
   let submittedId: number | null = null;
 
+  const draftSnapshot = (): DraftRecord => ({
+    ...draft,
+    targets: collectTargets(),
+    comment: textarea.value,
+    title: topicInput?.value ?? draft.title,
+    type: getType(),
+  });
+
+  /** Store the draft now (first edit / style change). */
+  const promoteDraft = (): void => {
+    if (draftStored) return;
+    draft = draftSnapshot();
+    saveDraft(draft);
+    draftStored = true;
+  };
+
+  /** Push the current form state into the stored draft. */
+  const syncDraft = (): void => {
+    if (!draftStored) return;
+    draft = draftSnapshot();
+    updateDraft(pageKey, draft.id, {
+      comment: draft.comment,
+      title: draft.title,
+      type: draft.type,
+      targets: draft.targets,
+      selector: draft.selector,
+    });
+  };
+
   const scheduleDraftSave = (): void => {
+    promoteDraft();
     if (draftTimer !== null) window.clearTimeout(draftTimer);
     draftTimer = window.setTimeout(() => {
       draftTimer = null;
-      saveDraft(opts.selector, {
-        comment: textarea.value,
-        title: topicInput?.value ?? "",
-        type: getType(),
-      });
+      syncDraft();
     }, 300);
   };
 
   const restoreDraft = (): void => {
-    const draft = loadDraft(opts.selector);
-    if (!draft) return;
     if (draft.comment) textarea.value = draft.comment;
     if (draft.title && topicInput) topicInput.value = draft.title;
-    if (draft.type) {
+    if (draft.type === "bug") {
       const radio = dialog.querySelector<HTMLInputElement>(
-        `input[name='__ef_type__'][value='${draft.type}']`
+        `input[name='__ef_type__'][value='bug']`
       );
       if (radio && !radio.checked) {
         radio.checked = true;
@@ -2963,83 +3302,36 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   };
 
   const renderChanges = () => {
-    const t = activeTarget();
-    const pending = t ? getChangesFor(t.el) : [];
-    const pendingCount = pending.length;
-    // Commit freezes every pending edit across targets, not just the active one.
-    const pendingElsewhere = Math.max(0, getChangeCount() - pendingCount);
-    const committed = getCommittedEntries();
+    // Only the live draft's edits are shown. Committed (baseline) edits from
+    // earlier reports are managed from the All reports list.
+    const changes = getChanges();
+    const count = changes.length;
 
-    const pendingList =
-      pendingCount === 0
-        ? `<div class="ef-changes-empty">No pending edits on this element. Commit to freeze them.</div>`
+    const list =
+      count === 0
+        ? `<div class="ef-changes-empty">No changes in this draft yet.</div>`
         : `<ul class="ef-changes-list">
-            ${pending.map((c) => {
+            ${changes.map((c) => {
               const groupLabel = c.move != null ? "Position" : c.group === "text" ? "Text" : c.group;
               return `<li><span class="ef-change-group">${escapeHtml(groupLabel)}</span><span class="ef-change-before">${escapeHtml(c.before || "—")}</span><span class="ef-arrow">→</span><span class="ef-change-after">${escapeHtml(c.after)}</span></li>`;
             }).join("")}
           </ul>`;
 
-    const committedList =
-      committed.length === 0
-        ? `<div class="ef-changes-empty">No committed changes yet.</div>`
-        : `<ul class="ef-committed-list">
-            ${committed.map((c, i) => `
-              <li class="ef-committed-item${c.stale ? " ef-stale" : ""}">
-                <div class="ef-committed-meta">
-                  <span class="ef-committed-sel" title="${escapeHtml(c.selector)}">${escapeHtml(c.selector)}</span>
-                  ${c.stale ? `<span class="ef-committed-badge">not found</span>` : ""}
-                  <button type="button" class="ef-committed-remove" data-idx="${i}" aria-label="Remove committed change">×</button>
-                </div>
-                <div class="ef-committed-diff">
-                  <span class="ef-change-group">${escapeHtml(c.groupLabel || c.group)}</span>
-                  <span class="ef-change-before">${escapeHtml(c.before || "—")}</span>
-                  <span class="ef-arrow">→</span>
-                  <span class="ef-change-after">${escapeHtml(c.after)}</span>
-                </div>
-              </li>`).join("")}
-          </ul>`;
-
     changesHost.innerHTML = `
       <div class="ef-changes-block">
         <div class="ef-changes-head">
-          <div class="ef-section-label">Changes (${pendingCount})</div>
+          <div class="ef-section-label">This draft (${count})</div>
           <div class="ef-changes-actions">
-            <button type="button" class="ef-btn-secondary ef-btn-sm" id="__ef_revert_pending__"${pendingCount === 0 ? " disabled" : ""}>Revert</button>
-            <button type="button" class="ef-btn-primary ef-btn-sm" id="__ef_commit__"${pendingCount === 0 ? " disabled" : ""}>Commit</button>
+            <button type="button" class="ef-btn-secondary ef-btn-sm" id="__ef_revert_pending__"${count === 0 ? " disabled" : ""}>Revert all</button>
           </div>
         </div>
-        ${pendingList}
-        ${pendingElsewhere > 0 ? `<div class="ef-hint">${pendingElsewhere} pending edit${pendingElsewhere !== 1 ? "s" : ""} on other element${pendingElsewhere !== 1 ? "s" : ""} will also be committed.</div>` : ""}
-      </div>
-      <div class="ef-committed" id="__ef_committed__">
-        <div class="ef-changes-head">
-          <div class="ef-section-label">Committed changes (${committed.length})</div>
-          ${committed.length > 0 ? `<button type="button" class="ef-btn-secondary ef-btn-sm" id="__ef_committed_clear__">Remove all</button>` : ""}
-        </div>
-        ${committedList}
+        ${list}
+        <div class="ef-hint">Saving or creating the issue commits these edits. Leaving the draft reverts the page until you reopen it.</div>
       </div>`;
 
     changesHost.querySelector<HTMLButtonElement>("#__ef_revert_pending__")?.addEventListener("click", () => {
       revertPending();
       renderSelection();
-    });
-    changesHost.querySelector<HTMLButtonElement>("#__ef_commit__")?.addEventListener("click", () => {
-      commitChanges();
-      renderSelection();
-    });
-    changesHost.querySelector<HTMLButtonElement>("#__ef_committed_clear__")?.addEventListener("click", () => {
-      clearCommitted();
-      renderSelection();
-    });
-    changesHost.querySelectorAll<HTMLButtonElement>(".ef-committed-remove").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const idx = parseInt(btn.dataset.idx ?? "-1", 10);
-        if (idx >= 0) {
-          removeCommittedAt(idx);
-          renderSelection();
-        }
-      });
     });
   };
 
@@ -3060,8 +3352,6 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
       styleHost.querySelector<HTMLElement>(".ef-style-class-list")?.scrollTop ?? 0;
     const changesScroll =
       changesHost.querySelector<HTMLElement>(".ef-changes-list")?.scrollTop ?? 0;
-    const committedScroll =
-      changesHost.querySelector<HTMLElement>(".ef-committed-list")?.scrollTop ?? 0;
 
     renderTargets();
     renderStyle();
@@ -3075,8 +3365,6 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     if (newClassList) newClassList.scrollTop = classListScroll;
     const newChanges = changesHost.querySelector<HTMLElement>(".ef-changes-list");
     if (newChanges) newChanges.scrollTop = changesScroll;
-    const newCommitted = changesHost.querySelector<HTMLElement>(".ef-committed-list");
-    if (newCommitted) newCommitted.scrollTop = committedScroll;
     bodyEl.scrollTop = bodyScroll;
     renderEditorSelector();
   };
@@ -3086,7 +3374,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
    * report that is (mostly) a reorder reads as a move.
    */
   const defaultAction = (): IntentAction =>
-    getAllChanges().some((c) => c.move != null) ? "move" : inferAction(getType());
+    getChanges().some((c) => c.move != null) ? "move" : inferAction(getType());
 
   let action: IntentAction = defaultAction();
   let actionTouched = false;
@@ -3280,7 +3568,6 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
    * Create issue themselves.
    */
   const applyReport = (r: ReportSuggestion): void => {
-    if (designMode) setDesign(false);
     setTab("feedback");
 
     const radio = dialog.querySelector<HTMLInputElement>(
@@ -3367,8 +3654,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   // (now last) textarea would scroll them out of view and pop the mobile keyboard.
 
   // Escape steps back one level: an unfinished page pick ends, another tab
-  // returns to Feedback, the style editor returns to the report, and only the
-  // report itself (the whole thing) cancels.
+  // returns to Feedback, and only the report itself (the whole thing) cancels.
   const onKey = (e: KeyboardEvent) => {
     // The auth layer owns Escape while it is up.
     if (authLayerOpen) return;
@@ -3379,16 +3665,18 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
       setPickMode(false);
       return;
     }
+    if (view === "reports") {
+      // The list is the last level: close the pane, keeping every draft.
+      closeDialog();
+      opts.onCancel();
+      return;
+    }
     if (tab !== "feedback") {
       setTab("feedback");
       return;
     }
-    if (designMode) {
-      // Keep every pending edit; just return to the report.
-      backToSubmit();
-      return;
-    }
-    cancelReport();
+    // Leaving the report keeps the draft; only Discard/Cancel deletes it.
+    setView("reports");
   };
   const removeKey = () => {
     document.removeEventListener("keydown", onKey);
@@ -3397,23 +3685,37 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   document.addEventListener("keydown", onKey);
   dialogKeyHandler = onKey;
 
-  // Editor: Cancel throws away the whole report (draft + uncommitted edits).
-  cancelBtn.addEventListener("click", () => {
+  /** Close after a successful submit/export: the draft is no longer in progress. */
+  const finishReport = (): void => {
+    if (draftTimer !== null) { window.clearTimeout(draftTimer); draftTimer = null; }
+    discarding = true;
+    deleteDraft(pageKey, draft.id);
+    removeKey();
+    closeDialog();
+  };
+
+  // Issue card: Cancel throws away the whole report.
+  issueCancelBtn.addEventListener("click", () => {
     cancelReport();
   });
 
-  // Editor: back to the issue card, keeping text, chips and pending edits.
-  backToIssueBtn.addEventListener("click", () => {
-    backToSubmit();
-  });
-
-  // Report panel: "Edit element" opens the style editor for the target.
-  editBtn.addEventListener("click", () => {
-    setDesign(true);
-  });
-
-  // Issue card: Cancel throws away the whole report, same as the editor's.
-  issueCancelBtn.addEventListener("click", () => {
+  // Edit tab: one button clears the feedback text and its live changes. Two
+  // steps so a stray click cannot delete a draft.
+  let discardArmed = false;
+  const disarmDiscard = (): void => {
+    discardArmed = false;
+    discardBtn.textContent = "Discard draft";
+    discardBtn.removeAttribute("data-confirm");
+  };
+  discardBtn.addEventListener("click", () => {
+    if (!discardArmed) {
+      discardArmed = true;
+      discardBtn.textContent = "Confirm discard";
+      discardBtn.setAttribute("data-confirm", "true");
+      window.setTimeout(() => { if (discardArmed) disarmDiscard(); }, 4000);
+      return;
+    }
+    disarmDiscard();
     cancelReport();
   });
 
@@ -3429,9 +3731,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
         () => opts.onSubmit(comment, getType(), buildIntent(), memorySyncRequested()),
         opts.ensureAuth
       )();
-      clearDraft(opts.selector);
-      removeKey();
-      closeDialog();
+      finishReport();
       opts.onComplete?.();
     } catch (err) {
       // Declined re-auth: keep the draft, show an inline prompt, re-enable.
@@ -3487,9 +3787,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
         () => opts.onExport(ids, type, topic),
         opts.ensureAuth
       )();
-      clearDraft(opts.selector);
-      removeKey();
-      closeDialog();
+      finishReport();
       showToast("Issue created successfully!");
       opts.onComplete?.();
     } catch (err) {
@@ -3511,9 +3809,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
             withAuthRetry(() => opts.onExport(ids, type, topic), opts.ensureAuth)(),
         });
         if (granted) {
-          clearDraft(opts.selector);
-          removeKey();
-          closeDialog();
+          finishReport();
           showToast("Issue created successfully!");
           opts.onComplete?.();
         } else {
@@ -3543,6 +3839,9 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     renderScopeHint();
     // Keep the pane's edit count live whatever tab is showing.
     renderChangeCount();
+    // A style change (or a second target) is enough to make this report real:
+    // store it so it shows up under All reports.
+    if (view === "report" && (getChanges().length > 0 || count > 1)) promoteDraft();
     // A pick just finished: show the editor again and restore modal focus.
     if (awaitingPick && !isPickMode()) {
       awaitingPick = false;
@@ -3581,6 +3880,13 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   window.addEventListener("resize", onResize);
 
   dialogCleanup = () => {
+    // Leaving the report keeps the draft: persist its text + edits, then put
+    // the page back to the committed baseline. A deliberate discard/submit has
+    // already cleaned up and sets `discarding`.
+    if (!discarding && view === "report") {
+      try { syncDraft(); } catch { /* storage unavailable */ }
+      try { suspendDraft(); } catch { /* detached DOM */ }
+    }
     unsubSelection();
     unsubHighlight();
     unsubActionSeed();
@@ -3592,25 +3898,29 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     deactivateFocusTrap();
   };
 
-  // Backdrop click closes the centered pane. It never fires while docked (the
-  // rail is click-through at the root), and it cancels only from the style
-  // editor — a typed report is never discarded by a stray click.
+  // Backdrop click is never destructive: it steps back to All reports (which
+  // suspends the draft), or closes the pane from the list. It never fires while
+  // docked — the rail is click-through at the root.
   dialog.addEventListener("click", (e) => {
-    if (e.target === dialog && designMode && !effectiveDock() && !awaitingPick) {
-      cancelReport();
+    if (e.target !== dialog || effectiveDock() || awaitingPick) return;
+    if (view === "reports") {
+      closeDialog();
+      opts.onCancel();
+      return;
     }
+    setView("reports");
   });
 
-  // Restore the persisted draft exactly once per open. Doing it here (instead of
-  // on every tab switch) keeps newer text intact when returning from the editor.
+  // Restore the draft exactly once per open. Doing it here (instead of on every
+  // tab switch) keeps newer text intact when returning from the editor.
   restoreDraft();
   renderChangeCount();
-  // Open on the report tab, form mode. The rail is installed before the first
-  // paint so a docked pane never flashes centered.
+  // Open in report context, on the Feedback tab. The rail is installed before
+  // the first paint so a docked pane never flashes centered.
   dialog.dataset.tab = "feedback";
-  dialog.dataset.design = "false";
-  reportEl.hidden = false;
-  designEl.hidden = true;
+  dialog.dataset.view = "report";
+  crumbRow.hidden = false;
+  reportsEl.hidden = true;
   applyDockState(card);
   activateDialog(card, { modal: !effectiveDock(), preserveFocusReturn: true });
   renderEditorSelector();

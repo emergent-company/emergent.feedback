@@ -32,15 +32,16 @@ Zero-config feedback overlay. One `<script>` tag adds element-level commenting +
 |--------|--------|
 | Hold hotkey | Enter selection mode (crosshair + highlights) |
 | Hover element | Tooltip shows tag or `data-component` name |
-| Click element | Opens issue submission modal |
+| Click element | Opens the feedback pane |
 | Release hotkey | Exit selection mode |
 
 ### Feedback dialog
 
-- Clicking an element opens the **issue submission modal** immediately (comment / title / type / intent)
-- **Edit element** — opens the style editor (docked sidebar by default, or centered card); **Back to issue** returns to the modal
-- **Commit** — freezes pending edits; committed edits persist (localStorage) across close/reload until removed via the Committed-changes list
-- In the modal: fill comment/title/type/intent, then **Create issue** (GitHub issue) or **Save** (local only, no GitHub issue)
+- Clicking an element opens the **feedback pane** on its **Feedback** tab (comment / title / type / intent)
+- Tabs, in order: **Feedback · Edit · Changes · Chat** (Chat is opt-in). **Edit** is the style editor (docked sidebar by default, or centered card); tab navigation replaces the old footer buttons
+- **Save** / **Create issue** commits the draft's style edits to the local baseline; **Discard draft** deletes the draft and reverts its live edits
+- **← All reports** (header) lists in-progress drafts and submitted feedback for the page; resume a draft, cancel it (two-step), or **Clear applied changes**
+- Leaving a draft suspends it: the page reverts to baseline until you reopen the draft. Escape steps back one level (Edit/Changes/Chat → Feedback → All reports → close)
 
 ## `data-component` attribute
 

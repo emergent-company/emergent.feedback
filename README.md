@@ -118,12 +118,17 @@ one set of badges; legacy rows saved under a fragment URL are included too.
 ### Feedback pane
 
 Clicking an element opens the **feedback pane** on its **Feedback** tab — the
-former **Send to GitHub** button is gone. The pane is one card with three tabs:
+former **Send to GitHub** button is gone. The pane is one card with these tabs:
 
-- **Feedback** — the report form, and the live style editor for the selected
-  element(s).
-- **Changes** — every pending style edit, with revert actions.
+- **Feedback** — the report form.
+- **Edit** — the live style editor for the selected element(s).
+- **Changes** — the style edits belonging to the current draft, with a
+  **Revert all** action.
 - **Chat** — opt-in report composer (see [Chat tab](#chat-tab)).
+
+The pane header carries **← All reports** (`#__ef_all_reports__`), which opens
+the page-level list of drafts and submitted reports (see
+[Drafts and reports](#drafts-and-reports)).
 
 To report feedback:
 
@@ -131,16 +136,39 @@ To report feedback:
    type (**Bug** / **Enhancement**) and intent, then **Create issue**
    (`#__ef_issue_submit__`) to submit to GitHub, or **Save** (`#__ef_submit__`)
    to save the feedback locally without creating a GitHub issue.
-2. Optionally, **Edit element** (`#__ef_edit_element__`) swaps the Feedback tab
-   to the style editor (`#__ef_design__`). Restyle the selected element(s) there,
-   then **Back to feedback** (`#__ef_back_to_issue__`) returns to the form —
-   typed text and pending edits are preserved. In the editor, **Cancel**
-   (`#__ef_cancel__`) throws away the whole report.
+2. Optionally, switch to **Edit element** (`#__ef_tab_edit__`) and restyle the
+   selected element(s). Moving between tabs preserves typed text and live edits.
+   **Discard draft** (`#__ef_discard_draft__`) deletes the draft, its text and
+   its style edits in one step (two-step confirm).
 3. **Cancel** (`#__ef_issue_cancel__`) discards the report and closes the pane.
-   `Escape` steps back one level: an unfinished page pick ends, another tab
-   returns to Feedback, the style editor returns to the form, and only the form
-   itself cancels. Clicking outside the centered card is deliberately inert so a
-   typed report is never discarded by a stray click.
+   `Escape` steps back one level: an unfinished page pick ends; Edit, Changes
+   and Chat return to Feedback; Feedback suspends the draft and shows
+   **All reports**; `Escape` in the list closes the pane. Clicking the backdrop
+   of the centered card also steps back to **All reports** — it never discards a
+   typed report.
+
+### Drafts and reports
+
+Each open report is a **draft**: its text, type, target elements and style
+edits. Drafts are stored in `sessionStorage`, scoped to the page with the same
+normalization as badges (so `#hash` routes collapse in `path` mode). A draft is
+recorded on the first meaningful edit, so merely reading comments does not add
+an entry.
+
+**← All reports** replaces the tabs with a full-panel master list:
+
+- **In progress** — one row per draft (headline, type, element/change counts,
+  age). Selecting a row reopens that report and re-applies its style edits;
+  **Cancel** (two-step confirm) deletes it and reverts its live edits.
+- **Submitted** — open feedback for the page, with status and a GitHub-issue
+  link when one exists. Selecting a row opens its element's report form.
+- **Clear applied changes** — drops the committed style baseline left by earlier
+  reports (shown only when one exists).
+
+Leaving a draft (opening All reports, closing the pane, backing out) **suspends**
+it: the page reverts to the committed baseline while the draft keeps its text and
+edits. Reopening it re-applies them. Only **Cancel** / **Discard draft** — or a
+successful **Save** / **Create issue** — ends a draft.
 
 ### Docked pane
 
@@ -220,11 +248,11 @@ Memory instance on localhost or a private network, set
 
 ### Live style editing
 
-The style editor (`.ef-design`, opened via **Edit element**) lives inside the
-pane's **Feedback** tab and shows only the **Design** editor. Writing the report
-and viewing the captured context/HTML happen in the same tab's report form (see
+The style editor (`.ef-design`) is the pane's **Edit element** tab and shows
+only the **Design** editor. Writing the report and viewing the captured
+context/HTML happen on the **Feedback** tab (see
 [Feedback pane](#feedback-pane)), not in the editor. `#__ef_change_count__` in
-the pane header and the **Changes** tab badge both show the attached
+the pane header and the **Changes** tab badge both show the current draft's
 style-change count.
 
 With the editor open, click additional elements to add them to the selection (a
@@ -280,7 +308,7 @@ appears above **Position**. Typing updates the text on the page live; Enter or
 blur records the edit and **Reset** restores the original text. Elements whose
 text lives only in descendants, or whose content mixes text and inline markup
 (`<p>Hello <b>world</b>!</p>`), get no field — the overlay never collapses child
-markup. Text edits join the same pending/commit flow and ride in the payload as
+markup. Text edits join the same draft flow and ride in the payload as
 `{ target, group: "text", before, after }`, so the issue body lists them as
 `` `target` — text: `before` → `after` ``.
 
@@ -295,19 +323,19 @@ drop is swallowed so it does not also toggle the selection. Illegal drops
 
 A move is recorded per element as an anchor pair (container selector + the
 sibling it sits before + index, plus the readable position, e.g.
-`2nd of 3 in .toolbar`). It shows up in the **Changes**/**Committed changes**
-lists as `Position`, is reverted with the element's other pending edits, replays
-after a reload once committed, and rides in the payload as
+`2nd of 3 in .toolbar`). It shows up in the **Changes** list as `Position`, is reverted with the element's other pending edits, replays
+after a reload once the report is saved, and rides in the payload as
 `{ target, group: "position", before, after, move: { from, to } }` — the issue
 body renders it as a `move:` line.
 
-Edits start **pending**: they apply live to the page but are reverted when the
-report is cancelled or the editing session ends. Press **Commit** to freeze the
-pending edits — committed edits are written to localStorage and persist across
-closing/reopening the editor and page reloads. Manage them from the global
-**Committed changes** list (per-entry **Remove** plus **Remove all**); they are
-cleared only by explicit removal. The **Changes** tab and the server
-panel preview render a **Requested changes** list (`target — group: before → after`).
+Edits belong to the **draft**. They apply live while that draft is open and are
+reverted when you leave it (All reports, closing the pane); reopening the draft
+re-applies them. **Save** / **Create issue** commits the draft's edits to the
+permanent baseline (localStorage), so they replay on every reload; the
+**All reports** list's **Clear applied changes** drops that baseline. The
+**Changes** tab lists the current draft's edits with **Revert all**, and the
+server panel preview renders a **Requested changes** list
+(`target — group: before → after`).
 
 Tokens come from the project via `data-theme-url` (below). Placeholder choices
 are used when it is absent.

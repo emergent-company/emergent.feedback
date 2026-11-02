@@ -31,7 +31,7 @@ test.describe("editor affordances (structure fixture)", () => {
     await expect(page.locator("#__ef_dialog__")).toBeVisible();
     // Submission-first: clicking opens the issue modal; "Edit element" swaps
     // it for the style editor.
-    await page.locator("#__ef_edit_element__").click();
+    await page.locator("#__ef_tab_edit__").click();
     await expect(page.locator("#__ef_style_editor__")).toBeVisible();
   }
 

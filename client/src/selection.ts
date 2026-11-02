@@ -102,6 +102,8 @@ const COLOR_PICK = "#4f86f7"; // blue — pick-mode hover
 let targets: TargetEntry[] = [];
 let applied: EditRecord[] = [];
 let committed: EditRecord[] = [];
+/** Draft whose live edits are currently applied to the page (null = baseline). */
+let activeDraftId: string | null = null;
 let listeners: Array<() => void> = [];
 let pickMode = false;
 let hoverEl: Element | null = null;
@@ -227,6 +229,7 @@ export function pickTarget(el: Element, selector: string, dataComponent?: string
 export function clear(): void {
   targets = [];
   applied = [];
+  activeDraftId = null;
   pickMode = false;
   hoverEl = null;
   resetHighlight();
@@ -567,26 +570,30 @@ function storageKey(): string {
   return COMMITTED_KEY;
 }
 
+/** Records → the plain shape persisted for committed and per-draft changes. */
+function serializeRecords(records: EditRecord[]): unknown[] {
+  return records.map((r) => {
+    if (isPlacement(r)) {
+      return { kind: POSITION_GROUP, selector: r.selector, from: r.from, to: r.to };
+    }
+    if (isText(r)) {
+      return {
+        kind: TEXT_GROUP,
+        selector: r.selector,
+        nodeIndex: r.nodeIndex,
+        before: r.before,
+        after: r.after,
+      };
+    }
+    return { selector: r.selector, group: r.group, token: r.token, before: r.before, after: r.after };
+  });
+}
+
 /** Write the committed store to localStorage (guarded for Node/private mode). */
 function persist(): void {
   if (typeof localStorage === "undefined") return;
   try {
-    const data = committed.map((r) => {
-      if (isPlacement(r)) {
-        return { kind: POSITION_GROUP, selector: r.selector, from: r.from, to: r.to };
-      }
-      if (isText(r)) {
-        return {
-          kind: TEXT_GROUP,
-          selector: r.selector,
-          nodeIndex: r.nodeIndex,
-          before: r.before,
-          after: r.after,
-        };
-      }
-      return { selector: r.selector, group: r.group, token: r.token, before: r.before, after: r.after };
-    });
-    localStorage.setItem(storageKey(), JSON.stringify(data));
+    localStorage.setItem(storageKey(), JSON.stringify(serializeRecords(committed)));
   } catch {
     // Private mode / sandboxed iframe / absent localStorage — ignore.
   }
@@ -639,9 +646,110 @@ export function commitChanges(): void {
   emit();
 }
 
-/** Alias for `commitChanges` — called after a successful Save / issue send. */
-export function markSent(): void {
+// ── Draft-scoped changes ──────────────────────────────────────────────────────
+// Only one draft is live at a time. Leaving a draft writes its edits to
+// sessionStorage and reverts the DOM to the committed baseline; reopening the
+// draft re-applies them. Nothing leaks between drafts.
+
+const DRAFT_CHANGES_KEY = "__ef_draft_changes__:";
+
+function draftChangesKey(id: string): string {
+  return `${DRAFT_CHANGES_KEY}${id}`;
+}
+
+function persistDraftChanges(id: string, records: EditRecord[]): void {
+  if (typeof sessionStorage === "undefined") return;
+  try {
+    sessionStorage.setItem(draftChangesKey(id), JSON.stringify(serializeRecords(records)));
+  } catch {
+    // Private mode / quota / sandboxed iframe — ignore.
+  }
+}
+
+function loadDraftChanges(id: string): EditRecord[] {
+  if (typeof sessionStorage === "undefined") return [];
+  let raw: string | null = null;
+  try {
+    raw = sessionStorage.getItem(draftChangesKey(id));
+  } catch {
+    raw = null;
+  }
+  return parseRecords(raw);
+}
+
+function removeDraftChanges(id: string): void {
+  if (typeof sessionStorage === "undefined") return;
+  try {
+    sessionStorage.removeItem(draftChangesKey(id));
+  } catch {
+    // ignore
+  }
+}
+
+/** Draft whose edits are currently applied, if any. */
+export function activeDraft(): string | null {
+  return activeDraftId;
+}
+
+/** Live or stored change count for a draft. */
+export function getDraftChangeCount(id: string): number {
+  if (activeDraftId === id) return applied.length;
+  return loadDraftChanges(id).length;
+}
+
+/** Make `id` the live draft: suspend the current one, then apply its edits. */
+export function beginDraft(id: string): void {
+  if (activeDraftId === id) return;
+  suspendDraft();
+  activeDraftId = id;
+  const records = loadDraftChanges(id);
+  applied = records;
+  for (const r of records) applyRecord(r);
+  renderHighlight();
+  emit();
+}
+
+/** Persist + revert the live draft's edits so the page returns to baseline. */
+export function suspendDraft(): void {
+  if (activeDraftId) {
+    // Keep the store honest: an empty draft (or one whose edits were all
+    // reverted) must not leave an empty changes key behind.
+    if (applied.length > 0) persistDraftChanges(activeDraftId, applied);
+    else removeDraftChanges(activeDraftId);
+  }
+  for (let i = applied.length - 1; i >= 0; i--) revertRecord(applied[i]);
+  applied = [];
+  activeDraftId = null;
+  renderHighlight();
+  emit();
+}
+
+/** Drop a draft's stored edits (reverting them if it is the live draft). */
+export function discardDraft(id: string): void {
+  if (activeDraftId === id) {
+    for (let i = applied.length - 1; i >= 0; i--) revertRecord(applied[i]);
+    applied = [];
+    activeDraftId = null;
+  }
+  removeDraftChanges(id);
+  renderHighlight();
+  emit();
+}
+
+/**
+ * Commit the live draft's edits into the permanent baseline (after a successful
+ * Save / issue send) and forget its draft-scoped storage.
+ */
+export function commitDraft(): void {
+  const id = activeDraftId;
   commitChanges();
+  if (id) removeDraftChanges(id);
+  activeDraftId = null;
+}
+
+/** Alias kept for call sites that announce a successful submission. */
+export function markSent(): void {
+  commitDraft();
 }
 
 /** Revert + drop ONLY pending edits; committed entries are left untouched. */
@@ -669,6 +777,68 @@ function queryEl(selector: string): Element | null {
  * Entries whose selector no longer resolves become stale (el: null) and are
  * kept in memory + storage. Safe to call once at boot.
  */
+/** Parse one serialized record; resolve its element but do not apply it yet. */
+function parseRecord(item: unknown): EditRecord | null {
+  if (!item || typeof item !== "object") return null;
+  const rec = item as Record<string, unknown>;
+  const selector = typeof rec.selector === "string" ? rec.selector : "";
+  if (!selector) return null;
+
+  // A recorded move: replay the position rather than a class/style.
+  if (rec.kind === POSITION_GROUP) {
+    const from = rec.from as PlacementAnchor | undefined;
+    const to = rec.to as PlacementAnchor | undefined;
+    if (!from || !to || typeof from.container !== "string" || typeof to.container !== "string") {
+      return null;
+    }
+    return { kind: "position", el: queryEl(selector), selector, from, to };
+  }
+
+  // A recorded direct-text edit: replay it on the element's text node.
+  if (rec.kind === TEXT_GROUP) {
+    const before = typeof rec.before === "string" ? rec.before : "";
+    const after = typeof rec.after === "string" ? rec.after : "";
+    const nodeIndex = typeof rec.nodeIndex === "number" ? rec.nodeIndex : -1;
+    return { kind: "text", el: queryEl(selector), selector, nodeIndex, before, after };
+  }
+
+  const group = (rec.group ?? null) as TokenGroup | null;
+  const token = (rec.token ?? null) as Token | null;
+  if (!group || !token) return null;
+  const before = typeof rec.before === "string" ? rec.before : "";
+  const after = typeof rec.after === "string" ? rec.after : "";
+  return { el: queryEl(selector), group, token, before, after, selector };
+}
+
+/** Apply a parsed record to the DOM (no-op for stale entries). */
+function applyRecord(r: EditRecord): void {
+  if (!r.el) return;
+  try {
+    if (isPlacement(r)) placeAt(r.el, r.to);
+    else if (isText(r)) writeDirectText(r.el, r.after, r.nodeIndex);
+    else applyToken(r.el, r.group, r.token);
+  } catch {
+    // Element may have left the DOM — nothing to apply.
+  }
+}
+
+function parseRecords(raw: string | null): EditRecord[] {
+  if (!raw) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  const out: EditRecord[] = [];
+  for (const item of parsed) {
+    const rec = parseRecord(item);
+    if (rec) out.push(rec);
+  }
+  return out;
+}
+
 export function loadCommitted(): void {
   committed = [];
   if (typeof localStorage === "undefined") {
@@ -681,80 +851,8 @@ export function loadCommitted(): void {
   } catch {
     raw = null;
   }
-  if (!raw) {
-    emit();
-    return;
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    parsed = null;
-  }
-  if (!Array.isArray(parsed)) {
-    emit();
-    return;
-  }
-
-  const records: EditRecord[] = [];
-  for (const item of parsed) {
-    if (!item || typeof item !== "object") continue;
-    const rec = item as Record<string, unknown>;
-    const selector = typeof rec.selector === "string" ? rec.selector : "";
-    if (!selector) continue;
-
-    // A recorded move: replay the position rather than a class/style.
-    if (rec.kind === POSITION_GROUP) {
-      const from = rec.from as PlacementAnchor | undefined;
-      const to = rec.to as PlacementAnchor | undefined;
-      if (!from || !to || typeof from.container !== "string" || typeof to.container !== "string") {
-        continue;
-      }
-      const el = queryEl(selector);
-      if (el) {
-        try {
-          placeAt(el, to);
-        } catch {
-          // ignore — element apply failed, treat as stale-but-present
-        }
-      }
-      records.push({ kind: "position", el, selector, from, to });
-      continue;
-    }
-
-    // A recorded direct-text edit: replay it on the element's text node.
-    if (rec.kind === TEXT_GROUP) {
-      const before = typeof rec.before === "string" ? rec.before : "";
-      const after = typeof rec.after === "string" ? rec.after : "";
-      const nodeIndex = typeof rec.nodeIndex === "number" ? rec.nodeIndex : -1;
-      const el = queryEl(selector);
-      if (el) {
-        try {
-          writeDirectText(el, after, nodeIndex >= 0 ? nodeIndex : undefined);
-        } catch {
-          // ignore — element apply failed, treat as stale-but-present
-        }
-      }
-      records.push({ kind: "text", el, selector, nodeIndex, before, after });
-      continue;
-    }
-
-    const group = (rec.group ?? null) as TokenGroup | null;
-    const token = (rec.token ?? null) as Token | null;
-    const before = typeof rec.before === "string" ? rec.before : "";
-    const after = typeof rec.after === "string" ? rec.after : "";
-    if (!group || !token) continue;
-
-    const el = queryEl(selector);
-    if (el) {
-      try {
-        applyToken(el, group, token);
-      } catch {
-        // ignore — element apply failed, treat as stale-but-present
-      }
-    }
-    records.push({ el: el ?? null, group, token, before, after, selector });
-  }
+  const records = parseRecords(raw);
+  for (const r of records) applyRecord(r);
   committed = records;
   emit();
 }
