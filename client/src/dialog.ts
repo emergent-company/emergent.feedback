@@ -29,7 +29,6 @@ import {
 import type {
   FeedbackIntent,
   IntentAction,
-  ScopeBreadth,
   StyleChange,
 } from "./envelope";
 import { syncThemeTo } from "./theme";
@@ -172,6 +171,9 @@ function injectStyles(): void {
       width: 50vw;
       min-width: min(480px, calc(100vw - 32px));
       max-width: min(900px, calc(100vw - 32px));
+      /* Centered (undocked) the card shrink-wraps its content; keep a floor so
+         a short tab does not collapse the whole window. Never exceed the max. */
+      min-height: min(560px, 85vh);
       max-height: 85vh;
       box-shadow: var(--ef-card-shadow);
       display: flex;
@@ -222,17 +224,6 @@ function injectStyles(): void {
       border-radius: 50%;
       border: 1px solid var(--ef-control-border);
     }
-    #__ef_dialog__ .ef-selector {
-      font-size: 11px;
-      color: var(--ef-muted-strong);
-      font-family: ui-monospace, "SF Mono", Menlo, monospace;
-      /* Compact single line in the editor header — never grows the header. */
-      max-width: 100%;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
     /* ── Scrollable editor body ───────────────────────────────────────────── */
     /* The editor is a single scrolling column under its header. */
     #__ef_dialog__ .ef-body {
@@ -558,34 +549,7 @@ function injectStyles(): void {
       font-family: inherit;
     }
 
-    /* ── Intent micro-form ─────────────────────────────────────────────────── */
-    #__ef_dialog__ .ef-intent {
-      display: flex;
-      flex-direction: column;
-      gap: 7px;
-      flex-shrink: 0;
-    }
-    #__ef_dialog__ .ef-intent-row {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 4px;
-    }
-    #__ef_dialog__ .ef-intent-label {
-      font-size: 10px;
-      font-weight: 700;
-      color: var(--ef-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      flex-shrink: 0;
-    }
-    #__ef_dialog__ .ef-chips {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 5px;
-      width: 100%;
-      min-width: 0;
-    }
+    /* ── Chips (Chat suggestions) ──────────────────────────────────────────── */
     #__ef_dialog__ .ef-chip {
       padding: 3px 11px;
       border-radius: 20px;
@@ -2329,53 +2293,9 @@ export interface SubmitFeedbackOptions {
   chat?: { api: APIClient; agent?: string };
 }
 
-// ── Intent micro-form helpers ────────────────────────────────────────────────
-
-const INTENT_ACTIONS: { value: IntentAction; label: string }[] = [
-  { value: "change", label: "Change" },
-  { value: "add", label: "Add" },
-  { value: "remove", label: "Remove" },
-  { value: "move", label: "Move" },
-  { value: "fix", label: "Fix" },
-  { value: "refactor", label: "Refactor" },
-  { value: "investigate", label: "Investigate" },
-];
-
 /** Default action verb for a feedback type (bug → fix, enhancement → change). */
 function inferAction(type: FeedbackType): IntentAction {
   return type === "bug" ? "fix" : "change";
-}
-
-interface ExpectedSuggestion {
-  value: string;
-  label: string;
-  /** Short structured sentence written into intent.expected when tapped. */
-  sentence: string;
-}
-
-/**
- * Auto-suggest "what did you expect?" chips from captured element signals.
- * Returns [] when nothing contextual applies — the caller hides the row.
- */
-function buildExpectedSuggestions(
-  styles: Record<string, string> | undefined,
-  tagName: string
-): ExpectedSuggestion[] {
-  const out: ExpectedSuggestion[] = [];
-  const hasColor = !!styles && !!(styles["color"] || styles["backgroundColor"]);
-  const buttonish = tagName === "button" || tagName === "a" || tagName === "input";
-
-  if (hasColor) {
-    out.push({ value: "contrast", label: "More contrast", sentence: "Higher contrast — meets WCAG AA (≥ 4.5:1)" });
-    out.push({ value: "darker", label: "Darker", sentence: "Darker color" });
-    if (buttonish) out.push({ value: "match", label: "Match other buttons", sentence: "Match the style of other buttons" });
-    out.push({ value: "different-color", label: "Different color", sentence: "A different color" });
-  }
-  if (styles?.["fontSize"]) {
-    out.push({ value: "larger", label: "Larger", sentence: "Larger text" });
-    out.push({ value: "smaller", label: "Smaller", sentence: "Smaller text" });
-  }
-  return out;
 }
 
 /** Shows the element feedback dialog: existing comments + compose area. */
@@ -2541,18 +2461,6 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
 
   const outerHTML = ctx["outerHTML"] as string | undefined;
 
-  // ── Intent micro-form pieces ───────────────────────────────────────────────
-  const tagName = String(ctx["tagName"] ?? "").toLowerCase();
-  const suggestions = buildExpectedSuggestions(styles, tagName);
-
-  const expectedRowHTML = suggestions.length > 0 ? `
-        <div class="ef-intent-row">
-          <span class="ef-intent-label">Expected</span>
-          <div class="ef-chips" id="__ef_expected__">
-            ${suggestions.map((s) => `<button type="button" class="ef-chip${s.value === "__below__" ? " ef-chip-muted" : ""}" data-expected="${s.value}" data-sentence="${escapeHtml(s.sentence)}" aria-pressed="false">${escapeHtml(s.label)}</button>`).join("")}
-          </div>
-        </div>` : "";
-
   // Subtitle for the issue modal header: repo · element.
   // "ask" is the only mode where the reporter chooses. "auto" syncs server-side
   // without a control; "off"/absent shows nothing.
@@ -2582,7 +2490,6 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
           </div>
           <button class="ef-dock-btn" id="__ef_dock__" type="button" title="Dock to the side" aria-label="Dock to the side"></button>
         </div>
-        <div class="ef-selector" id="__ef_editor_selector__" title="${escapeHtml(opts.selector)}">${escapeHtml(opts.selector)}</div>
       </div>
       <div class="ef-tabs" role="tablist" aria-label="Overlay views">${tabsHTML}</div>
       <div class="ef-panels">
@@ -2600,22 +2507,6 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
                   <label for="__ef_type_bug__">🐛 Bug</label>
                   <input type="radio" name="__ef_type__" id="__ef_type_enh__" value="enhancement" checked>
                   <label for="__ef_type_enh__">✨ Enhancement</label>
-                </div>
-                <div class="ef-intent">
-                  <div class="ef-intent-row">
-                    <span class="ef-intent-label">Action</span>
-                    <div class="ef-chips" id="__ef_action__"></div>
-                  </div>
-                  ${expectedRowHTML}
-                  <div class="ef-intent-row">
-                    <span class="ef-intent-label">Scope</span>
-                    <div class="ef-chips" id="__ef_scope__">
-                      <button type="button" class="ef-chip ef-chip-on" data-breadth="element" aria-pressed="true">This element</button>
-                      <button type="button" class="ef-chip" data-breadth="region" aria-pressed="false">Region</button>
-                      <button type="button" class="ef-chip" data-breadth="multi" aria-pressed="false">Multiple</button>
-                    </div>
-                    <span class="ef-hint" id="__ef_scope_hint__"></span>
-                  </div>
                 </div>
                 <textarea id="__ef_comment__" placeholder="Anything else? (optional)"></textarea>
                 <div class="ef-error" id="__ef_err__"></div>
@@ -2714,7 +2605,6 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   const memorySyncInput = dialog.querySelector<HTMLInputElement>("#__ef_memory_sync__");
   const memorySyncRequested = (): boolean => memoryAsk && !!memorySyncInput?.checked;
   const changeChip = dialog.querySelector<HTMLElement>("#__ef_change_count__")!;
-  const editorSelector = dialog.querySelector<HTMLElement>("#__ef_editor_selector__")!;
   const discardBtn = dialog.querySelector<HTMLButtonElement>("#__ef_discard_draft__")!;
 
   type TabKey = "feedback" | "edit" | "changes" | "chat";
@@ -3000,7 +2890,6 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     panelsEl.hidden = listing;
     reportsEl.hidden = !listing;
     titleEl.textContent = listing ? "All reports" : title;
-    editorSelector.hidden = listing;
     if (listing) {
       suspendActiveDraft();
       // Reset tab state without firing another mode change.
@@ -3152,12 +3041,6 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   });
   if (topicInput) topicInput.addEventListener("input", scheduleDraftSave);
 
-  // ── Intent micro-form state + wiring ───────────────────────────────────────
-  const actionWrap = dialog.querySelector<HTMLElement>("#__ef_action__")!;
-  const expectedWrap = dialog.querySelector<HTMLElement>("#__ef_expected__");
-  const scopeWrap = dialog.querySelector<HTMLElement>("#__ef_scope__")!;
-  const scopeHint = dialog.querySelector<HTMLElement>("#__ef_scope_hint__")!;
-
   // ── Targets + live style editor + changes summary ───────────────────────────
   const bodyEl = dialog.querySelector<HTMLElement>(".ef-body")!;
   const targetsHost = dialog.querySelector<HTMLElement>("#__ef_targets__")!;
@@ -3180,14 +3063,6 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     if (t.dataComponent) return t.dataComponent;
     const tail = t.selector.split(">").pop()?.trim();
     return tail || t.selector;
-  };
-
-  /** Compact selector line in the editor header (context for what is edited). */
-  const renderEditorSelector = (): void => {
-    const t = activeTarget();
-    const sel = t?.selector ?? opts.selector;
-    editorSelector.textContent = sel;
-    editorSelector.title = sel;
   };
 
   const renderTargets = () => {
@@ -3366,7 +3241,6 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     const newChanges = changesHost.querySelector<HTMLElement>(".ef-changes-list");
     if (newChanges) newChanges.scrollTop = changesScroll;
     bodyEl.scrollTop = bodyScroll;
-    renderEditorSelector();
   };
 
   /**
@@ -3377,84 +3251,25 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     getChanges().some((c) => c.move != null) ? "move" : inferAction(getType());
 
   let action: IntentAction = defaultAction();
-  let actionTouched = false;
+  // Chat can propose an action; a later selection-driven move must not clobber it.
+  let actionFromChat = false;
+  // Expected/actual have no free-text fields in the form. A chat proposal may
+  // supply them, and they ride along in the intent when it does.
   let expected = "";
-  let breadth: ScopeBreadth = "element";
-  // "Actual" has no free-text field in the form: the UI infers it. A chat
-  // proposal may supply one, and it rides along in the intent when it does.
   let agentActual = "";
 
-  const renderActions = () => {
-    actionWrap.innerHTML = INTENT_ACTIONS.map((a) =>
-      `<button type="button" class="ef-chip${a.value === action ? " ef-chip-on" : ""}" data-action="${a.value}" aria-pressed="${a.value === action}">${a.label}</button>`
-    ).join("");
-  };
-  renderActions();
-
-  // A move recorded while the modal is open re-seeds the verb, unless the
-  // reporter already chose one.
+  // A move recorded while the pane is open re-seeds the verb.
   const unsubActionSeed = onSelectionChange(() => {
-    if (actionTouched) return;
-    const next = defaultAction();
-    if (next === action) return;
-    action = next;
-    renderActions();
-  });
-
-  actionWrap.addEventListener("click", (e) => {
-    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-action]");
-    if (!btn) return;
-    action = btn.dataset.action as IntentAction;
-    actionTouched = true;
-    renderActions();
+    if (actionFromChat) return;
+    action = defaultAction();
   });
 
   dialog.querySelectorAll<HTMLInputElement>("input[name='__ef_type__']").forEach((inp) => {
     inp.addEventListener("change", () => {
-      if (!actionTouched) { action = inferAction(getType()); renderActions(); }
+      action = inferAction(getType());
+      actionFromChat = false;
       scheduleDraftSave();
     });
-  });
-
-  if (expectedWrap) {
-    const expBtns = Array.from(expectedWrap.querySelectorAll<HTMLButtonElement>("[data-expected]"));
-    const clearExpected = () => expBtns.forEach((b) => {
-      b.classList.remove("ef-chip-on");
-      b.setAttribute("aria-pressed", "false");
-    });
-    expBtns.forEach((btn) => btn.addEventListener("click", () => {
-      const val = btn.dataset.expected ?? "";
-      if (val === "__below__") { expected = ""; clearExpected(); textarea.focus(); return; }
-      const wasOn = btn.classList.contains("ef-chip-on");
-      clearExpected();
-      if (wasOn) { expected = ""; return; } // tap again to clear
-      btn.classList.add("ef-chip-on");
-      btn.setAttribute("aria-pressed", "true");
-      expected = btn.dataset.sentence ?? "";
-    }));
-  }
-
-  const renderScopeHint = () => {
-    const n = currentTargets().length;
-    if (n > 1) {
-      scopeHint.textContent = `Editing ${n} elements individually — switch tabs in Design.`;
-      return;
-    }
-    scopeHint.textContent = breadth === "element"
-      ? ""
-      : "Region selection isn't captured — the selected element is recorded.";
-  };
-
-  scopeWrap.addEventListener("click", (e) => {
-    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-breadth]");
-    if (!btn) return;
-    breadth = (btn.dataset.breadth ?? "element") as ScopeBreadth;
-    scopeWrap.querySelectorAll<HTMLButtonElement>("[data-breadth]").forEach((b) => {
-      const on = b === btn;
-      b.classList.toggle("ef-chip-on", on);
-      b.setAttribute("aria-pressed", on ? "true" : "false");
-    });
-    renderScopeHint();
   });
 
   /** Build the structured intent passed to onSubmit as the third argument. */
@@ -3469,9 +3284,8 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
       expected: expected.trim() || undefined,
       actual: agentActual.trim() || undefined,
       scope: {
-        // Multi-target editing is a genuine multi selection; otherwise honour
-        // the user's own scope chip.
-        breadth: targetSelectors.length > 1 ? "multi" : breadth,
+        // Multi-target editing is a genuine multi selection.
+        breadth: targetSelectors.length > 1 ? "multi" : "element",
         targets: targetSelectors,
       },
     };
@@ -3480,9 +3294,9 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   };
 
   /**
-   * Comment text for the legacy explanation field. Falls back to a concise
-   * sentence assembled from the structured chips so a chip-only report still
-   * satisfies the server's non-empty comment contract.
+   * Comment text for the legacy explanation field. Falls back to the chat
+   * proposal's expected sentence and/or the applied live edits so a
+   * change-only report still satisfies the server's non-empty comment contract.
    */
   const collectComment = (): string => {
     const raw = textarea.value.trim();
@@ -3576,31 +3390,13 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     if (radio) radio.checked = true;
 
     action = r.action;
-    actionTouched = true;
-    renderActions();
+    actionFromChat = true;
 
-    if (r.expected !== undefined) {
-      expected = r.expected;
-      // The agent's sentence is free text; drop any chip that no longer matches.
-      expectedWrap
-        ?.querySelectorAll<HTMLButtonElement>("[data-expected]")
-        .forEach((b) => {
-          b.classList.remove("ef-chip-on");
-          b.setAttribute("aria-pressed", "false");
-        });
-    }
+    if (r.expected !== undefined) expected = r.expected;
     agentActual = r.actual ?? "";
     if (r.comment !== undefined) textarea.value = r.comment;
     if (r.title !== undefined && topicInput) topicInput.value = r.title;
-    if (r.scope?.breadth) {
-      breadth = r.scope.breadth;
-      scopeWrap.querySelectorAll<HTMLButtonElement>("[data-breadth]").forEach((b) => {
-        const on = b.dataset.breadth === breadth;
-        b.classList.toggle("ef-chip-on", on);
-        b.setAttribute("aria-pressed", on ? "true" : "false");
-      });
-      renderScopeHint();
-    }
+    // Scope is derived from the live target selection on submit.
 
     errDiv.textContent = "";
     scheduleDraftSave();
@@ -3650,8 +3446,8 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     chatPanel.render();
   };
 
-  // No autofocus: the intent chips are the primary surface, and focusing the
-  // (now last) textarea would scroll them out of view and pop the mobile keyboard.
+  // No autofocus: focusing the note textarea would pop the mobile keyboard on
+  // open and scroll the context sections out of view.
 
   // Escape steps back one level: an unfinished page pick ends, another tab
   // returns to Feedback, and only the report itself (the whole thing) cancels.
@@ -3722,7 +3518,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   // Modal: Save submits the feedback without creating a GitHub issue.
   submitBtn.addEventListener("click", async () => {
     const comment = collectComment();
-    if (!comment) { errDiv.textContent = "Add a note or choose what you expected."; return; }
+    if (!comment) { errDiv.textContent = "Add a note describing the problem."; return; }
     submitBtn.disabled = true;
     submitBtn.textContent = "Saving…";
     errDiv.textContent = "";
@@ -3829,14 +3625,12 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   // Initial render + keep selection-driven sections live as the user picks.
   let prevTargetCount = currentTargets().length;
   renderSelection();
-  renderScopeHint();
   const unsubSelection = onSelectionChange(() => {
     const count = currentTargets().length;
     // A new element landed: focus its tab so the editor targets it.
     if (count > prevTargetCount) activeTargetIdx = count - 1;
     prevTargetCount = count;
     renderSelection();
-    renderScopeHint();
     // Keep the pane's edit count live whatever tab is showing.
     renderChangeCount();
     // A style change (or a second target) is enough to make this report real:
@@ -3923,7 +3717,6 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   reportsEl.hidden = true;
   applyDockState(card);
   activateDialog(card, { modal: !effectiveDock(), preserveFocusReturn: true });
-  renderEditorSelector();
   mountChatPanel();
   // The report form is showing: the page must not be pickable yet.
   opts.onEditingChange?.("submit");

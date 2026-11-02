@@ -104,6 +104,55 @@ func TestBuildIssueContentSingle(t *testing.T) {
 	}
 }
 
+func TestBuildIssueContentTitlePrefersComponent(t *testing.T) {
+	cases := []struct {
+		name string
+		ctx  map[string]any
+		want string
+	}{
+		{
+			name: "explicit label",
+			ctx:  map[string]any{"label": "PayButton", "source": map[string]any{"component": "Other"}},
+			want: "Feedback on PayButton",
+		},
+		{
+			name: "source component",
+			ctx: map[string]any{
+				"dataComponent": "PricingCard > UpgradeButton",
+				"source":        map[string]any{"component": "UpgradeButton"},
+			},
+			want: "Feedback on UpgradeButton",
+		},
+		{
+			name: "data-component only",
+			ctx:  map[string]any{"dataComponent": "Checkout > div > span"},
+			want: "Feedback on Checkout",
+		},
+		{
+			name: "selector fallback",
+			ctx:  map[string]any{"url": "https://app.example.com/"},
+			want: "Feedback on div:nth-of-type(1)",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			ctxJSON, _ := json.Marshal(c.ctx)
+			items := []store.Feedback{{
+				ID:          1,
+				URL:         "https://app.example.com/",
+				Selector:    "main > div:nth-of-type(1)",
+				Comment:     "note",
+				ContextJSON: string(ctxJSON),
+				GitHubUser:  "alice",
+			}}
+			title, _ := buildIssueContent(items, "")
+			if title != c.want {
+				t.Fatalf("title = %q, want %q", title, c.want)
+			}
+		})
+	}
+}
+
 func TestBuildIssueContentMulti(t *testing.T) {
 	ctx := map[string]any{"url": "https://app.example.com/"}
 	ctxJSON, _ := json.Marshal(ctx)

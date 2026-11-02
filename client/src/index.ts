@@ -14,6 +14,7 @@ import { getSessionId } from "./session";
 import { captureElement } from "./screenshot";
 import { captureSnapshot } from "./snapshot";
 import { resolveSource, buildFingerprint } from "./source";
+import { buildDefaultIssueTopic, componentName } from "./labels";
 import {
   scoreExplanation,
   computeProvenance,
@@ -480,12 +481,13 @@ function elementLabel(el: Element): string {
     // Element picking starts when the reporter chooses "Edit element".
     forceMode("commenting");
 
-    // Build the default issue title. Prefer data-component over the CSS selector.
-    const dataComponent = context["dataComponent"] as string | undefined;
-    const elementLabel = dataComponent ?? (selector.split(">").pop()?.trim() ?? selector);
-    const defaultIssueTopic = existingComments.length > 0
-      ? `Feedback: ${existingComments.length + 1} comments on ${elementLabel}`
-      : `Feedback on ${elementLabel}`;
+    // Build the default issue title. Prefer the component (framework metadata
+    // or data-component) over the CSS selector.
+    const defaultIssueTopic = buildDefaultIssueTopic(
+      context,
+      selector,
+      existingComments.length
+    );
 
     showSubmitDialog({
       selector,
@@ -762,6 +764,8 @@ function elementLabel(el: Element): string {
   function gatherContext(el: Element): Record<string, unknown> {
     const rect = el.getBoundingClientRect();
     const source = resolveSource(el);
+    const dataComponent = buildComponentPath(el) ?? undefined;
+    const label = componentName({ source, dataComponent });
     const outerHTML = redactElementHTML(el).slice(0, 4000);
     const innerText = redactText((el as HTMLElement).innerText ?? "").slice(0, 200);
     return {
@@ -769,7 +773,8 @@ function elementLabel(el: Element): string {
       viewport: { width: window.innerWidth, height: window.innerHeight },
       devicePixelRatio: window.devicePixelRatio,
       tagName: el.tagName.toLowerCase(),
-      dataComponent: buildComponentPath(el) ?? undefined,
+      dataComponent,
+      ...(label ? { label } : {}),
       outerHTML,
       innerText,
       attributes: gatherAttributes(el),

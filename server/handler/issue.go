@@ -230,11 +230,13 @@ func buildIssueContentLevel(items []store.Feedback, level string) (title, body s
 
 	first := items[0]
 
-	// Title: short description only — no URL.
+	// Title: short description only — no URL. Prefer the component when the
+	// captured context names one.
+	label := elementLabelFromContext(parseContext(first.ContextJSON), first.Selector)
 	if len(items) == 1 {
-		title = fmt.Sprintf("Feedback on %s", selectorShort(first.Selector))
+		title = fmt.Sprintf("Feedback on %s", label)
 	} else {
-		title = fmt.Sprintf("Feedback: %d comments on %s", len(items), selectorShort(first.Selector))
+		title = fmt.Sprintf("Feedback: %d comments on %s", len(items), label)
 	}
 
 	var sb strings.Builder
@@ -939,6 +941,26 @@ func (h *Handler) syncIssueStates(ctx context.Context, issues []store.GitHubIssu
 		}
 	}
 	return issues
+}
+
+// elementLabelFromContext names the element for issue titles: an explicit
+// context label first, then the framework component (or nearest
+// data-component), then the short selector.
+func elementLabelFromContext(ctx map[string]any, selector string) string {
+	if v := asString(ctx["label"]); v != "" {
+		return v
+	}
+	if src := getMap(ctx, "source"); len(src) > 0 {
+		if v := asString(src["component"]); v != "" {
+			return v
+		}
+	}
+	if v := asString(ctx["dataComponent"]); v != "" {
+		if seg := strings.TrimSpace(strings.Split(v, ">")[0]); seg != "" {
+			return seg
+		}
+	}
+	return selectorShort(selector)
 }
 
 // selectorShort returns the last segment of a CSS selector for use in titles.
