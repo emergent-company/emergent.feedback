@@ -361,7 +361,6 @@ export function withPick(turns: ChatTurn[], turnIndex: number, variantId: string
 export interface ChatPanelOptions {
   api: APIClient;
   repo: string;
-  agent?: string;
   /** Capture context, reduced by buildChatContext. Re-read per turn. */
   getContext: () => Record<string, unknown>;
   /** Compact human summary for the context strip, re-read per render. */
@@ -541,7 +540,6 @@ export function mountChat(host: HTMLElement, opts: ChatPanelOptions): ChatPanel 
           repo: opts.repo,
           messages,
           context: opts.getContext(),
-          ...(opts.agent ? { agent: opts.agent } : {}),
         },
         (ev) => {
           if (ev.type === "token") {

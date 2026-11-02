@@ -68,7 +68,6 @@ export interface OverlayConfig {
    */
   chat: boolean;
   /** Optional Memory agent name/id hint sent with each chat turn. */
-  chatAgent?: string;
 }
 
 function getScriptTag(): HTMLScriptElement | null {
@@ -125,7 +124,6 @@ export function readConfig(): OverlayConfig {
 
   // Opt-in chat tab: presence of data-chat enables it; data-chat="false" disables.
   const chat = tag?.dataset.chat !== undefined && tag?.dataset.chat !== "false";
-  const chatAgent = tag?.dataset.chatAgent?.trim() || undefined;
 
   const badgeUrlMode: NonNullable<OverlayConfig["badgeUrlMode"]> =
     tag?.dataset.badgeUrlMode?.trim().toLowerCase() === "path" ? "path" : "exact";
@@ -148,7 +146,6 @@ export function readConfig(): OverlayConfig {
     theme,
     ...(themeUrl !== undefined ? { themeUrl } : {}),
     chat,
-    ...(chatAgent !== undefined ? { chatAgent } : {}),
     badgeUrlMode,
     dashboardUrl,
   };

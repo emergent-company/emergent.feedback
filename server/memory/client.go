@@ -109,21 +109,54 @@ func (c *Client) PatchObject(ctx context.Context, projectID, objectID string, pr
 	return out, nil
 }
 
-// AskRequest is the body for POST /api/projects/:id/ask.
-type AskRequest struct {
-	Message string `json:"message"`
+// AgentDefinition is the subset of GET /api/projects/:id/agent-definitions the
+// feedback panel needs: the name to talk to and a line of context for the picker.
+type AgentDefinition struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Visibility  string `json:"visibility"`
 }
 
-// AskStream starts one agent turn and returns the raw SSE body. The caller
-// owns the reader and must close it.
+// ListAgentDefinitions returns the project's agent definitions. Requires the
+// agents:read scope; a token that predates chat therefore fails with 403 unless
+// the destination is reconnected.
+func (c *Client) ListAgentDefinitions(ctx context.Context, projectID string) ([]AgentDefinition, error) {
+	if projectID == "" {
+		return nil, fmt.Errorf("memory: project id is required")
+	}
+	var out struct {
+		Data []AgentDefinition `json:"data"`
+	}
+	path := "/api/projects/" + url.PathEscape(projectID) + "/agent-definitions"
+	if err := c.do(ctx, http.MethodGet, path, nil, &out); err != nil {
+		return nil, err
+	}
+	return out.Data, nil
+}
+
+// AgentStreamRequest is the body for POST /api/projects/:id/agents/:ref/stream.
+type AgentStreamRequest struct {
+	Message string `json:"message"`
+	// System is the machine-readable output contract appended to the agent's
+	// own system prompt. The persona lives in the (GUI-editable) definition;
+	// the contract stays here so an operator edit cannot break the parser.
+	System string `json:"system,omitempty"`
+}
+
+// AgentStream starts one stateless turn against a named agent definition and
+// returns the raw SSE body. The caller owns the reader and must close it.
 //
 // Unlike doWithHeaders this does not buffer or decode: the overlay forwards the
 // tokens to the browser as they arrive. The shared HTTP client carries a 15s
 // timeout for request/response calls, so streaming uses a copy with no overall
 // deadline and the same guarded transport.
-func (c *Client) AskStream(ctx context.Context, projectID, message string) (io.ReadCloser, error) {
+func (c *Client) AgentStream(ctx context.Context, projectID, agent, message, system string) (io.ReadCloser, error) {
 	if projectID == "" {
 		return nil, fmt.Errorf("memory: project id is required")
+	}
+	if agent == "" {
+		return nil, fmt.Errorf("memory: agent is required")
 	}
 	if c.BaseURL == "" {
 		return nil, fmt.Errorf("memory: base url is required")
@@ -131,7 +164,7 @@ func (c *Client) AskStream(ctx context.Context, projectID, message string) (io.R
 	if c.Token == "" {
 		return nil, fmt.Errorf("memory: token is required")
 	}
-	body, err := json.Marshal(AskRequest{Message: message})
+	body, err := json.Marshal(AgentStreamRequest{Message: message, System: system})
 	if err != nil {
 		return nil, fmt.Errorf("memory: encode request: %w", err)
 	}
@@ -139,7 +172,8 @@ func (c *Client) AskStream(ctx context.Context, projectID, message string) (io.R
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodPost,
-		c.BaseURL+"/api/projects/"+url.PathEscape(projectID)+"/ask",
+		c.BaseURL+"/api/projects/"+url.PathEscape(projectID)+
+			"/agents/"+url.PathEscape(agent)+"/stream",
 		bytes.NewReader(body),
 	)
 	if err != nil {

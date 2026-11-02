@@ -457,6 +457,7 @@ templ PanelDestinationsPage() {
 		<div id="memory-flash" class="alert mb-4 hidden"></div>
 		<div class="mb-4 rounded-box border border-base-300 bg-base-100 p-4 text-sm text-base-content/70">
 			<p><span class="font-medium text-base-content">Ask</span> shows a “Send to Memory” option in the feedback dialog (default). <span class="font-medium text-base-content">Auto</span> sends every report. <span class="font-medium text-base-content">Off</span> disables syncing without deleting the connection.</p>
+			<p class="mt-2">The chat agent answers the report composer in the overlay. Pick any agent definition from the connected project; <code class="font-mono">feedback-assistant</code> is created on first use and can be tuned in Memory’s agent definitions.</p>
 		</div>
 		<div id="memory-list" class="flex flex-col gap-3">
 			<div class="rounded-box border border-base-300 bg-base-100 p-6 text-sm text-base-content/60">Loading destinations…</div>
@@ -502,7 +503,7 @@ templ panelMemoryConnectModal() {
 							<span class="label-text mb-1">Project token</span>
 							<input id="memory-token" type="password" class="input input-bordered w-full font-mono text-xs" placeholder="emt_…" autocomplete="off"/>
 						</label>
-						<p class="text-xs text-base-content/50">Create a token with <code class="font-mono">graph:read</code>, <code class="font-mono">graph:write</code>, and <code class="font-mono">projects:read</code>.</p>
+						<p class="text-xs text-base-content/50">Create a token with <code class="font-mono">graph:read</code>, <code class="font-mono">graph:write</code>, <code class="font-mono">projects:read</code>, <code class="font-mono">agents:read</code>, and <code class="font-mono">chat:use</code>.</p>
 						<button type="button" class="btn btn-outline btn-sm" id="memory-paste">Save token</button>
 					</div>
 				</details>
@@ -1587,7 +1588,7 @@ templ panelScript() {
 		}
 
 		// ── Memory destinations ──────────────────────────────────────────
-		var memoryState = { destinations: [], repos: null };
+		var memoryState = { destinations: [], repos: null, agents: {}, agentErrors: {} };
 
 		function memoryFlash(message, kind) {
 			var el = byId("memory-flash");
@@ -1670,7 +1671,46 @@ templ panelScript() {
 					left.appendChild(note);
 				}
 
-				var right = makeEl("div", "flex items-center gap-2 sm:shrink-0");
+				var right = makeEl("div", "flex flex-wrap items-center gap-2 sm:shrink-0");
+				var agent = makeEl("select", "select select-bordered select-sm w-44", { "aria-label": "Chat agent for " + item.repo });
+				agent.title = "The Memory agent that answers chat turns for this repository.";
+				agent.disabled = readOnly;
+				var fillAgents = function (names) {
+					clear(agent);
+					var options = (names || []).slice();
+					if (options.indexOf(item.agent) === -1) options.unshift(item.agent);
+					options.forEach(function (name) {
+						var opt = makeEl("option", "", { value: name }); opt.textContent = name; agent.appendChild(opt);
+					});
+					agent.value = item.agent;
+				};
+				fillAgents([item.agent]);
+				if (!memoryState.agents[item.repo] && !memoryState.agentErrors[item.repo]) {
+					api("/api/memory/agents?repo=" + encodeURIComponent(item.repo)).then(function (names) {
+						memoryState.agents[item.repo] = (Array.isArray(names) ? names : []).map(function (a) { return a.name; }).filter(Boolean);
+						fillAgents(memoryState.agents[item.repo]);
+					}).catch(function (err) {
+						memoryState.agentErrors[item.repo] = err.message;
+						agent.title = err.message;
+					});
+				} else if (memoryState.agents[item.repo]) {
+					fillAgents(memoryState.agents[item.repo]);
+				}
+				agent.addEventListener("change", function () {
+					if (readOnly) return;
+					agent.disabled = true;
+					api("/api/memory/destinations", {
+						method: "PATCH",
+						body: JSON.stringify({ repo: item.repo, agent: agent.value })
+					}).then(function (saved) {
+						item.agent = saved.agent;
+						memoryFlash("Chat agent updated for " + item.repo + ".", "success");
+					}).catch(function (err) {
+						memoryFlash(err.message, "error");
+						agent.value = item.agent;
+					}).then(function () { agent.disabled = false; });
+				});
+
 				var mode = makeEl("select", "select select-bordered select-sm w-24", { "aria-label": "Memory mode for " + item.repo });
 				[["ask", "Ask"], ["auto", "Auto"], ["off", "Off"]].forEach(function (pair) {
 					var opt = makeEl("option", "", { value: pair[0] }); opt.textContent = pair[1]; mode.appendChild(opt);
@@ -1721,7 +1761,7 @@ templ panelScript() {
 						.catch(function (err) { memoryFlash(err.message, "error"); disc.disabled = false; });
 				});
 
-				right.appendChild(mode); right.appendChild(test); right.appendChild(disc);
+				right.appendChild(agent); right.appendChild(mode); right.appendChild(test); right.appendChild(disc);
 				top.appendChild(left); top.appendChild(right);
 				card.appendChild(top);
 				list.appendChild(card);
@@ -1928,7 +1968,12 @@ templ panelScript() {
 			});
 
 			var memoryRefresh = byId("memory-refresh");
-			if (memoryRefresh) memoryRefresh.addEventListener("click", loadMemoryDestinations);
+			if (memoryRefresh) memoryRefresh.addEventListener("click", function () {
+				// Drop the cached agent lists so a newly created definition shows up.
+				memoryState.agents = {};
+				memoryState.agentErrors = {};
+				loadMemoryDestinations();
+			});
 			var memoryConnect = byId("memory-connect");
 			if (memoryConnect) memoryConnect.addEventListener("click", openMemoryModal);
 			var memoryClose = byId("memory-close");

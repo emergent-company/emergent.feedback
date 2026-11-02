@@ -204,6 +204,7 @@ func BuildRouter(opts Options) (*echo.Echo, error) {
 	auth.PATCH("/api/memory/destinations", h.HandleUpdateMemoryDestination)
 	auth.DELETE("/api/memory/destinations", h.HandleDeleteMemoryDestination)
 	auth.POST("/api/memory/destinations/test", h.HandleTestMemoryDestination)
+	auth.GET("/api/memory/agents", h.HandleListMemoryAgents)
 	auth.POST("/api/memory/sync", h.HandleSyncFeedbackToMemory)
 	auth.POST("/api/memory/chat", h.HandleMemoryChat)
 	auth.POST("/api/memory/oauth/start", h.HandleMemoryOAuthStart)

@@ -16,7 +16,7 @@ import (
 const pragmas = `PRAGMA journal_mode=WAL;`
 
 // LatestSchemaVersion is the highest migration version applied by Migrate.
-const LatestSchemaVersion = 9
+const LatestSchemaVersion = 10
 
 type dialect int
 
@@ -291,6 +291,9 @@ SELECT base_url, redirect_uri, client_id, created_at FROM memory_oauth_clients;`
 		`DROP TABLE memory_oauth_clients;`,
 		`ALTER TABLE memory_oauth_clients_v9 RENAME TO memory_oauth_clients;`,
 	}},
+	{10, "memory_destination_agent", []string{
+		`ALTER TABLE memory_destinations ADD COLUMN agent TEXT NOT NULL DEFAULT '';`,
+	}},
 }
 
 // postgresMigrations mirror sqliteMigrations with PostgreSQL DDL. Same version
@@ -462,6 +465,9 @@ SELECT base_url, redirect_uri, client_id, created_at FROM memory_oauth_clients
 ON CONFLICT DO NOTHING;`,
 		`DROP TABLE memory_oauth_clients;`,
 		`ALTER TABLE memory_oauth_clients_v9 RENAME TO memory_oauth_clients;`,
+	}},
+	{10, "memory_destination_agent", []string{
+		`ALTER TABLE memory_destinations ADD COLUMN agent TEXT NOT NULL DEFAULT '';`,
 	}},
 }
 

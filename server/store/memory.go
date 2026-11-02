@@ -23,16 +23,19 @@ var ErrMemoryOAuthClientNotFound = errors.New("memory oauth client not found")
 // MemoryDestination is the per-repository connection to an emergent.memory
 // project. The Memory token is encrypted at rest with the feedback JWT secret.
 type MemoryDestination struct {
-	ID              int64
-	Repo            string
-	BaseURL         string
-	ProjectID       string
-	ProjectName     string
-	ClientID        string
-	TokenEncrypted  []byte
-	TokenID         string
-	Scopes          string
-	Mode            string
+	ID             int64
+	Repo           string
+	BaseURL        string
+	ProjectID      string
+	ProjectName    string
+	ClientID       string
+	TokenEncrypted []byte
+	TokenID        string
+	Scopes         string
+	Mode           string
+	// Agent names the Memory agent definition that answers chat turns for this
+	// destination. Empty means the built-in default (feedback-assistant).
+	Agent           string
 	FeedbackBaseURL string
 	LastSyncAt      *time.Time
 	LastError       string
@@ -107,8 +110,8 @@ func (s *Store) UpsertMemoryDestination(ctx context.Context, d MemoryDestination
 	}
 	q := `
 INSERT INTO memory_destinations
-  (repo, base_url, project_id, project_name, client_id, token_encrypted, token_id, scopes, mode, feedback_base_url, created_by)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  (repo, base_url, project_id, project_name, client_id, token_encrypted, token_id, scopes, mode, agent, feedback_base_url, created_by)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(repo) DO UPDATE SET
   base_url = excluded.base_url,
   project_id = excluded.project_id,
@@ -118,12 +121,13 @@ ON CONFLICT(repo) DO UPDATE SET
   token_id = excluded.token_id,
   scopes = excluded.scopes,
   mode = excluded.mode,
+  agent = excluded.agent,
   feedback_base_url = excluded.feedback_base_url,
   last_error = '',
   updated_at = ` + s.d.nowExpr()
 	_, err := s.db.ExecContext(ctx, s.bind(q),
 		d.Repo, d.BaseURL, d.ProjectID, d.ProjectName, d.ClientID, d.TokenEncrypted,
-		d.TokenID, d.Scopes, mode, d.FeedbackBaseURL, d.CreatedBy,
+		d.TokenID, d.Scopes, mode, d.Agent, d.FeedbackBaseURL, d.CreatedBy,
 	)
 	if err != nil {
 		return fmt.Errorf("store: upsert memory destination: %w", err)
@@ -133,7 +137,7 @@ ON CONFLICT(repo) DO UPDATE SET
 
 const memoryDestinationColumns = `
   id, repo, base_url, project_id, project_name, client_id, token_encrypted, token_id,
-  scopes, mode, feedback_base_url, last_sync_at, last_error, created_by, created_at, updated_at`
+  scopes, mode, agent, feedback_base_url, last_sync_at, last_error, created_by, created_at, updated_at`
 
 func scanMemoryDestination(sc interface {
 	Scan(dest ...any) error
@@ -143,7 +147,7 @@ func scanMemoryDestination(sc interface {
 	var createdAt, updatedAt string
 	if err := sc.Scan(
 		&d.ID, &d.Repo, &d.BaseURL, &d.ProjectID, &d.ProjectName, &d.ClientID,
-		&d.TokenEncrypted, &d.TokenID, &d.Scopes, &d.Mode, &d.FeedbackBaseURL,
+		&d.TokenEncrypted, &d.TokenID, &d.Scopes, &d.Mode, &d.Agent, &d.FeedbackBaseURL,
 		&lastSync, &d.LastError, &d.CreatedBy, &createdAt, &updatedAt,
 	); err != nil {
 		return MemoryDestination{}, err
@@ -243,6 +247,19 @@ func (s *Store) SetMemoryDestinationMode(ctx context.Context, repo, mode string)
 	res, err := s.db.ExecContext(ctx, s.bind(q), mode, repo)
 	if err != nil {
 		return fmt.Errorf("store: set memory destination mode: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrMemoryDestinationNotFound
+	}
+	return nil
+}
+
+// SetMemoryDestinationAgent updates the per-repo chat agent definition name.
+func (s *Store) SetMemoryDestinationAgent(ctx context.Context, repo, agent string) error {
+	q := `UPDATE memory_destinations SET agent = ?, updated_at = ` + s.d.nowExpr() + ` WHERE repo = ?`
+	res, err := s.db.ExecContext(ctx, s.bind(q), agent, repo)
+	if err != nil {
+		return fmt.Errorf("store: set memory destination agent: %w", err)
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
 		return ErrMemoryDestinationNotFound

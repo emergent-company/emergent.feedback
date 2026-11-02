@@ -141,8 +141,6 @@ export interface ChatTurnParams {
   messages: ChatMessage[];
   /** Redacted capture context for the element under discussion. */
   context?: Record<string, unknown>;
-  /** Optional Memory agent hint (data-chat-agent). */
-  agent?: string;
 }
 
 export type ChatStreamEvent =

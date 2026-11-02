@@ -2638,7 +2638,7 @@ export interface SubmitFeedbackOptions {
    * Opt-in Chat tab (report composer). Present only when the host sets
    * `data-chat`; the pane then shows Feedback · Changes · Chat.
    */
-  chat?: { api: APIClient; agent?: string };
+  chat?: { api: APIClient };
 }
 
 /** Default action verb for a feedback type (bug → fix, enhancement → change). */
@@ -4070,7 +4070,6 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     chatPanel = mountChat(host, {
       api: opts.chat.api,
       repo: opts.repo,
-      ...(opts.chat.agent ? { agent: opts.chat.agent } : {}),
       getContext: chatContext,
       getSummary: () => ({
         selector: currentTargets()[0]?.selector ?? opts.selector,

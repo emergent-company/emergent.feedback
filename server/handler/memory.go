@@ -23,7 +23,13 @@ const (
 	memoryModeOff  = "off"
 
 	memoryIssueType   = "Issue"
-	memoryScopeString = "graph:read graph:write schema:read projects:read chat:use"
+	memoryScopeString = "graph:read graph:write schema:read projects:read agents:read chat:use"
+
+	// memoryDefaultAgent is the built-in Memory agent that answers chat turns
+	// for a destination that has not picked one. Memory materializes it in the
+	// project on first use, and a repository admin can edit it in Memory's
+	// agent-definitions panel.
+	memoryDefaultAgent = "feedback-assistant"
 
 	memoryAdminRequiredMessage = "Only repository admins can manage the Memory connection."
 )
@@ -37,8 +43,9 @@ type memoryConnectRequest struct {
 }
 
 type memoryModeRequest struct {
-	Repo string `json:"repo"`
-	Mode string `json:"mode"`
+	Repo  string `json:"repo"`
+	Mode  string `json:"mode"`
+	Agent string `json:"agent"`
 }
 
 type memoryRepoRequest struct {
@@ -56,11 +63,22 @@ type memoryDestinationView struct {
 	ProjectID   string `json:"project_id"`
 	ProjectName string `json:"project_name"`
 	Mode        string `json:"mode"`
+	Agent       string `json:"agent"`
 	Connected   bool   `json:"connected"`
 	CanManage   bool   `json:"can_manage"`
 	LastSyncAt  string `json:"last_sync_at,omitempty"`
 	LastError   string `json:"last_error,omitempty"`
 	CreatedAt   string `json:"created_at,omitempty"`
+}
+
+// memoryAgentName resolves the destination's chat agent, defaulting to the
+// built-in feedback assistant so connections made before the picker existed
+// keep working.
+func memoryAgentName(d store.MemoryDestination) string {
+	if name := strings.TrimSpace(d.Agent); name != "" {
+		return name
+	}
+	return memoryDefaultAgent
 }
 
 func memoryView(d store.MemoryDestination) memoryDestinationView {
@@ -70,6 +88,7 @@ func memoryView(d store.MemoryDestination) memoryDestinationView {
 		ProjectID:   d.ProjectID,
 		ProjectName: d.ProjectName,
 		Mode:        d.Mode,
+		Agent:       memoryAgentName(d),
 		Connected:   len(d.TokenEncrypted) > 0,
 		LastError:   d.LastError,
 	}
@@ -105,6 +124,27 @@ func normalizeMemoryBaseURL(raw string) (string, error) {
 
 func validMemoryMode(mode string) bool {
 	return mode == memoryModeAsk || mode == memoryModeAuto || mode == memoryModeOff
+}
+
+// validMemoryAgentName bounds the agent reference a destination may store. It
+// is passed through to Memory as a path segment, so it accepts only the shapes
+// agent definitions use: a name (letters, digits, dot, dash, underscore) or a
+// UUID, and it stays short enough to be a name rather than a prompt.
+func validMemoryAgentName(name string) bool {
+	if name == "" || len(name) > 120 {
+		return false
+	}
+	for _, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= 'A' && r <= 'Z':
+		case r >= '0' && r <= '9':
+		case r == '-' || r == '_' || r == '.':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func (h *Handler) publicBaseURL(c echo.Context) string {
@@ -242,7 +282,8 @@ func (h *Handler) HandleListMemoryDestinations(c echo.Context) error {
 	return c.JSON(http.StatusOK, out)
 }
 
-// HandleUpdateMemoryDestination changes the per-repo submit mode.
+// HandleUpdateMemoryDestination changes the per-repo submit mode and/or the
+// Memory agent that answers chat turns.
 //
 // PATCH /api/memory/destinations
 func (h *Handler) HandleUpdateMemoryDestination(c echo.Context) error {
@@ -250,8 +291,16 @@ func (h *Handler) HandleUpdateMemoryDestination(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
-	if req.Repo == "" || !validMemoryMode(req.Mode) {
-		return echo.NewHTTPError(http.StatusBadRequest, "repo and mode (ask|auto|off) are required")
+	req.Repo = strings.TrimSpace(req.Repo)
+	req.Agent = strings.TrimSpace(req.Agent)
+	if req.Repo == "" || (req.Mode == "" && req.Agent == "") {
+		return echo.NewHTTPError(http.StatusBadRequest, "repo and one of mode (ask|auto|off) or agent are required")
+	}
+	if req.Mode != "" && !validMemoryMode(req.Mode) {
+		return echo.NewHTTPError(http.StatusBadRequest, "mode must be one of ask, auto, off")
+	}
+	if req.Agent != "" && !validMemoryAgentName(req.Agent) {
+		return echo.NewHTTPError(http.StatusBadRequest, "agent must be an agent definition name or id")
 	}
 	d, err := h.ownedMemoryDestination(c, req.Repo)
 	if err != nil {
@@ -260,10 +309,18 @@ func (h *Handler) HandleUpdateMemoryDestination(c echo.Context) error {
 	if err := h.requireMemoryAdmin(c, d.Repo); err != nil {
 		return err
 	}
-	if err := h.Store.SetMemoryDestinationMode(c.Request().Context(), d.Repo, req.Mode); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to update the Memory destination")
+	if req.Mode != "" {
+		if err := h.Store.SetMemoryDestinationMode(c.Request().Context(), d.Repo, req.Mode); err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to update the Memory destination")
+		}
+		d.Mode = req.Mode
 	}
-	d.Mode = req.Mode
+	if req.Agent != "" {
+		if err := h.Store.SetMemoryDestinationAgent(c.Request().Context(), d.Repo, req.Agent); err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to update the Memory destination")
+		}
+		d.Agent = req.Agent
+	}
 	view := memoryView(d)
 	view.CanManage = true
 	return c.JSON(http.StatusOK, view)
@@ -333,7 +390,79 @@ func (h *Handler) HandleTestMemoryDestination(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadGateway, msg)
 	}
 	_ = h.Store.SetMemoryDestinationError(c.Request().Context(), d.ID, "")
-	return c.JSON(http.StatusOK, map[string]any{"ok": true, "project": d.ProjectName})
+
+	// Chat turns go to a named agent, so "Test" also proves the configured
+	// agent resolves. A token from before the chat existed lacks agents:read
+	// and lands here as a 403 — exactly the reconnect case worth surfacing.
+	agent := memoryAgentName(d)
+	defs, aerr := client.ListAgentDefinitions(c.Request().Context(), d.ProjectID)
+	if aerr != nil {
+		var apiErr *memory.APIError
+		if errors.As(aerr, &apiErr) && apiErr.Status == http.StatusForbidden {
+			msg := "The token is missing the agents:read scope. Reconnect the destination to grant it."
+			_ = h.Store.SetMemoryDestinationError(c.Request().Context(), d.ID, msg)
+			return echo.NewHTTPError(http.StatusForbidden, msg)
+		}
+		msg := memoryErrorMessage(aerr)
+		_ = h.Store.SetMemoryDestinationError(c.Request().Context(), d.ID, msg)
+		return echo.NewHTTPError(http.StatusBadGateway, msg)
+	}
+	agentFound := false
+	for _, def := range defs {
+		if def.Name == agent || def.ID == agent {
+			agentFound = true
+			break
+		}
+	}
+	if !agentFound {
+		msg := "The agent \"" + agent + "\" is not available in the connected project. Pick another agent or reconnect."
+		_ = h.Store.SetMemoryDestinationError(c.Request().Context(), d.ID, msg)
+		return echo.NewHTTPError(http.StatusBadGateway, msg)
+	}
+
+	return c.JSON(http.StatusOK, map[string]any{"ok": true, "project": d.ProjectName, "agent": agent})
+}
+
+// HandleListMemoryAgents returns the agent definitions the connected Memory
+// project exposes, so the panel can offer a picker instead of a free-text name.
+//
+// GET /api/memory/agents?repo=owner/name
+func (h *Handler) HandleListMemoryAgents(c echo.Context) error {
+	repo := strings.TrimSpace(c.QueryParam("repo"))
+	if repo == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "repo query parameter is required")
+	}
+	d, err := h.ownedMemoryDestination(c, repo)
+	if err != nil {
+		return err
+	}
+	if len(d.TokenEncrypted) == 0 {
+		return echo.NewHTTPError(http.StatusConflict, "Memory is not connected for this repository.")
+	}
+	client, err := h.memoryClient(d)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+	defs, err := client.ListAgentDefinitions(c.Request().Context(), d.ProjectID)
+	if err != nil {
+		var apiErr *memory.APIError
+		if errors.As(err, &apiErr) && apiErr.Status == http.StatusForbidden {
+			return echo.NewHTTPError(
+				http.StatusForbidden,
+				"The Memory token is missing the agents:read scope. Reconnect the destination to grant it.",
+			)
+		}
+		return echo.NewHTTPError(http.StatusBadGateway, memoryErrorMessage(err))
+	}
+	type agentView struct {
+		Name        string `json:"name"`
+		Description string `json:"description,omitempty"`
+	}
+	out := make([]agentView, 0, len(defs))
+	for _, def := range defs {
+		out = append(out, agentView{Name: def.Name, Description: def.Description})
+	}
+	return c.JSON(http.StatusOK, out)
 }
 
 // HandleMemoryStatus is the public overlay probe: is this repo connected, and
@@ -355,6 +484,10 @@ func (h *Handler) HandleMemoryStatus(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]any{
 		"connected": len(d.TokenEncrypted) > 0,
 		"mode":      d.Mode,
+		"chat": map[string]any{
+			"agent":     memoryAgentName(d),
+			"available": len(d.TokenEncrypted) > 0 && d.Mode != memoryModeOff,
+		},
 	})
 }
 

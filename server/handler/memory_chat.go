@@ -15,12 +15,14 @@ import (
 
 // The Chat tab is a report composer. The agent writes the feedback fields; it
 // never edits the page, the repository, the spec or a revision. The overlay's
-// edit primitives are client-only and are not reachable from the chat, and this
-// prompt is the second line of defence.
-const memoryChatPrompt = `You are the report composer inside the emergent.feedback overlay.
-
-Your job: turn the reporter's description into the fields of one feedback report — title, type, action, expected, actual, scope and comment — and, when they ask what something could look like, into a gallery of layout options.
-What you must never do: edit the page, the repository, the spec or a revision; apply a change; claim that something was changed; or call tools. You cannot change anything and must not offer to. A gallery is a proposal, not an edit.
+// edit primitives are client-only and are not reachable from the chat.
+//
+// The persona lives in the destination's Memory agent definition (default
+// feedback-assistant), where an operator can edit it in Memory's admin panel.
+// Everything below is the machine-readable contract the widget's parser depends
+// on, so it is delivered as a per-request system-prompt appendix: editing the
+// persona in the GUI cannot break the parser.
+const memoryChatContract = `Output contract (applies to every turn).
 
 Rules:
 - Reply with at most three short sentences of prose.
@@ -37,7 +39,8 @@ Rules:
   - No <script> or <style> tags inside html, no <iframe>, no forms, no external images or fonts. Inline style attributes are fine.
   - Keep each variant under 12000 characters of HTML and 6000 of CSS. Simpler is better: the reporter is comparing layouts, not reading code.
   - Never say a variant is applied. The reporter picks one and it travels with the report as evidence.
-- A design turn may also carry a report. If the reporter asked for a fix as well, return both members in the same block.`
+- A design turn may also carry a report. If the reporter asked for a fix as well, return both members in the same block.
+- A gallery is a proposal, not an edit. Do not claim anything was changed.`
 
 const (
 	memoryChatMaxMessages  = 24
@@ -56,7 +59,6 @@ type memoryChatRequest struct {
 	Repo     string              `json:"repo"`
 	Messages []memoryChatMessage `json:"messages"`
 	Context  json.RawMessage     `json:"context"`
-	Agent    string              `json:"agent"`
 }
 
 // HandleMemoryChat streams one report-composer turn from the repo's connected
@@ -105,7 +107,7 @@ func (h *Handler) HandleMemoryChat(c echo.Context) error {
 	}
 
 	prompt := buildMemoryChatPrompt(messages, req.Context)
-	body, err := client.AskStream(c.Request().Context(), d.ProjectID, prompt)
+	body, err := client.AgentStream(c.Request().Context(), d.ProjectID, memoryAgentName(d), prompt, memoryChatContract)
 	if err != nil {
 		return h.memoryChatError(err)
 	}
@@ -155,12 +157,13 @@ func normalizeChatMessages(in []memoryChatMessage) ([]memoryChatMessage, error) 
 	return out, nil
 }
 
-// buildMemoryChatPrompt composes the single question the Memory ask endpoint
-// receives: the composer instructions, the bounded capture context, then the
-// transcript. Context is untrusted JSON and is fenced as data, not instructions.
+// buildMemoryChatPrompt composes the single question the named Memory agent
+// receives: the bounded capture context, then the transcript. Context is
+// untrusted JSON and is fenced as data, not instructions. The agent's persona
+// and the output contract travel outside this message (definition + system
+// appendix), so this stays a plain transcript.
 func buildMemoryChatPrompt(messages []memoryChatMessage, ctx json.RawMessage) string {
 	var b strings.Builder
-	b.WriteString(memoryChatPrompt)
 
 	if len(ctx) > 0 {
 		raw := strings.TrimSpace(string(ctx))
@@ -262,7 +265,7 @@ func (h *Handler) memoryChatError(err error) error {
 		case http.StatusNotFound:
 			return echo.NewHTTPError(
 				http.StatusBadGateway,
-				"The connected Memory project or its agent is no longer available.",
+				"The connected Memory project or the configured agent is no longer available. Check the destination's agent setting.",
 			)
 		}
 	}

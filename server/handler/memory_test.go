@@ -27,6 +27,8 @@ type fakeMemory struct {
 	lastForm    url.Values
 	failUpserts int
 	token       string
+	chatPath    string
+	chatBody    map[string]any
 }
 
 func (f *fakeMemory) handler() http.Handler {
@@ -38,6 +40,24 @@ func (f *fakeMemory) handler() http.Handler {
 			return
 		}
 		_, _ = w.Write([]byte(`[{"id":"p1","name":"Project One"}]`))
+	})
+	mux.HandleFunc("/api/projects/p1/agent-definitions", func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer emt_") {
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"message":"bad token"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"success":true,"data":[{"id":"d1","name":"feedback-assistant","description":"Report composer","visibility":"project"}]}`))
+	})
+	mux.HandleFunc("/api/projects/p1/agents/", func(w http.ResponseWriter, r *http.Request) {
+		f.mu.Lock()
+		f.chatPath = r.URL.Path
+		body := map[string]any{}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		f.chatBody = body
+		f.mu.Unlock()
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: {\"type\":\"token\",\"text\":\"ok\"}\n\ndata: {\"type\":\"done\"}\n\n"))
 	})
 	mux.HandleFunc("/api/graph/objects/upsert", func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
@@ -154,7 +174,9 @@ func newMemoryTestHandler(t *testing.T, mem *fakeMemory) (*Handler, *store.Store
 	e.PATCH("/api/memory/destinations", h.HandleUpdateMemoryDestination)
 	e.DELETE("/api/memory/destinations", h.HandleDeleteMemoryDestination)
 	e.POST("/api/memory/destinations/test", h.HandleTestMemoryDestination)
+	e.GET("/api/memory/agents", h.HandleListMemoryAgents)
 	e.POST("/api/memory/sync", h.HandleSyncFeedbackToMemory)
+	e.POST("/api/memory/chat", h.HandleMemoryChat)
 	e.POST("/api/memory/oauth/start", h.HandleMemoryOAuthStart)
 	e.GET("/oauth/memory/callback", h.HandleMemoryOAuthCallback)
 	e.POST("/feedback", h.HandleCreateFeedback)
@@ -249,6 +271,84 @@ func TestMemoryModeUpdate(t *testing.T) {
 	rec = doJSON(t, e, http.MethodPatch, "/api/memory/destinations", "alice", `{"repo":"org/repo","mode":"nope"}`)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("bad mode = %d", rec.Code)
+	}
+}
+
+func TestMemoryDestinationAgentPicker(t *testing.T) {
+	mem := &fakeMemory{}
+	srv := httptest.NewServer(mem.handler())
+	defer srv.Close()
+	_, s, e := newMemoryTestHandler(t, mem)
+	connectMemory(t, e, srv.URL)
+
+	// A destination that predates the picker reports the built-in default.
+	rec := doJSON(t, e, http.MethodGet, "/api/memory/status?repo=org/repo", "", "")
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"agent":"feedback-assistant"`) {
+		t.Fatalf("status = %d %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"available":true`) {
+		t.Fatalf("status should report chat as available: %s", rec.Body.String())
+	}
+
+	rec = doJSON(t, e, http.MethodGet, "/api/memory/agents?repo=org/repo", "alice", "")
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"feedback-assistant"`) {
+		t.Fatalf("agents = %d %s", rec.Code, rec.Body.String())
+	}
+
+	rec = doJSON(t, e, http.MethodPatch, "/api/memory/destinations", "alice", `{"repo":"org/repo","agent":"support-bot"}`)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"agent":"support-bot"`) {
+		t.Fatalf("patch agent = %d %s", rec.Code, rec.Body.String())
+	}
+	d, _ := s.GetMemoryDestination(context.Background(), "org/repo")
+	if d.Agent != "support-bot" || d.Mode != "auto" {
+		t.Fatalf("destination = %+v", d)
+	}
+
+	rec = doJSON(t, e, http.MethodPatch, "/api/memory/destinations", "alice", `{"repo":"org/repo","agent":"../etc/passwd"}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("bad agent = %d, want 400", rec.Code)
+	}
+	rec = doJSON(t, e, http.MethodPatch, "/api/memory/destinations", "alice", `{"repo":"org/repo"}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("empty patch = %d, want 400", rec.Code)
+	}
+}
+
+func TestMemoryChatUsesDestinationAgent(t *testing.T) {
+	mem := &fakeMemory{}
+	srv := httptest.NewServer(mem.handler())
+	defer srv.Close()
+	_, _, e := newMemoryTestHandler(t, mem)
+	connectMemory(t, e, srv.URL)
+
+	rec := doJSON(t, e, http.MethodPatch, "/api/memory/destinations", "alice", `{"repo":"org/repo","agent":"support-bot"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("patch agent = %d: %s", rec.Code, rec.Body.String())
+	}
+
+	rec = doJSON(t, e, http.MethodPost, "/api/memory/chat", "alice", `{
+		"repo":"org/repo",
+		"messages":[{"role":"user","content":"the CTA is invisible"}],
+		"context":{"selector":"#hero button"}
+	}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("chat = %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"ok"`) {
+		t.Fatalf("chat stream was not forwarded: %s", rec.Body.String())
+	}
+
+	mem.mu.Lock()
+	path, body := mem.chatPath, mem.chatBody
+	mem.mu.Unlock()
+	if path != "/api/projects/p1/agents/support-bot/stream" {
+		t.Fatalf("chat path = %q", path)
+	}
+	if msg, _ := body["message"].(string); !strings.Contains(msg, "Reporter: the CTA is invisible") {
+		t.Fatalf("message = %q", msg)
+	}
+	if system, _ := body["system"].(string); !strings.Contains(system, "Output contract") {
+		t.Fatalf("system appendix = %q", system)
 	}
 }
 

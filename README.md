@@ -48,7 +48,6 @@ Add the following snippet to your HTML, just before `</body>`:
 | `data-theme` | No | Overlay theme: `auto` (default), `light` or `dark`. `auto` detects the host page theme, then falls back to the OS `prefers-color-scheme`. |
 | `data-theme-url` | No | Absolute or same-origin URL of a JSON theme manifest (design-token groups) that powers the live style editor. See [Live style editing](#live-style-editing). When omitted, the overlay reads daisyUI color variables from the page and uses a built-in Tailwind/daisyUI utility set (spacing, layout, typography, colors, borders/effects, daisyUI components). |
 | `data-chat` | No | Adds the **Chat** tab to the pane: a report composer backed by the repository's connected Memory project. Off unless the attribute is present; `data-chat="false"` disables it. See [Chat tab](#chat-tab). |
-| `data-chat-agent` | No | Optional Memory agent name or id sent with each chat turn. Only meaningful with `data-chat`. |
 
 The overlay dialog, activation bar, badges and toasts follow the resolved theme. The server-rendered
 landing page and API-key panel share a persisted Light/Dark/System toggle (localStorage key
@@ -234,14 +233,35 @@ self-contained HTML fragment plus optional CSS.
   of scripts, inline handlers and `javascript:` URLs before it is stored. The
   sandbox, not that regex, is the security boundary.
 
-The browser never sees the Memory token. The overlay posts to
-`POST /api/memory/chat`, which owns the credentials and the composer prompt and
-streams the Memory `ask` response back as SSE (`token` / `error` / `done`).
+#### The chat agent
 
-Chat requires the `chat:use` scope on the destination's token. Destinations
-connected before the chat existed were granted
-`graph:read graph:write schema:read projects:read`, so **reconnect the
-destination** (or paste a token with `chat:use`) to enable it.
+Chat turns go to a **dedicated Memory agent**, not the shared CLI assistant:
+
+- Each destination names an agent definition (default `feedback-assistant`).
+  Repository admins pick it in **Panel → Destinations**; the list comes from the
+  connected Memory project's agent definitions.
+- Memory creates `feedback-assistant` in the project on first use. After that it
+  is an ordinary agent definition: edit its prompt, model and tools in Memory's
+  admin panel and the next chat turn uses the edit. The agent has read-only
+  tools — it cannot write graph objects.
+- The persona lives in that definition. The machine-readable output contract
+  (the single fenced JSON block, the closed enums, the gallery shape) is sent by
+  this server as a per-request system appendix, so a prompt edit cannot break
+  the overlay's parser.
+- A destination stores only the agent *name*; the overlay changes nothing but
+  the conversation and the report it composes.
+
+The browser never sees the Memory token. The overlay posts to
+`POST /api/memory/chat`, which resolves the destination's agent and streams one
+stateless turn from Memory (`POST /api/projects/:id/agents/:agentRef/stream`)
+back as SSE (`token` / `error` / `done`).
+
+Chat requires the `chat:use` and `agents:read` scopes on the destination's
+token. Destinations connected before chat existed were granted
+`graph:read graph:write schema:read projects:read` only, so **reconnect the
+destination** (or paste a token with `chat:use agents:read`) to enable chat and
+the agent picker. **Test** in the panel verifies the project, the token scopes
+and the configured agent in one step.
 
 ### Memory destinations
 

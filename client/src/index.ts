@@ -617,10 +617,7 @@ function elementLabel(el: Element): string {
       // Opt-in Chat tab (data-chat): a report composer, never an editor.
       ...(config.chat
         ? {
-            chat: {
-              api,
-              ...(config.chatAgent ? { agent: config.chatAgent } : {}),
-            },
+            chat: { api },
           }
         : {}),
     });
