@@ -194,13 +194,14 @@ the pick and stay in the editor.
 
 ### Chat tab
 
-`data-chat` adds a **Chat** tab that composes the report with an agent from the
-repository's connected Memory project. The scope is deliberately narrow:
+`data-chat` adds a **Chat** tab that composes the report — and, when asked, drafts
+layout options — with an agent from the repository's connected Memory project.
+The scope is deliberately narrow:
 
 - The agent **writes feedback fields only** — title, type, action, expected,
-  actual, scope and comment. It cannot edit the page, the repository, the spec
-  or a revision, and the overlay's edit primitives are not reachable from the
-  chat.
+  actual, scope and comment — plus optional design variants. It cannot edit the
+  page, the repository, the spec or a revision, and the overlay's edit
+  primitives are not reachable from the chat.
 - It replies with a short paragraph plus one fenced JSON block. The client
   parses that block, validates it against closed enums and caps every string
   before it can touch a field.
@@ -208,10 +209,30 @@ repository's connected Memory project. The scope is deliberately narrow:
   card fills the Feedback tab; the reporter reviews and presses **Save** or
   **Create issue** themselves.
 - The transcript is client-side only, per element and per page (localStorage
-  `__ef_chat__:<url>|<selector>`). Only chat text is stored, never the context.
+  `__ef_chat__:<url>|<selector>`). Only chat text, the validated gallery and the
+  reporter's pick are stored, never the capture context.
 - The context sent with each turn is redacted to the selector, a sanitised URL,
   the component/tag, the source location, a fixed style allow-list and a
-  summary of pending edits. No HTML, snapshots, replay or user agent.
+  summary of pending edits. No HTML, snapshots, replay or user agent. Once a
+  variant is picked, only its id, label and notes travel in later turns.
+
+#### Design options
+
+Asking for options ("show me three ways to lay this out") makes the agent return
+a `gallery` member in the same JSON block: 2–4 variants, each a small
+self-contained HTML fragment plus optional CSS.
+
+- The reporter previews them in a modal — desktop or 390 px — and picks one
+  with **Use this**. Nothing on the page changes: the variants are rendered in
+  `sandbox=""` iframes (opaque origin, no scripts, no forms, no navigation)
+  under a CSP that forbids every subresource except the host origin.
+- The pick is remembered on the transcript, shown as a chip on the Feedback tab
+  and attached to the report as `intent.design` — the chosen variant plus the
+  labels of the alternatives. The issue body renders it in a folded **Proposed
+  design** section. It is evidence for the implementer, never a structural edit.
+- Markup is length-capped (12 000 characters of HTML, 6 000 of CSS) and stripped
+  of scripts, inline handlers and `javascript:` URLs before it is stored. The
+  sandbox, not that regex, is the security boundary.
 
 The browser never sees the Memory token. The overlay posts to
 `POST /api/memory/chat`, which owns the credentials and the composer prompt and

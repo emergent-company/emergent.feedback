@@ -37,11 +37,21 @@ import {
   buildChatContext,
   loadChat,
   mountChat,
+  pickedVariant,
   saveChat,
+  withPick,
   type ChatPanel,
   type ChatTurn,
   type ReportSuggestion,
 } from "./chat";
+import {
+  buildDesignAttachment,
+  buildVariantDocument,
+  collectHostStyles,
+  variantRef,
+  type Gallery,
+  type GalleryVariant,
+} from "./gallery";
 import { layoutAxis, type DropTarget } from "./structure";
 import type { ThemeTokens } from "./tokens";
 import {
@@ -1091,6 +1101,277 @@ function injectStyles(): void {
       font-size: 11px;
       color: var(--ef-muted);
       font-style: italic;
+    }
+    /* ── Design gallery ──────────────────────────────────────────────────── */
+    #__ef_dialog__ .ef-gallery-card {
+      border: 1px solid var(--ef-border);
+      border-radius: 8px;
+      padding: 10px;
+      background: var(--ef-surface);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    #__ef_dialog__ .ef-gallery-card-head {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--ef-muted);
+    }
+    #__ef_dialog__ .ef-gallery-options {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      font-size: 11px;
+    }
+    #__ef_dialog__ .ef-gallery-options li {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--ef-text-soft);
+    }
+    #__ef_dialog__ .ef-gallery-options li.is-picked {
+      color: var(--ef-text-strong);
+      font-weight: 600;
+    }
+    #__ef_dialog__ .ef-gallery-option-label {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #__ef_dialog__ .ef-gallery-option-badge {
+      flex-shrink: 0;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--ef-accent);
+      background: var(--ef-accent-soft);
+      border-radius: 999px;
+      padding: 1px 6px;
+    }
+    #__ef_dialog__ .ef-gallery-card .ef-btn-secondary {
+      align-self: flex-start;
+    }
+    #__ef_dialog__ .ef-variant-chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--ef-border);
+      border-left: 3px solid var(--ef-accent);
+      border-radius: 6px;
+      background: var(--ef-accent-soft);
+      padding: 6px 8px;
+      margin: 8px 0;
+      font-size: 11px;
+      color: var(--ef-text-soft);
+    }
+    #__ef_dialog__ .ef-variant-chip[hidden] {
+      display: none;
+    }
+    #__ef_dialog__ .ef-variant-chip-label {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--ef-muted);
+    }
+    #__ef_dialog__ .ef-variant-chip-name {
+      font-weight: 600;
+      color: var(--ef-text-strong);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #__ef_dialog__ .ef-variant-chip-actions {
+      margin-left: auto;
+      display: flex;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    #__ef_dialog__ .ef-gallery-layer {
+      /* Fixed, not absolute: the pane can be docked to a 400px rail, and the
+         gallery must still cover the viewport. The docked root also turns
+         pointer events off, so this layer re-enables them for itself. */
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      pointer-events: auto;
+      background: var(--ef-backdrop);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    #__ef_dialog__ .ef-gallery-modal {
+      display: flex;
+      flex-direction: column;
+      width: min(1180px, 100%);
+      max-height: 100%;
+      background: var(--ef-card-bg);
+      border-radius: 12px;
+      box-shadow: var(--ef-card-shadow);
+      overflow: hidden;
+    }
+    #__ef_dialog__ .ef-gallery-head {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--ef-border);
+      flex-shrink: 0;
+    }
+    #__ef_dialog__ .ef-gallery-eyebrow {
+      margin: 0 0 2px;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ef-muted);
+    }
+    #__ef_dialog__ .ef-gallery-title {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--ef-heading);
+    }
+    #__ef_dialog__ .ef-gallery-head-actions {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    #__ef_dialog__ .ef-gallery-size {
+      display: flex;
+      border: 1px solid var(--ef-border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    #__ef_dialog__ .ef-gallery-size-btn {
+      border: 0;
+      background: var(--ef-control-bg);
+      color: var(--ef-chip-fg);
+      font: inherit;
+      font-size: 11px;
+      padding: 4px 8px;
+      cursor: pointer;
+    }
+    #__ef_dialog__ .ef-gallery-size-btn[aria-pressed="true"] {
+      background: var(--ef-primary);
+      color: var(--ef-primary-content);
+      font-weight: 600;
+    }
+    #__ef_dialog__ .ef-gallery-close {
+      border: 1px solid var(--ef-border);
+      background: var(--ef-control-bg);
+      color: var(--ef-chip-fg);
+      border-radius: 6px;
+      width: 26px;
+      height: 26px;
+      cursor: pointer;
+      font-size: 12px;
+      line-height: 1;
+    }
+    #__ef_dialog__ .ef-gallery-grid {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 12px;
+      padding: 14px 16px;
+      background: var(--ef-surface);
+    }
+    #__ef_dialog__ .ef-gallery-tile {
+      display: flex;
+      flex-direction: column;
+      border: 1px solid var(--ef-border);
+      border-radius: 8px;
+      background: var(--ef-card-bg);
+      overflow: hidden;
+      min-width: 0;
+    }
+    #__ef_dialog__ .ef-gallery-tile.is-picked {
+      border-color: var(--ef-accent);
+      box-shadow: 0 0 0 2px var(--ef-accent-soft);
+    }
+    #__ef_dialog__ .ef-gallery-grid.is-zoomed {
+      grid-template-columns: 1fr;
+    }
+    #__ef_dialog__ .ef-gallery-grid.is-zoomed .ef-gallery-tile:not(.is-zoomed) {
+      display: none;
+    }
+    #__ef_dialog__ .ef-gallery-frame {
+      height: 240px;
+      background: var(--ef-surface-alt);
+      display: flex;
+      justify-content: center;
+      overflow: hidden;
+    }
+    #__ef_dialog__ .ef-gallery-tile.is-zoomed .ef-gallery-frame {
+      height: min(60vh, 640px);
+    }
+    #__ef_dialog__ .ef-gallery-iframe {
+      border: 0;
+      width: 100%;
+      height: 100%;
+      background: var(--ef-card-bg);
+    }
+    #__ef_dialog__ .ef-gallery-grid[data-width="mobile"] .ef-gallery-iframe {
+      width: 390px;
+      max-width: 100%;
+      border-left: 1px solid var(--ef-border);
+      border-right: 1px solid var(--ef-border);
+    }
+    #__ef_dialog__ .ef-gallery-tile-body {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 10px;
+      border-top: 1px solid var(--ef-border);
+    }
+    #__ef_dialog__ .ef-gallery-tile-head {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    #__ef_dialog__ .ef-gallery-tile-head h4 {
+      margin: 0;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--ef-heading);
+    }
+    #__ef_dialog__ .ef-gallery-tile-notes {
+      margin: 0;
+      font-size: 11px;
+      line-height: 1.45;
+      color: var(--ef-muted-strong);
+    }
+    #__ef_dialog__ .ef-gallery-tile-actions {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    #__ef_dialog__ .ef-gallery-foot {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border-top: 1px solid var(--ef-border);
+      flex-shrink: 0;
+    }
+    #__ef_dialog__ .ef-gallery-note {
+      margin: 0;
+      font-size: 10px;
+      color: var(--ef-muted);
+    }
+    #__ef_dialog__ .ef-gallery-foot-spacer {
+      flex: 1;
     }
     #__ef_dialog__ .ef-chat-compose {
       border-top: 1px solid var(--ef-border);
@@ -2225,6 +2506,8 @@ let dialogCleanup: (() => void) | null = null;
 // True while an auth (login/grant) layer is shown. The pane's Tab trap stands
 // down while the auth layer owns the keyboard.
 let authLayerOpen = false;
+// A layer above the card (the design gallery) that owns Tab while it is open.
+let topLayerEl: HTMLElement | null = null;
 // Pending prompt layers (bottom → top). closeDialog() resolves every one as
 // cancelled so no caller is left hanging when the dialog is torn down.
 const authLayerCancels: Array<() => void> = [];
@@ -2276,12 +2559,14 @@ function activateDialog(
     // The auth layer owns the keyboard while it is open.
     if (authLayerOpen) return;
     if (e.key !== "Tab") return;
-    const items = getFocusable(card);
-    if (items.length === 0) { e.preventDefault(); card.focus(); return; }
+    // A layer above the card (the gallery) traps Tab inside itself.
+    const scope = topLayerEl && topLayerEl.isConnected ? topLayerEl : card;
+    const items = getFocusable(scope);
+    if (items.length === 0) { e.preventDefault(); scope.focus(); return; }
     const first = items[0];
     const last = items[items.length - 1];
     const active = document.activeElement as HTMLElement | null;
-    if (!active || active === card || !card.contains(active)) {
+    if (!active || active === scope || !scope.contains(active)) {
       e.preventDefault();
       (e.shiftKey ? last : first).focus();
       return;
@@ -2579,6 +2864,14 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
                   <label for="__ef_type_bug__">🐛 Bug</label>
                   <input type="radio" name="__ef_type__" id="__ef_type_enh__" value="enhancement" checked>
                   <label for="__ef_type_enh__">✨ Enhancement</label>
+                </div>
+                <div class="ef-variant-chip" id="__ef_variant_chip__" hidden>
+                  <span class="ef-variant-chip-label">Design</span>
+                  <span class="ef-variant-chip-name" id="__ef_variant_name__"></span>
+                  <div class="ef-variant-chip-actions">
+                    <button type="button" class="ef-btn-secondary ef-btn-sm" id="__ef_variant_view__">View</button>
+                    <button type="button" class="ef-btn-secondary ef-btn-sm" id="__ef_variant_clear__">Remove</button>
+                  </div>
                 </div>
                 <textarea id="__ef_comment__" placeholder="Anything else? (optional)"></textarea>
                 <div class="ef-error" id="__ef_err__"></div>
@@ -3456,6 +3749,13 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
       },
     };
     if (changes.length > 0) intent.changes = changes;
+    // A picked design travels as evidence with the report. It is not applied to
+    // the page and never becomes a repository change.
+    const pick = pickedVariant(chatTurns);
+    if (pick) {
+      const design = buildDesignAttachment(pick.gallery, pick.variant.id);
+      if (design) intent.design = design;
+    }
     return intent;
   };
 
@@ -3518,6 +3818,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     }
     const raw = (opts.context ?? {}) as Record<string, unknown>;
     const src = raw.source as Record<string, unknown> | undefined;
+    const pick = pickedVariant(chatTurns);
     return buildChatContext({
       selector: t?.selector ?? opts.selector,
       url: typeof raw.url === "string" ? raw.url : window.location.href,
@@ -3539,6 +3840,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
         after: c.after,
       })),
       targetCount: currentTargets().length,
+      ...(pick ? { selectedVariant: variantRef(pick.variant) } : {}),
     });
   };
 
@@ -3570,6 +3872,195 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     textarea.focus();
   };
 
+  // ── Design gallery ─────────────────────────────────────────────────────────
+  // The agent proposes variants; the reporter previews them in script-free
+  // iframes and picks one. The pick is evidence attached to the report — it is
+  // never applied to the page.
+  const variantChip = dialog.querySelector<HTMLElement>("#__ef_variant_chip__");
+  const variantName = dialog.querySelector<HTMLElement>("#__ef_variant_name__");
+  let galleryLayer: HTMLElement | null = null;
+  let galleryOpener: HTMLElement | null = null;
+
+  const refreshVariantChip = (): void => {
+    if (!variantChip || !variantName) return;
+    const pick = pickedVariant(chatTurns);
+    if (!pick) {
+      variantChip.hidden = true;
+      variantName.textContent = "";
+      variantName.removeAttribute("title");
+      return;
+    }
+    variantChip.hidden = false;
+    variantName.textContent = pick.variant.label;
+    variantName.title = pick.variant.notes ?? pick.variant.label;
+  };
+
+  const closeGallery = (): void => {
+    if (!galleryLayer) return;
+    topLayerEl = null;
+    galleryLayer.remove();
+    galleryLayer = null;
+    // Return focus to whatever opened the layer, if it is still in the DOM.
+    if (galleryOpener?.isConnected) galleryOpener.focus();
+    galleryOpener = null;
+  };
+
+  variantChip?.querySelector("#__ef_variant_view__")?.addEventListener("click", () => {
+    const pick = pickedVariant(chatTurns);
+    if (!pick) return;
+    setTab("chat");
+    openGallery(pick.turnIndex);
+  });
+  variantChip?.querySelector("#__ef_variant_clear__")?.addEventListener("click", () => {
+    const pick = pickedVariant(chatTurns);
+    if (!pick) return;
+    setPick(pick.turnIndex, null);
+  });
+
+  /** Repaint the chip, the chat card and (when open) the modal tiles. */
+  const paintPick = (turnIndex: number): void => {
+    refreshVariantChip();
+    chatPanel?.render();
+    if (!galleryLayer) return;
+    const picked = chatTurns[turnIndex]?.picked;
+    galleryLayer.querySelectorAll<HTMLElement>(".ef-gallery-tile").forEach((tile) => {
+      const on = tile.dataset.variant === picked;
+      tile.classList.toggle("is-picked", on);
+      const pickBtn = tile.querySelector<HTMLButtonElement>("[data-pick]");
+      if (pickBtn) pickBtn.textContent = on ? "Chosen" : "Use this";
+      const head = tile.querySelector<HTMLElement>(".ef-gallery-tile-head");
+      const badge = head?.querySelector<HTMLElement>(".ef-gallery-option-badge");
+      if (on && head && !badge) {
+        head.insertAdjacentHTML("beforeend", '<span class="ef-gallery-option-badge">Chosen</span>');
+      } else if (!on && badge) {
+        badge.remove();
+      }
+    });
+  };
+
+  const setPick = (turnIndex: number, variantId: string | null): void => {
+    chatTurns = withPick(chatTurns, turnIndex, variantId);
+    saveChat(chatLoadedFor, chatTurns);
+    paintPick(turnIndex);
+  };
+
+  const openGallery = (turnIndex: number): void => {
+    const turn = chatTurns[turnIndex];
+    const gallery = turn?.gallery;
+    if (!gallery || !turn) return;
+    closeGallery();
+
+    const host = collectHostStyles(document);
+    const picked = turn.picked;
+    galleryOpener = document.activeElement as HTMLElement | null;
+
+    const layer = document.createElement("div");
+    layer.className = "ef-gallery-layer";
+    layer.innerHTML = `
+      <div class="ef-gallery-modal" role="dialog" aria-modal="true" aria-label="Design options">
+        <header class="ef-gallery-head">
+          <div>
+            <p class="ef-gallery-eyebrow">Design options</p>
+            <h3 class="ef-gallery-title">${escapeHtml(gallery.title ?? "Pick the layout you want")}</h3>
+          </div>
+          <div class="ef-gallery-head-actions">
+            <div class="ef-gallery-size" role="group" aria-label="Preview width">
+              <button type="button" class="ef-gallery-size-btn" data-gallery-width="desktop" aria-pressed="true">Desktop</button>
+              <button type="button" class="ef-gallery-size-btn" data-gallery-width="mobile" aria-pressed="false">390 px</button>
+            </div>
+            <button type="button" class="ef-gallery-close" data-gallery-close aria-label="Close gallery">✕</button>
+          </div>
+        </header>
+        <div class="ef-gallery-grid" data-width="desktop">
+          ${gallery.variants
+            .map(
+              (v) => `
+            <article class="ef-gallery-tile${v.id === picked ? " is-picked" : ""}" data-variant="${escapeHtml(v.id)}">
+              <div class="ef-gallery-frame"></div>
+              <div class="ef-gallery-tile-body">
+                <div class="ef-gallery-tile-head">
+                  <h4>${escapeHtml(v.label)}</h4>
+                  ${v.id === picked ? '<span class="ef-gallery-option-badge">Chosen</span>' : ""}
+                </div>
+                ${v.notes ? `<p class="ef-gallery-tile-notes">${escapeHtml(v.notes)}</p>` : ""}
+                <div class="ef-gallery-tile-actions">
+                  <button type="button" class="ef-btn-primary ef-btn-sm" data-pick="${escapeHtml(v.id)}">${v.id === picked ? "Chosen" : "Use this"}</button>
+                  <button type="button" class="ef-btn-secondary ef-btn-sm" data-zoom="${escapeHtml(v.id)}">Expand</button>
+                </div>
+              </div>
+            </article>`
+            )
+            .join("")}
+        </div>
+        <footer class="ef-gallery-foot">
+          <p class="ef-gallery-note">Preview only — the page has not changed. Your pick is attached to the report as evidence.</p>
+          <div class="ef-gallery-foot-spacer"></div>
+          <button type="button" class="ef-btn-secondary ef-btn-sm" data-gallery-close>Done</button>
+        </footer>
+      </div>`;
+
+    // Documents are built per tile so each iframe gets exactly one variant.
+    layer.querySelectorAll<HTMLElement>(".ef-gallery-tile").forEach((tile) => {
+      const variant = gallery.variants.find((v) => v.id === tile.dataset.variant);
+      const frame = tile.querySelector<HTMLElement>(".ef-gallery-frame");
+      if (!variant || !frame) return;
+      const iframe = document.createElement("iframe");
+      iframe.className = "ef-gallery-iframe";
+      // No allow-* tokens: opaque origin, no scripts, no forms, no navigation.
+      iframe.setAttribute("sandbox", "");
+      iframe.setAttribute("referrerpolicy", "no-referrer");
+      iframe.setAttribute("title", `Preview: ${variant.label}`);
+      iframe.srcdoc = buildVariantDocument(variant, host);
+      frame.appendChild(iframe);
+    });
+
+    layer.addEventListener("click", (event) => {
+      const target = event.target as Element;
+      if (target === layer) {
+        closeGallery();
+        return;
+      }
+      if (target.closest("[data-gallery-close]")) {
+        closeGallery();
+        return;
+      }
+      const widthBtn = target.closest<HTMLElement>("[data-gallery-width]");
+      if (widthBtn) {
+        const next = widthBtn.dataset.galleryWidth === "mobile" ? "mobile" : "desktop";
+        const grid = layer.querySelector<HTMLElement>(".ef-gallery-grid");
+        if (grid) grid.dataset.width = next;
+        layer.querySelectorAll<HTMLElement>("[data-gallery-width]").forEach((btn) => {
+          btn.setAttribute("aria-pressed", btn.dataset.galleryWidth === next ? "true" : "false");
+        });
+        return;
+      }
+      const pickBtn = target.closest<HTMLElement>("[data-pick]");
+      if (pickBtn?.dataset.pick) {
+        const id = pickBtn.dataset.pick;
+        setPick(turnIndex, chatTurns[turnIndex]?.picked === id ? null : id);
+        return;
+      }
+      const zoomBtn = target.closest<HTMLElement>("[data-zoom]");
+      if (zoomBtn?.dataset.zoom) {
+        const grid = layer.querySelector<HTMLElement>(".ef-gallery-grid");
+        const tile = zoomBtn.closest<HTMLElement>(".ef-gallery-tile");
+        const already = tile?.classList.contains("is-zoomed") ?? false;
+        layer.querySelectorAll<HTMLElement>(".ef-gallery-tile").forEach((t) => t.classList.remove("is-zoomed"));
+        grid?.classList.toggle("is-zoomed", !already);
+        if (!already && tile) tile.classList.add("is-zoomed");
+        layer.querySelectorAll<HTMLElement>("[data-zoom]").forEach((b) => {
+          const on = !already && b.dataset.zoom === zoomBtn.dataset.zoom;
+          b.textContent = on ? "Collapse" : "Expand";
+        });
+      }
+    });
+
+    dialog.appendChild(layer);
+    galleryLayer = layer;
+    topLayerEl = layer;
+    layer.querySelector<HTMLElement>("[data-gallery-close]")?.focus();
+  };
+
   const mountChatPanel = (): void => {
     if (!chatEnabled || !opts.chat) return;
     const host = dialog.querySelector<HTMLElement>("#__ef_chat__");
@@ -3591,7 +4082,9 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
         saveChat(chatLoadedFor, turns);
       },
       onUseReport: applyReport,
+      onOpenGallery: (turnIndex) => openGallery(turnIndex),
     });
+    refreshVariantChip();
     chatLastCount = allChanges().length;
   };
 
@@ -3621,6 +4114,11 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     // The auth layer owns Escape while it is up.
     if (authLayerOpen) return;
     if (e.key !== "Escape") return;
+    // The gallery is a layer above the pane: Escape closes it first.
+    if (galleryLayer) {
+      closeGallery();
+      return;
+    }
     if (awaitingPick) {
       // Cancel the pick but keep the dialog: the selection subscription
       // restores the editor once pick mode ends.
@@ -4095,6 +4593,7 @@ export function closeDialog(): void {
 
   // Drop the auth keyboard state so a later reopen starts clean.
   authLayerOpen = false;
+  topLayerEl = null;
 
   // Prompt layers still waiting for input must resolve rather than leak their
   // keyboard handlers and leave callers hanging.

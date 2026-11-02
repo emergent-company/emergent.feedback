@@ -291,6 +291,7 @@ func buildSingleItem(sb *strings.Builder, f store.Feedback, level string) {
 			sb.WriteString("## Intent\n\n")
 			writeIntent(sb, ctx, intent)
 			writeChanges(sb, ctx, "## Requested changes")
+			writeDesign(sb, intent, "## Proposed design")
 			sb.WriteString("\n")
 		}
 
@@ -359,6 +360,7 @@ func buildMultiItem(sb *strings.Builder, items []store.Feedback, level string) {
 				sb.WriteString("### Intent\n\n")
 				writeIntent(sb, ctx, intent)
 				writeChanges(sb, ctx, "### Requested changes")
+				writeDesign(sb, intent, "### Proposed design")
 				sb.WriteString("\n")
 			}
 			writeRepro(sb, ctx, level)
@@ -568,6 +570,64 @@ func writeChanges(sb *strings.Builder, ctx map[string]any, heading string) {
 		sb.WriteString("\n")
 	}
 	sb.WriteString("\n")
+}
+
+// writeDesign renders the variant the reporter picked from an agent-proposed
+// gallery. The markup is evidence for the implementer — the agent never applied
+// it to the page — so it is folded away instead of rendered.
+func writeDesign(sb *strings.Builder, intent map[string]any, heading string) {
+	design := getMap(intent, "design")
+	if len(design) == 0 {
+		return
+	}
+	variant := getMap(design, "variant")
+	html := strVal(variant["html"])
+	if html == "" {
+		return
+	}
+	label := strVal(variant["label"])
+	if label == "" {
+		label = strVal(variant["id"])
+	}
+
+	sb.WriteString(heading)
+	sb.WriteString("\n\n")
+	if title := strVal(design["title"]); title != "" {
+		fmt.Fprintf(sb, "**Gallery:** %s  \n", title)
+	}
+	fmt.Fprintf(sb, "**Chosen:** `%s` %s\n", mdTickSafe(strVal(variant["id"])), mdTickSafe(label))
+	if notes := strVal(variant["notes"]); notes != "" {
+		fmt.Fprintf(sb, "\n%s\n", notes)
+	}
+	if raw, ok := design["alternatives"].([]any); ok && len(raw) > 0 {
+		var names []string
+		for _, a := range raw {
+			m, ok := a.(map[string]any)
+			if !ok {
+				continue
+			}
+			name := strVal(m["label"])
+			if name == "" {
+				name = strVal(m["id"])
+			}
+			if name != "" {
+				names = append(names, mdTickSafe(name))
+			}
+		}
+		if len(names) > 0 {
+			fmt.Fprintf(sb, "\n**Not chosen:** %s\n", strings.Join(names, ", "))
+		}
+	}
+
+	sb.WriteString("\n<details>\n<summary>Variant markup</summary>\n\n```html\n")
+	sb.WriteString(html)
+	sb.WriteString("\n```\n")
+	if css := strVal(variant["css"]); css != "" {
+		sb.WriteString("\n```css\n")
+		sb.WriteString(css)
+		sb.WriteString("\n```\n")
+	}
+	sb.WriteString("\n</details>\n\n")
 }
 
 // changeCount returns the number of renderable live changes recorded on the

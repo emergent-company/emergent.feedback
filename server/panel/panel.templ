@@ -1430,8 +1430,52 @@ templ panelScript() {
 				section.appendChild(chList);
 			}
 
-			var raw = makeEl("details", "mt-3 text-xs");
-			var sum = makeEl("summary", "cursor-pointer text-base-content/50");
+			// A design variant the reporter picked from the chat gallery. The
+			// markup is evidence for the implementer, never applied to the page.
+			if (isObj(ctx.intent) && isObj(ctx.intent.design) && isObj(ctx.intent.design.variant)) {
+				var dg = ctx.intent.design;
+				var dv = dg.variant;
+				if (typeof dv.html === "string" && dv.html) {
+					var dLabel = makeEl("div", "mt-4 mb-2 text-xs font-medium uppercase tracking-wide text-base-content/40");
+					dLabel.textContent = "Proposed design";
+					section.appendChild(dLabel);
+
+					var dHead = makeEl("div", "flex flex-wrap items-baseline gap-2 text-sm text-base-content/80");
+					var dName = makeEl("span", "font-medium");
+					dName.textContent = textOf(dv.label) || textOf(dv.id);
+					dHead.appendChild(dName);
+					if (typeof dv.notes === "string" && dv.notes) {
+						var dNotes = makeEl("span", "text-xs text-base-content/60");
+						dNotes.textContent = dv.notes;
+						dHead.appendChild(dNotes);
+					}
+					section.appendChild(dHead);
+
+					if (Array.isArray(dg.alternatives) && dg.alternatives.length) {
+						var dNames = [];
+						for (var ai = 0; ai < dg.alternatives.length; ai++) {
+							var alt = dg.alternatives[ai];
+							if (isObj(alt)) dNames.push(textOf(alt.label) || textOf(alt.id));
+						}
+						if (dNames.length) {
+							var dAlts = makeEl("p", "mt-1 text-xs text-base-content/50");
+							dAlts.textContent = "Not chosen: " + dNames.join(", ");
+							section.appendChild(dAlts);
+						}
+					}
+
+					var dRaw = makeEl("details", "mt-2 text-xs");
+					var dSum = makeEl("summary", "cursor-pointer text-base-content/50");
+					dSum.textContent = "Variant markup";
+					dRaw.appendChild(dSum);
+					var dPre = makeEl("pre", "mt-2 max-h-64 overflow-auto rounded-lg bg-base-300/40 p-3 font-mono text-xs text-base-content/80");
+					dPre.textContent = dv.html + (typeof dv.css === "string" && dv.css ? "\n\n" + dv.css : "");
+					dRaw.appendChild(dPre);
+					section.appendChild(dRaw);
+				}
+			}
+
+			var raw = makeEl("details", "mt-3 text-xs");			var sum = makeEl("summary", "cursor-pointer text-base-content/50");
 			sum.textContent = "Raw context JSON";
 			raw.appendChild(sum);
 			var pre = makeEl("pre", "mt-2 max-h-64 overflow-auto rounded-lg bg-base-300/40 p-3 font-mono text-xs text-base-content/80");

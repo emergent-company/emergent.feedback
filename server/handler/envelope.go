@@ -348,8 +348,62 @@ func buildIntent(ctx map[string]any) map[string]any {
 	if v, ok := raw["changes"]; ok && v != nil {
 		out["changes"] = redactContextValue(v)
 	}
+	if d := buildDesign(raw["design"]); d != nil {
+		out["design"] = d
+	}
 	if len(out) == 0 {
 		return nil
+	}
+	return out
+}
+
+// buildDesign copies the picked gallery variant into the envelope. The markup
+// and CSS are agent output that the client already bounded and stripped; this
+// re-applies the caps because the JSON body is untrusted input.
+func buildDesign(raw any) map[string]any {
+	d, ok := raw.(map[string]any)
+	if !ok || len(d) == 0 {
+		return nil
+	}
+	v, ok := d["variant"].(map[string]any)
+	if !ok || len(v) == 0 {
+		return nil
+	}
+	html := strings.TrimSpace(asString(v["html"]))
+	if html == "" {
+		return nil
+	}
+	variant := map[string]any{
+		"id":    truncateRunes(asString(v["id"]), 16),
+		"label": redactSecrets(truncateRunes(asString(v["label"]), 60)),
+		"html":  truncateRunes(html, 12000),
+	}
+	if css := strings.TrimSpace(asString(v["css"])); css != "" {
+		variant["css"] = truncateRunes(css, 6000)
+	}
+	if notes := strings.TrimSpace(asString(v["notes"])); notes != "" {
+		variant["notes"] = redactSecrets(truncateRunes(notes, 400))
+	}
+	out := map[string]any{"variant": variant}
+	if title := strings.TrimSpace(asString(d["title"])); title != "" {
+		out["title"] = redactSecrets(truncateRunes(title, 80))
+	}
+	if alts, ok := d["alternatives"].([]any); ok && len(alts) > 0 {
+		list := make([]any, 0, len(alts))
+		for _, a := range alts {
+			m, ok := a.(map[string]any)
+			if !ok {
+				continue
+			}
+			item := map[string]any{
+				"id":    truncateRunes(asString(m["id"]), 16),
+				"label": redactSecrets(truncateRunes(asString(m["label"]), 60)),
+			}
+			list = append(list, item)
+		}
+		if len(list) > 0 {
+			out["alternatives"] = list
+		}
 	}
 	return out
 }

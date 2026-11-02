@@ -554,3 +554,96 @@ func TestPrettyHTML(t *testing.T) {
 		}
 	}
 }
+
+func designFeedback(t *testing.T, design map[string]any) string {
+	t.Helper()
+	ctx := map[string]any{
+		"intent": map[string]any{
+			"kind":   "enhancement",
+			"action": "change",
+			"design": design,
+		},
+	}
+	ctxJSON, _ := json.Marshal(ctx)
+	items := []store.Feedback{{
+		ID:          7,
+		URL:         "https://app.example.com/",
+		Selector:    "section#hero",
+		Comment:     "x",
+		ContextJSON: string(ctxJSON),
+		GitHubUser:  "alice",
+	}}
+	_, body := buildIssueContent(items, "")
+	return body
+}
+
+func TestIssueBodyRendersPickedDesign(t *testing.T) {
+	body := designFeedback(t, map[string]any{
+		"title": "Hero options",
+		"variant": map[string]any{
+			"id":    "b",
+			"label": "Stacked hero",
+			"notes": "Bigger CTA, copy above the fold.",
+			"html":  `<section class="hero"><h1>Ship</h1></section>`,
+			"css":   ".hero{padding:48px}",
+		},
+		"alternatives": []any{
+			map[string]any{"id": "a", "label": "Split hero"},
+		},
+	})
+
+	for _, want := range []string{
+		"## Proposed design",
+		"**Gallery:** Hero options",
+		"**Chosen:** `b` Stacked hero",
+		"Bigger CTA, copy above the fold.",
+		"**Not chosen:** Split hero",
+		"<summary>Variant markup</summary>",
+		"```html",
+		"<section class=\"hero\"><h1>Ship</h1></section>",
+		".hero{padding:48px}",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("issue body is missing %q:\n%s", want, body)
+		}
+	}
+}
+
+func TestIssueBodyOmitsDesignWhenNotPicked(t *testing.T) {
+	ctx := map[string]any{
+		"intent": map[string]any{"kind": "bug", "action": "fix"},
+	}
+	ctxJSON, _ := json.Marshal(ctx)
+	items := []store.Feedback{{
+		ID: 8, URL: "https://app.example.com/", Selector: "button",
+		Comment: "x", ContextJSON: string(ctxJSON), GitHubUser: "alice",
+	}}
+	_, body := buildIssueContent(items, "")
+	if strings.Contains(body, "Proposed design") {
+		t.Fatalf("design section should be absent when nothing was picked:\n%s", body)
+	}
+}
+
+func TestBuildDesignCapsAndRejects(t *testing.T) {
+	if buildDesign(nil) != nil {
+		t.Fatal("nil design should be dropped")
+	}
+	if buildDesign(map[string]any{"title": "no variant"}) != nil {
+		t.Fatal("a design without a variant should be dropped")
+	}
+	if buildDesign(map[string]any{"variant": map[string]any{"html": "  "}}) != nil {
+		t.Fatal("a variant without markup should be dropped")
+	}
+
+	long := strings.Repeat("x", 20000)
+	d := buildDesign(map[string]any{
+		"variant": map[string]any{"id": "a", "label": "L", "html": "<div>" + long + "</div>"},
+	})
+	if d == nil {
+		t.Fatal("expected a design")
+	}
+	v := d["variant"].(map[string]any)
+	if got := len([]rune(v["html"].(string))); got != 12000 {
+		t.Fatalf("html cap = %d, want 12000", got)
+	}
+}

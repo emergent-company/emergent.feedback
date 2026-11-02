@@ -13,6 +13,12 @@
 
 import type { APIClient, ChatMessage } from "./api";
 import { sanitizeURL } from "./redact";
+import {
+  validateGallery,
+  type Gallery,
+  type GalleryVariant,
+  type VariantRef,
+} from "./gallery";
 
 /** Local escaper so this module stays free of a cycle with dialog.ts. */
 function escapeHtml(s: unknown): string {
@@ -44,6 +50,10 @@ export interface ChatTurn {
   text: string;
   /** Parsed + validated report proposal attached to an assistant turn. */
   report?: ReportSuggestion;
+  /** Parsed + validated design options attached to an assistant turn. */
+  gallery?: Gallery;
+  /** Id of the variant the reporter picked from `gallery`. */
+  picked?: string;
   /** The turn failed; text carries the message. */
   error?: boolean;
 }
@@ -133,8 +143,15 @@ function stripFences(text: string): string {
  * Pull the last fenced ```json block out of an agent reply and validate it.
  * The agent may also emit the object bare; both shapes are accepted, but only
  * a well-formed object survives validation.
+ *
+ * One block may carry both members — a reply that proposes a report AND design
+ * options is the normal shape for "show me options and file it".
  */
-export function extractReport(reply: string): { prose: string; report: ReportSuggestion | null } {
+export function extractReport(reply: string): {
+  prose: string;
+  report: ReportSuggestion | null;
+  gallery: Gallery | null;
+} {
   const text = reply ?? "";
   const blocks: string[] = [];
   const fence = /```(?:json)?\s*\n([\s\S]*?)```/gi;
@@ -142,31 +159,36 @@ export function extractReport(reply: string): { prose: string; report: ReportSug
   while ((m = fence.exec(text)) !== null) blocks.push(m[1]);
 
   let report: ReportSuggestion | null = null;
-  for (let i = blocks.length - 1; i >= 0 && !report; i--) {
+  let gallery: Gallery | null = null;
+  for (let i = blocks.length - 1; i >= 0 && !(report && gallery); i--) {
+    let parsed: unknown;
     try {
-      const parsed = JSON.parse(blocks[i].trim()) as Record<string, unknown>;
-      const candidate = parsed && typeof parsed === "object" ? parsed.report ?? parsed : null;
-      report = validateReport(candidate);
+      parsed = JSON.parse(blocks[i].trim());
     } catch {
-      // Not JSON — ignore and keep looking at earlier blocks.
+      continue; // Not JSON — keep looking at earlier blocks.
     }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) continue;
+    const obj = parsed as Record<string, unknown>;
+    if (!report) report = validateReport(obj.report ?? obj);
+    if (!gallery) gallery = validateGallery(obj.gallery);
   }
 
   // Fallback: an unfenced object at the end of the reply.
-  if (!report) {
+  if (!report || !gallery) {
     const start = text.indexOf("{");
     const end = text.lastIndexOf("}");
     if (start >= 0 && end > start) {
       try {
         const parsed = JSON.parse(text.slice(start, end + 1)) as Record<string, unknown>;
-        report = validateReport(parsed.report ?? parsed);
+        if (!report) report = validateReport(parsed.report ?? parsed);
+        if (!gallery) gallery = validateGallery(parsed.gallery);
       } catch {
         // Not JSON either: prose only.
       }
     }
   }
 
-  return { prose: blocks.length > 0 ? stripFences(text) : text.trim(), report };
+  return { prose: blocks.length > 0 ? stripFences(text) : text.trim(), report, gallery };
 }
 
 /** Fields the Chat tab may receive from the dialog. */
@@ -179,6 +201,12 @@ export interface ChatContextInput {
   computedStyles?: Record<string, string>;
   changes?: { group: string; before?: string; after: string }[];
   targetCount?: number;
+  /**
+   * The variant the reporter picked from the last gallery. Only the label and
+   * notes travel: the markup stays in the browser unless the report is
+   * submitted, so the context block never blows its size budget.
+   */
+  selectedVariant?: VariantRef;
 }
 
 const CONTEXT_STYLES = [
@@ -232,6 +260,13 @@ export function buildChatContext(input: ChatContextInput): Record<string, unknow
     }));
   }
   if (input.targetCount && input.targetCount > 1) ctx.targetCount = input.targetCount;
+  if (input.selectedVariant) {
+    ctx.selectedVariant = {
+      id: clip(input.selectedVariant.id, 16) ?? "",
+      label: clip(input.selectedVariant.label, 60) ?? "",
+      ...(input.selectedVariant.notes ? { notes: clip(input.selectedVariant.notes, 400) } : {}),
+    };
+  }
   return ctx;
 }
 
@@ -242,6 +277,19 @@ export function buildChatContext(input: ChatContextInput): Record<string, unknow
 function storageKey(selector: string): string {
   const url = typeof window !== "undefined" ? sanitizeURL(window.location.href) : "";
   return `${CHAT_KEY}:${url}|${selector}`;
+}
+
+/**
+ * Storage is untrusted input: an entry may predate validation or have been
+ * edited by hand. Re-validate the gallery and drop a pick that no longer names
+ * a variant.
+ */
+function repairTurn(turn: ChatTurn): ChatTurn {
+  if (!turn.gallery) return turn;
+  const gallery = validateGallery(turn.gallery);
+  if (!gallery) return { ...turn, gallery: undefined, picked: undefined };
+  const picked = gallery.variants.some((v) => v.id === turn.picked) ? turn.picked : undefined;
+  return { ...turn, gallery, picked };
 }
 
 export function loadChat(selector: string): ChatTurn[] {
@@ -256,22 +304,59 @@ export function loadChat(selector: string): ChatTurn[] {
         ((t as ChatTurn).role === "user" || (t as ChatTurn).role === "assistant") &&
         typeof (t as ChatTurn).text === "string"
       )
-      .slice(-MAX_TURNS);
+      .slice(-MAX_TURNS)
+      .map(repairTurn);
   } catch {
     return [];
   }
 }
 
+/** Above this the transcript is trimmed before it can hit the quota. */
+const MAX_STORED_CHARS = 512 * 1024;
+
 export function saveChat(selector: string, turns: ChatTurn[]): void {
   try {
-    if (turns.length === 0) localStorage.removeItem(storageKey(selector));
-    else localStorage.setItem(storageKey(selector), JSON.stringify(turns.slice(-MAX_TURNS)));
+    if (turns.length === 0) {
+      localStorage.removeItem(storageKey(selector));
+      return;
+    }
+    const kept = turns.slice(-MAX_TURNS);
+    let payload = JSON.stringify(kept);
+    // Galleries are the only large payload in a transcript. Keep the newest
+    // one; earlier options can be asked for again.
+    if (payload.length > MAX_STORED_CHARS) {
+      const lastGallery = kept.length - 1 - [...kept].reverse().findIndex((t) => !!t.gallery);
+      const trimmed = kept.map((t, i) =>
+        i === lastGallery || !t.gallery ? t : { ...t, gallery: undefined }
+      );
+      payload = JSON.stringify(trimmed);
+    }
+    localStorage.setItem(storageKey(selector), payload);
   } catch {
-    // Storage is best-effort; a full quota must not break the dialog.
+    // Quota or private mode: the live transcript still works, it just will not
+    // survive a reload.
   }
 }
 
 // ── Panel ────────────────────────────────────────────────────────────────────
+
+/** The reporter's current pick across the transcript, if any. */
+export function pickedVariant(
+  turns: ChatTurn[]
+): { turnIndex: number; gallery: Gallery; variant: GalleryVariant } | null {
+  for (let i = turns.length - 1; i >= 0; i--) {
+    const t = turns[i];
+    if (!t.gallery || !t.picked) continue;
+    const variant = t.gallery.variants.find((v) => v.id === t.picked);
+    if (variant) return { turnIndex: i, gallery: t.gallery, variant };
+  }
+  return null;
+}
+
+/** Immutable pick update; `null` clears it. */
+export function withPick(turns: ChatTurn[], turnIndex: number, variantId: string | null): ChatTurn[] {
+  return turns.map((t, i) => (i === turnIndex ? { ...t, picked: variantId ?? undefined } : t));
+}
 
 export interface ChatPanelOptions {
   api: APIClient;
@@ -285,6 +370,8 @@ export interface ChatPanelOptions {
   setTurns: (turns: ChatTurn[]) => void;
   /** Fill the Feedback tab from a validated proposal. */
   onUseReport: (report: ReportSuggestion) => void;
+  /** Open the gallery viewer for an assistant turn that carries variants. */
+  onOpenGallery: (turnIndex: number) => void;
 }
 
 export interface ChatPanel {
@@ -295,8 +382,8 @@ export interface ChatPanel {
 
 const SUGGESTIONS = [
   "This button doesn't stand out enough",
+  "Show me 3 layout options for this section",
   "The text is wrong",
-  "Explain what changed here",
 ];
 
 /** Mount the Chat tab into `host`. Returns controls the dialog can drive. */
@@ -310,7 +397,7 @@ export function mountChat(host: HTMLElement, opts: ChatPanelOptions): ChatPanel 
     const logHTML = turns.length === 0
       ? `<div class="ef-chat-empty">
            <p class="ef-chat-empty-title">Describe the change you want.</p>
-           <p class="ef-chat-empty-sub">I'll write the report — title, type, what you expected and what is wrong. I don't edit the page.</p>
+           <p class="ef-chat-empty-sub">I'll write the report — title, type, what you expected and what is wrong — or draft layout options you can pick from. I don't edit the page.</p>
            <div class="ef-chat-suggest">
              ${SUGGESTIONS.map((s) => `<button type="button" class="ef-chip" data-suggest="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join("")}
            </div>
@@ -364,9 +451,23 @@ export function mountChat(host: HTMLElement, opts: ChatPanelOptions): ChatPanel 
            <button type="button" class="ef-btn-primary ef-btn-sm" data-use-report="${idx}">Use as report</button>
          </div>`
       : "";
+    const g = t.gallery;
+    const gallery = g
+      ? `<div class="ef-gallery-card">
+           <div class="ef-gallery-card-head">Design options${g.title ? ` · ${escapeHtml(g.title)}` : ""}</div>
+           <ul class="ef-gallery-options">
+             ${g.variants
+               .map((v) =>
+                 `<li${v.id === t.picked ? ' class="is-picked"' : ""}><span class="ef-gallery-option-label">${escapeHtml(v.label)}</span>${v.id === t.picked ? '<span class="ef-gallery-option-badge">Chosen</span>' : ""}</li>`
+               )
+               .join("")}
+           </ul>
+           <button type="button" class="ef-btn-secondary ef-btn-sm" data-open-gallery="${idx}">${t.picked ? "Review options" : "Open gallery"}</button>
+         </div>`
+      : "";
     return `<div class="ef-chat-turn ef-chat-assistant${t.error ? " ef-chat-error" : ""}">
         <div class="ef-chat-bubble">${escapeHtml(t.text).replace(/\n/g, "<br>")}</div>
-        ${report}
+        ${report}${gallery}
       </div>`;
   };
 
@@ -405,6 +506,13 @@ export function mountChat(host: HTMLElement, opts: ChatPanelOptions): ChatPanel 
         const idx = parseInt(btn.dataset.useReport ?? "-1", 10);
         const turn = opts.getTurns()[idx];
         if (turn?.report) opts.onUseReport(turn.report);
+      });
+    });
+    host.querySelectorAll<HTMLButtonElement>("[data-open-gallery]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const idx = parseInt(btn.dataset.openGallery ?? "-1", 10);
+        const turn = opts.getTurns()[idx];
+        if (turn?.gallery) opts.onOpenGallery(idx);
       });
     });
     input?.focus();
@@ -465,9 +573,12 @@ export function mountChat(host: HTMLElement, opts: ChatPanelOptions): ChatPanel 
         assistant.error = !aborted;
         assistant.text = aborted ? "Stopped." : "No reply. Try again.";
       }
-      const { prose, report } = extractReport(assistant.text);
-      assistant.text = prose || (report ? "Here is a draft report." : assistant.text);
+      const { prose, report, gallery } = extractReport(assistant.text);
+      assistant.text =
+        prose ||
+        (report ? "Here is a draft report." : gallery ? "Here are some options." : assistant.text);
       if (report) assistant.report = report;
+      if (gallery) assistant.gallery = gallery;
       opts.setTurns([...turns, assistant]);
       render();
     }

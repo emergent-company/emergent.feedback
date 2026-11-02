@@ -6,6 +6,7 @@
 // side-effect free (types + pure helpers only).
 
 import type { PlacementAnchor } from "./structure";
+import type { DesignAttachment } from "./gallery";
 
 /** Where a value came from. Machine-readable honesty marker. */
 export type Provenance = "captured" | "inferred" | "stated" | "absent";
@@ -98,6 +99,12 @@ export interface FeedbackIntent {
   scope: IntentScope;
   /** Live style edits applied by the user before submitting. */
   changes?: StyleChange[];
+  /**
+   * A design the reporter picked from an agent-proposed gallery, with the
+   * alternatives that were not picked. Evidence, not an instruction: the agent
+   * never applies it to the page.
+   */
+  design?: DesignAttachment;
 }
 
 /** Machine-checkable "done when" contract. */

@@ -9,7 +9,10 @@ import assert from "node:assert/strict";
 import {
   buildChatContext,
   extractReport,
+  pickedVariant,
   validateReport,
+  withPick,
+  type ChatTurn,
 } from "../src/chat";
 
 test("validateReport: accepts a complete proposal", () => {
@@ -141,3 +144,79 @@ test("buildChatContext: single-target reports omit the count and empty fields", 
   assert.equal(ctx.computedStyles, undefined);
   assert.equal(ctx.changes, undefined);
 });
+
+test("extractReport: a gallery and a report can share one block", () => {
+  const reply = [
+    "Two options, and the report below.",
+    "",
+    "```json",
+    JSON.stringify({
+      report: { title: "Hero is flat", type: "enhancement", action: "change" },
+      gallery: {
+        title: "Hero options",
+        variants: [
+          { id: "a", label: "Split", html: "<section>a</section>" },
+          { id: "b", label: "Stacked", html: "<section>b</section>" },
+        ],
+      },
+    }),
+    "```",
+  ].join("\n");
+  const { prose, report, gallery } = extractReport(reply);
+  assert.equal(prose, "Two options, and the report below.");
+  assert.equal(report?.title, "Hero is flat");
+  assert.equal(gallery?.title, "Hero options");
+  assert.equal(gallery?.variants.length, 2);
+  assert.equal(gallery?.variants[1].label, "Stacked");
+});
+
+test("extractReport: a gallery-only reply yields no report", () => {
+  const { report, gallery } = extractReport(
+    '{"gallery":{"variants":[{"id":"a","label":"A","html":"<div>a</div>"},{"id":"b","label":"B","html":"<div>b</div>"}]}}'
+  );
+  assert.equal(report, null);
+  assert.equal(gallery?.variants.length, 2);
+});
+
+test("extractReport: an invalid gallery is dropped, prose survives", () => {
+  const { prose, gallery } = extractReport(
+    'One option is not a choice.\n\n```json\n{"gallery":{"variants":[{"id":"a","label":"Only","html":"<div></div>"}]}}\n```'
+  );
+  assert.equal(gallery, null);
+  assert.equal(prose, "One option is not a choice.");
+});
+
+test("buildChatContext: a picked variant sends labels, never markup", () => {
+  const ctx = buildChatContext({
+    selector: "section#hero",
+    url: "https://example.com/",
+    selectedVariant: { id: "b", label: "Stacked", notes: "Bigger CTA" },
+  });
+  assert.deepEqual(ctx.selectedVariant, { id: "b", label: "Stacked", notes: "Bigger CTA" });
+  assert.ok(!JSON.stringify(ctx).includes("<"));
+});
+
+test("withPick: set, switch and clear without mutating the transcript", () => {
+  const turns: ChatTurn[] = [
+    {
+      role: "assistant",
+      text: "Here are some options.",
+      gallery: {
+        variants: [
+          { id: "a", label: "A", html: "<div>a</div>" },
+          { id: "b", label: "B", html: "<div>b</div>" },
+        ],
+      },
+    },
+    { role: "user", text: "B please" },
+  ];
+  const picked = withPick(turns, 0, "b");
+  assert.equal(picked[0].picked, "b");
+  assert.equal(turns[0].picked, undefined);
+  assert.equal(pickedVariant(picked)?.variant.id, "b");
+
+  const cleared = withPick(picked, 0, null);
+  assert.equal(cleared[0].picked, undefined);
+  assert.equal(pickedVariant(cleared), null);
+});
+
