@@ -422,9 +422,16 @@ templ PanelReportsPage() {
 					Feedback captured by the overlay. Select a report to preview its context, screenshot and DOM snapshot.
 				</p>
 			</div>
-			@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeButton, Variant: ui.ButtonGhost, Size: ui.ButtonSM, Icon: "lucide--refresh-cw", Attrs: templ.Attributes{"id": "reports-refresh"}}) {
-				Refresh
-			}
+			<div class="flex shrink-0 items-center gap-2">
+				<select id="reports-filter" class="select select-bordered select-sm w-40" aria-label="Filter reports by GitHub issue status">
+					<option value="all">All statuses</option>
+					<option value="open">Open issues</option>
+					<option value="closed">Closed issues</option>
+				</select>
+				@ui.Button(ui.ButtonProps{Type: ui.ButtonTypeButton, Variant: ui.ButtonGhost, Size: ui.ButtonSM, Icon: "lucide--refresh-cw", Attrs: templ.Attributes{"id": "reports-refresh"}}) {
+					Refresh
+				}
+			</div>
 		</div>
 	</header>
 
@@ -569,7 +576,9 @@ templ panelScript() {
 			keysError: null,
 			reports: [],
 			reportsLoaded: false,
-			reportsError: null
+			reportsError: null,
+			// GitHub issue status filter for the reports list: all|open|closed.
+			reportsFilter: "all"
 		};
 		var selected = {};
 		var deepLinkOpened = false;
@@ -869,6 +878,39 @@ templ panelScript() {
 			var d = new Date(iso);
 			if (isNaN(d.getTime())) return iso || "";
 			return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+		}
+
+		// fmtAgo renders a compact relative timestamp ("3h ago"). Callers keep
+		// the absolute date in a title attribute for the exact value.
+		function fmtAgo(iso) {
+			var d = new Date(iso);
+			if (isNaN(d.getTime())) return iso || "";
+			var secs = Math.max(0, Math.round((Date.now() - d.getTime()) / 1000));
+			if (secs < 60) return "just now";
+			var mins = Math.round(secs / 60);
+			if (mins < 60) return mins + "m ago";
+			var hrs = Math.round(mins / 60);
+			if (hrs < 24) return hrs + "h ago";
+			var days = Math.round(hrs / 24);
+			if (days < 30) return days + "d ago";
+			return fmtDate(iso);
+		}
+
+		// issueStatusBadge renders a linked GitHub issue's state. Unknown or
+		// missing state renders nothing rather than guessing "open".
+		function issueStatusBadge(state) {
+			var s = String(state || "").toLowerCase();
+			if (s === "open") {
+				var open = makeEl("span", "badge badge-sm badge-success badge-outline");
+				open.textContent = "Open";
+				return open;
+			}
+			if (s === "closed") {
+				var closed = makeEl("span", "badge badge-sm badge-ghost");
+				closed.textContent = "Closed";
+				return closed;
+			}
+			return null;
 		}
 
 		function loadKeys() {
@@ -1178,6 +1220,18 @@ templ panelScript() {
 			});
 		}
 
+		// reportsVisible applies the GitHub issue-status filter without mutating
+		// the loaded list, so switching back to "all" is instant.
+		function reportsVisible() {
+			var f = state.reportsFilter;
+			if (f !== "open" && f !== "closed") return state.reports;
+			var out = [];
+			for (var i = 0; i < state.reports.length; i++) {
+				if (String(state.reports[i].issue_state || "").toLowerCase() === f) out.push(state.reports[i]);
+			}
+			return out;
+		}
+
 		function renderReports() {
 			var list = byId("reports-list");
 			if (!list) return;
@@ -1192,8 +1246,13 @@ templ panelScript() {
 				return;
 			}
 
-			for (var i = 0; i < state.reports.length; i++) {
-				list.appendChild(reportRow(state.reports[i]));
+			var visible = reportsVisible();
+			if (!visible.length) {
+				list.appendChild(reportsMessage("No reports match this filter.", "empty"));
+				return;
+			}
+			for (var i = 0; i < visible.length; i++) {
+				list.appendChild(reportRow(visible[i]));
 			}
 		}
 
@@ -1207,6 +1266,8 @@ templ panelScript() {
 				chip.textContent = report.repo;
 				head.appendChild(chip);
 			}
+			var status = issueStatusBadge(report.issue_state);
+			if (status) head.appendChild(status);
 			if (report.selector) {
 				var sel = makeEl("code", "max-w-full truncate font-mono text-xs text-base-content/70");
 				sel.textContent = report.selector;
@@ -1220,7 +1281,11 @@ templ panelScript() {
 			main.appendChild(p);
 
 			var meta = makeEl("div", "mt-2 text-xs text-base-content/50");
-			meta.textContent = "Created " + fmtDate(report.created_at);
+			var ago = makeEl("span", "");
+			ago.textContent = fmtAgo(report.created_at);
+			ago.title = fmtDate(report.created_at);
+			meta.appendChild(document.createTextNode("Created "));
+			meta.appendChild(ago);
 			main.appendChild(meta);
 
 			var side = makeEl("div", "flex flex-col items-end gap-2");
@@ -1230,7 +1295,7 @@ templ panelScript() {
 			side.appendChild(preview);
 			if (report.issue_url) {
 				var issueLink = makeEl("a", "link link-primary text-xs", { "href": report.issue_url, "target": "_blank", "rel": "noopener noreferrer", "aria-label": "Open GitHub issue for report " + report.id });
-				issueLink.textContent = "Issue";
+				issueLink.textContent = report.issue_number ? "Issue #" + report.issue_number : "Issue";
 				side.appendChild(issueLink);
 			}
 			li.appendChild(main);
@@ -1286,7 +1351,7 @@ templ panelScript() {
 			for (var i = 0; i < max; i++) {
 				var report = reports[i];
 				var a = makeEl("a", "flex items-center gap-3 px-3 py-2.5 rounded-box hover:bg-base-200 cursor-pointer transition-colors", {
-					"data-label": (report.repo || "") + " " + (report.selector || "") + " " + (report.comment || "") + " #" + report.id,
+					"data-label": (report.repo || "") + " " + (report.selector || "") + " " + (report.comment || "") + " " + (report.issue_state || "") + " #" + report.id,
 					"data-group": "Reports",
 					"href": "/panel/reports?report=" + encodeURIComponent(report.id)
 				});
@@ -1297,10 +1362,15 @@ templ panelScript() {
 				title.textContent = snippet(report.comment, 60) || "(no comment)";
 				body.appendChild(title);
 				var desc = makeEl("p", "text-xs text-base-content/40 truncate");
-				desc.textContent = (report.repo || "") + " · #" + report.id;
+				desc.textContent = (report.repo || "") + " · #" + report.id + " · " + fmtAgo(report.created_at);
 				body.appendChild(desc);
 
 				a.appendChild(body);
+				var st = issueStatusBadge(report.issue_state);
+				if (st) {
+					st.classList.add("shrink-0");
+					a.appendChild(st);
+				}
 				group.appendChild(a);
 			}
 		}
@@ -1522,6 +1592,8 @@ templ panelScript() {
 				chip.textContent = data.repo;
 				sub.appendChild(chip);
 			}
+			var detailStatus = issueStatusBadge(data.issue_state);
+			if (detailStatus) sub.appendChild(detailStatus);
 			if (data.selector) {
 				var sel = makeEl("code", "truncate font-mono text-xs text-base-content/70");
 				sel.textContent = data.selector;
@@ -1554,7 +1626,11 @@ templ panelScript() {
 			}
 
 			var meta = makeEl("div", "mt-2 text-xs text-base-content/50");
-			meta.textContent = "Created " + fmtDate(data.created_at);
+			var ago = makeEl("span", "");
+			ago.textContent = fmtAgo(data.created_at);
+			ago.title = fmtDate(data.created_at);
+			meta.appendChild(document.createTextNode("Created "));
+			meta.appendChild(ago);
 			wrap.appendChild(meta);
 
 			if (data.url) {
@@ -1909,6 +1985,12 @@ templ panelScript() {
 
 			var reportsRefresh = byId("reports-refresh");
 			if (reportsRefresh) reportsRefresh.addEventListener("click", loadReports);
+
+			var reportsFilter = byId("reports-filter");
+			if (reportsFilter) reportsFilter.addEventListener("change", function () {
+				state.reportsFilter = reportsFilter.value || "all";
+				renderReports();
+			});
 
 			var reload = byId("reload-repos");
 			if (reload) reload.addEventListener("click", loadRepos);

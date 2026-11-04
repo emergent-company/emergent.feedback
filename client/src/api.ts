@@ -94,6 +94,10 @@ export interface FeedbackComment {
   status?: string;
   /** GitHub issue URL when the item has been exported. */
   issue_url?: string;
+  /** GitHub issue number when the item has been exported. */
+  issue_number?: number;
+  /** Last-known GitHub issue state ("open" | "closed") for the export. */
+  issue_state?: string;
 }
 
 export interface BadgeSummary {
@@ -107,6 +111,10 @@ export interface IssueBadge {
   issue_number: number;
   issue_url: string;
   title: string;
+  /** When the issue was recorded (RFC3339). */
+  created_at?: string;
+  /** Last-known GitHub issue state ("open" | "closed"). */
+  state?: string;
 }
 
 export interface CreateFeedbackParams {

@@ -280,9 +280,21 @@ ORDER BY selector`
 	return summaries, rows.Err()
 }
 
+// ExportedReport is an exported feedback item plus the last-known state of the
+// GitHub issue it was exported to. IssueState is empty when no issue record has
+// been linked yet (for example an export that predates the record).
+type ExportedReport struct {
+	Feedback
+	IssueNumber   int64
+	IssueState    string
+	IssueSyncedAt time.Time
+}
+
 // ListExported returns exported feedback items (issue_url set) whose repo is
-// in the given list, newest first, capped.
-func (s *Store) ListExported(ctx context.Context, repos []string) ([]Feedback, error) {
+// in the given list, newest first, capped, joined to the most recent GitHub
+// issue record for each item's issue_url so callers can render issue state
+// without a call to GitHub.
+func (s *Store) ListExported(ctx context.Context, repos []string) ([]ExportedReport, error) {
 	if len(repos) == 0 {
 		return nil, nil
 	}
@@ -292,25 +304,33 @@ func (s *Store) ListExported(ctx context.Context, repos []string) ([]Feedback, e
 		args = append(args, r)
 	}
 	q := fmt.Sprintf(`
-SELECT id, url, selector, comment, repo, label, status, COALESCE(issue_url,''), created_at
-FROM feedback
-WHERE issue_url != '' AND repo IN (%s)
-ORDER BY id DESC LIMIT 500`, ph)
+SELECT f.id, f.url, f.selector, f.comment, f.repo, f.label, f.status,
+       COALESCE(f.issue_url,''), f.created_at,
+       COALESCE((SELECT gi.issue_number FROM github_issues gi WHERE gi.issue_url = f.issue_url ORDER BY gi.id DESC LIMIT 1), 0),
+       COALESCE((SELECT gi.state        FROM github_issues gi WHERE gi.issue_url = f.issue_url ORDER BY gi.id DESC LIMIT 1), ''),
+       COALESCE((SELECT gi.synced_at    FROM github_issues gi WHERE gi.issue_url = f.issue_url ORDER BY gi.id DESC LIMIT 1), '')
+FROM feedback f
+WHERE f.issue_url != '' AND f.repo IN (%s)
+ORDER BY f.id DESC LIMIT 500`, ph)
 	rows, err := s.db.QueryContext(ctx, s.bind(q), args...)
 	if err != nil {
 		return nil, fmt.Errorf("store: list exported: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
-	var out []Feedback
+	var out []ExportedReport
 	for rows.Next() {
-		var f Feedback
-		var createdAt string
-		if err := rows.Scan(&f.ID, &f.URL, &f.Selector, &f.Comment, &f.Repo, &f.Label, &f.Status, &f.IssueURL, &createdAt); err != nil {
+		var r ExportedReport
+		var createdAt, syncedAt string
+		if err := rows.Scan(
+			&r.ID, &r.URL, &r.Selector, &r.Comment, &r.Repo, &r.Label, &r.Status,
+			&r.IssueURL, &createdAt, &r.IssueNumber, &r.IssueState, &syncedAt,
+		); err != nil {
 			return nil, fmt.Errorf("store: scan exported: %w", err)
 		}
-		f.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
-		out = append(out, f)
+		r.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+		r.IssueSyncedAt, _ = time.Parse(time.RFC3339, syncedAt)
+		out = append(out, r)
 	}
 	return out, rows.Err()
 }

@@ -950,6 +950,10 @@ func (h *Handler) HandleListIssues(c echo.Context) error {
 		IssueNumber int64  `json:"issue_number"`
 		IssueURL    string `json:"issue_url"`
 		Title       string `json:"title"`
+		// CreatedAt / State let the overlay's All reports list show when the
+		// issue was filed and its last-known GitHub state.
+		CreatedAt string `json:"created_at,omitempty"`
+		State     string `json:"state,omitempty"`
 	}
 	out := make([]issueBadge, 0, len(issues))
 	for _, gi := range issues {
@@ -961,6 +965,8 @@ func (h *Handler) HandleListIssues(c echo.Context) error {
 			IssueNumber: gi.IssueNumber,
 			IssueURL:    gi.IssueURL,
 			Title:       gi.Title,
+			CreatedAt:   gi.CreatedAt.Format(time.RFC3339),
+			State:       gi.State,
 		})
 	}
 	return c.JSON(http.StatusOK, out)
@@ -974,6 +980,9 @@ func (h *Handler) syncIssueStates(ctx context.Context, issues []store.GitHubIssu
 	tokenReady := false
 	synced := 0
 	for i := range issues {
+		if issues[i].IssueNumber <= 0 {
+			continue
+		}
 		if time.Since(issues[i].SyncedAt) <= issueSyncInterval {
 			continue
 		}

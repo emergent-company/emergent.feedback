@@ -266,18 +266,42 @@ func (h *Handler) HandleListFeedbackByURL(c echo.Context) error {
 		CreatedAt  string `json:"created_at"`
 		Status     string `json:"status"`
 		IssueURL   string `json:"issue_url,omitempty"`
+		// GitHub issue status for the exported item, when one is linked.
+		IssueNumber int64  `json:"issue_number,omitempty"`
+		IssueState  string `json:"issue_state,omitempty"`
 	}
+
+	urls := make([]string, 0, len(items))
+	seen := make(map[string]bool, len(items))
+	for _, f := range items {
+		if f.IssueURL == "" || seen[f.IssueURL] {
+			continue
+		}
+		seen[f.IssueURL] = true
+		urls = append(urls, f.IssueURL)
+	}
+	issues, err := h.Store.LatestGitHubIssuesByURL(c.Request().Context(), urls)
+	if err != nil {
+		// Issue state is decoration; a lookup failure must not hide the list.
+		issues = nil
+	}
+
 	out := make([]item, 0, len(items))
 	for _, f := range items {
-		out = append(out, item{
+		it := item{
 			ID:         f.ID,
 			Selector:   f.Selector,
 			Comment:    redactSecrets(f.Comment),
 			GitHubUser: f.GitHubUser,
-			CreatedAt:  f.CreatedAt.Format("2006-01-02 15:04"),
+			CreatedAt:  f.CreatedAt.Format(time.RFC3339),
 			Status:     string(f.Status),
 			IssueURL:   f.IssueURL,
-		})
+		}
+		if gi, ok := issues[f.IssueURL]; ok {
+			it.IssueNumber = gi.IssueNumber
+			it.IssueState = gi.State
+		}
+		out = append(out, it)
 	}
 	return c.JSON(http.StatusOK, out)
 }

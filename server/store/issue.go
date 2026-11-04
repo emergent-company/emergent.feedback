@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -63,6 +64,76 @@ ORDER BY id DESC LIMIT 1`
 	gi.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
 	gi.SyncedAt, _ = time.Parse(time.RFC3339, syncedAt)
 	return gi, nil
+}
+
+// GetGitHubIssueByURL returns the most recent GitHub issue record for an issue
+// URL. It reports sql.ErrNoRows-wrapped errors when no record exists.
+func (s *Store) GetGitHubIssueByURL(ctx context.Context, issueURL string) (GitHubIssue, error) {
+	q := `
+SELECT id, issue_number, issue_url, repo, title, page_url, selector, state, created_at, synced_at
+FROM github_issues
+WHERE issue_url = ?
+ORDER BY id DESC LIMIT 1`
+
+	var gi GitHubIssue
+	var createdAt, syncedAt string
+	err := s.db.QueryRowContext(ctx, s.bind(q), issueURL).Scan(
+		&gi.ID, &gi.IssueNumber, &gi.IssueURL, &gi.Repo, &gi.Title,
+		&gi.PageURL, &gi.Selector, &gi.State, &createdAt, &syncedAt,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return GitHubIssue{}, fmt.Errorf("store: github issue for %q not found: %w", issueURL, sql.ErrNoRows)
+	}
+	if err != nil {
+		return GitHubIssue{}, fmt.Errorf("store: get github issue by url: %w", err)
+	}
+	gi.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+	gi.SyncedAt, _ = time.Parse(time.RFC3339, syncedAt)
+	return gi, nil
+}
+
+// LatestGitHubIssuesByURL returns the most recent issue record for each of the
+// given issue URLs, keyed by URL. URLs without a record are absent from the
+// map; an empty input returns an empty map.
+func (s *Store) LatestGitHubIssuesByURL(ctx context.Context, issueURLs []string) (map[string]GitHubIssue, error) {
+	out := make(map[string]GitHubIssue, len(issueURLs))
+	if len(issueURLs) == 0 {
+		return out, nil
+	}
+	ph := strings.TrimSuffix(strings.Repeat("?,", len(issueURLs)), ",")
+	args := make([]any, 0, len(issueURLs))
+	for _, u := range issueURLs {
+		args = append(args, u)
+	}
+	q := fmt.Sprintf(`
+SELECT id, issue_number, issue_url, repo, title, page_url, selector, state, created_at, synced_at
+FROM github_issues
+WHERE issue_url IN (%s)
+ORDER BY id ASC`, ph)
+	rows, err := s.db.QueryContext(ctx, s.bind(q), args...)
+	if err != nil {
+		return nil, fmt.Errorf("store: list github issues by url: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	for rows.Next() {
+		var gi GitHubIssue
+		var createdAt, syncedAt string
+		if err := rows.Scan(
+			&gi.ID, &gi.IssueNumber, &gi.IssueURL, &gi.Repo, &gi.Title,
+			&gi.PageURL, &gi.Selector, &gi.State, &createdAt, &syncedAt,
+		); err != nil {
+			return nil, fmt.Errorf("store: scan github issue: %w", err)
+		}
+		gi.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+		gi.SyncedAt, _ = time.Parse(time.RFC3339, syncedAt)
+		// Ascending id order means later rows win, matching "most recent".
+		out[gi.IssueURL] = gi
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // ListOpenGitHubIssuesByURL returns all open GitHub issues recorded for a page URL.

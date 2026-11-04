@@ -917,6 +917,31 @@ function injectStyles(): void {
       text-transform: uppercase;
       letter-spacing: 0.04em;
     }
+    #__ef_dialog__ .ef-report-state {
+      font-weight: 700;
+      color: var(--ef-muted-strong);
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    #__ef_dialog__ .ef-report-state[data-state="open"] { color: var(--ef-accent); }
+    #__ef_dialog__ .ef-report-state[data-state="closed"] {
+      color: var(--ef-muted);
+      text-decoration: line-through;
+    }
+    #__ef_dialog__ .ef-filter-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      color: var(--ef-muted-strong);
+      cursor: pointer;
+      user-select: none;
+    }
+    #__ef_dialog__ .ef-filter-toggle input {
+      margin: 0;
+      accent-color: var(--ef-primary);
+    }
     #__ef_dialog__ .ef-report-issue {
       color: var(--ef-primary);
       font-weight: 600;
@@ -3136,6 +3161,8 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   let reportsLoading = false;
   let reportsArmed: string | null = null;
   let reportsArmTimer: number | null = null;
+  /** Hide submitted reports whose linked GitHub issue is closed. */
+  let hideClosedReports = false;
 
   const relativeTime = (ts: number): string => {
     const diff = Math.max(0, Date.now() - ts);
@@ -3145,6 +3172,18 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     const hrs = Math.round(min / 60);
     if (hrs < 24) return `${hrs}h ago`;
     return `${Math.round(hrs / 24)}d ago`;
+  };
+
+  /** Format a server timestamp as relative time, falling back to raw text. */
+  const timeAgo = (iso: string | undefined): string => {
+    if (!iso) return "";
+    const ts = Date.parse(iso);
+    return Number.isNaN(ts) ? iso : relativeTime(ts);
+  };
+
+  const issueStateOf = (value: string | undefined): "open" | "closed" | "" => {
+    const s = (value ?? "").toLowerCase();
+    return s === "open" || s === "closed" ? s : "";
   };
 
   const draftHeadline = (d: DraftRecord): string => {
@@ -3187,6 +3226,12 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     </ul>`;
   };
 
+  const issueStateBadgeHTML = (state: string | undefined): string => {
+    const s = issueStateOf(state);
+    if (!s) return "";
+    return `<span class="ef-report-state" data-state="${s}">${s === "open" ? "Open" : "Closed"}</span>`;
+  };
+
   const submittedRowsHTML = (): string => {
     if (opts.loadPageReports && pageReports === null) {
       return `<div class="ef-reports-empty">${pageReportsError ? "Could not load submitted reports." : "Loading submitted reports…"}</div>`;
@@ -3199,11 +3244,15 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
     const rows: string[] = [];
     for (const c of comments) {
       const issue = issues.find((i) => i.selector === c.selector);
+      const state = issueStateOf(c.issue_state ?? issue?.state);
+      // "Hide closed" drops reports whose GitHub issue is already done.
+      if (hideClosedReports && state === "closed") continue;
       const status = c.status && c.status !== "open"
         ? `<span class="ef-report-status">${escapeHtml(c.status)}</span>`
         : "";
+      const issueNumber = c.issue_number ?? issue?.issue_number;
       const issueLink = (c.issue_url || issue?.issue_url)
-        ? `<a class="ef-report-issue" href="${escapeHtml(c.issue_url ?? issue!.issue_url)}" target="_blank" rel="noopener noreferrer">Issue${issue ? ` #${issue.issue_number}` : ""}</a>`
+        ? `<a class="ef-report-issue" href="${escapeHtml(c.issue_url ?? issue!.issue_url)}" target="_blank" rel="noopener noreferrer">Issue${issueNumber ? ` #${issueNumber}` : ""}</a>`
         : "";
       const excerpt = c.comment.length > 140 ? `${c.comment.slice(0, 137)}…` : c.comment;
       rows.push(`<li class="ef-report-item" data-kind="submitted">
@@ -3211,7 +3260,8 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
           <span class="ef-report-title">${escapeHtml(excerpt)}</span>
           <span class="ef-report-meta">
             <span>@${escapeHtml(c.github_user)}</span>
-            <span>${escapeHtml(c.created_at)}</span>
+            <span title="${escapeHtml(c.created_at)}">${escapeHtml(timeAgo(c.created_at))}</span>
+            ${issueStateBadgeHTML(state)}
             ${status}
             ${issueLink}
           </span>
@@ -3226,12 +3276,16 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
         <button type="button" class="ef-report-main" data-open="${escapeHtml(i.selector)}" title="${escapeHtml(i.selector)}">
           <span class="ef-report-title">${escapeHtml(i.title)}</span>
           <span class="ef-report-meta">
-            <span class="ef-report-status">issue</span>
+            <span title="${escapeHtml(i.created_at ?? "")}">${escapeHtml(timeAgo(i.created_at))}</span>
+            ${issueStateBadgeHTML(i.state ?? "open")}
             <a class="ef-report-issue" href="${escapeHtml(i.issue_url)}" target="_blank" rel="noopener noreferrer">#${i.issue_number}</a>
           </span>
           <span class="ef-report-sel">${escapeHtml(i.selector)}</span>
         </button>
       </li>`);
+    }
+    if (rows.length === 0) {
+      return `<div class="ef-reports-empty">No submitted reports match this filter.</div>`;
     }
     return `<ul class="ef-report-list">${rows.join("")}</ul>`;
   };
@@ -3278,6 +3332,10 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
         opts.onOpenReport?.(selector);
       });
     });
+    reportsEl.querySelector<HTMLInputElement>("#__ef_hide_closed__")?.addEventListener("change", (event) => {
+      hideClosedReports = (event.target as HTMLInputElement).checked;
+      renderReports();
+    });
     reportsEl.querySelector<HTMLButtonElement>("#__ef_clear_applied__")?.addEventListener("click", () => {
       clearCommitted();
       renderReports();
@@ -3306,6 +3364,10 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
         <section>
           <div class="ef-changes-head">
             <div class="ef-section-label">Submitted</div>
+            <label class="ef-filter-toggle" title="Hide reports whose GitHub issue is closed">
+              <input type="checkbox" id="__ef_hide_closed__"${hideClosedReports ? " checked" : ""} />
+              Hide closed
+            </label>
           </div>
           ${submittedRowsHTML()}
         </section>
