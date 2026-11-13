@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Host app fixture — session destination</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 0; padding: 32px; background: #f8fafc; color: #0f172a; }
+      h1 { font-size: 28px; margin: 0 0 8px; }
+      .btn { padding: 8px 16px; border-radius: 8px; border: none; background: #4f46e5; color: #fff; cursor: pointer; font-size: 14px; }
+      .surface { margin-top: 24px; }
+    </style>
+  </head>
+  <body data-testid="order-host-root">
+    <h1 id="host-heading">Session destination fixture</h1>
+    <p id="host-subtitle">A host whose only report destination is a coding-agent session.</p>
+
+    <button id="target-btn" type="button" class="btn">Primary action</button>
+
+    <section class="surface" data-component="OrderCard">
+      <div class="card">
+        <h2 id="order-title">Order card</h2>
+        <p id="order-copy">Point at me and send the report to the session.</p>
+        <button id="order-btn" type="button" class="btn" data-testid="order-send">Send</button>
+      </div>
+    </section>
+
+    <!--
+      A relative data-order-box keeps the order POST same-origin with this
+      fixture page, so the browser sends no CORS preflight; the spec fulfils the
+      route in Playwright. No data-order-token: this host has no reporter
+      account and must not need one.
+    -->
+    <script
+      src="__API_URL__/emergent-feedback.js"
+      data-api="__API_URL__"
+      data-repo="e2e/order-fixture"
+      data-label="feedback"
+      data-branch="e2e"
+      data-version="0.0.0-test"
+      data-order-box="/orderbox"
+      data-order-session="11111111-2222-3333-4444-555555555555"
+      async
+    ></script>
+  </body>
+</html>
