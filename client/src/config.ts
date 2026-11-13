@@ -68,6 +68,23 @@ export interface OverlayConfig {
    */
   chat: boolean;
   /** Optional Memory agent name/id hint sent with each chat turn. */
+  /**
+   * Base URL of an order-box instance (the rig's session front door). When set
+   * together with `orderSession`, the dialog offers a third destination that
+   * delivers the report into that coding-agent session instead of an issue.
+   * Set via data-order-box on the <script> tag.
+   */
+  orderBox?: string;
+  /**
+   * Paseo session id the order is delivered to: the full dashed UUID.
+   * Set via data-order-session.
+   */
+  orderSession?: string;
+  /**
+   * Shared order-box token, sent as a bearer header. Optional: on the same host
+   * the box's own cookie is used instead. Set via data-order-token.
+   */
+  orderToken?: string;
 }
 
 function getScriptTag(): HTMLScriptElement | null {
@@ -125,6 +142,23 @@ export function readConfig(): OverlayConfig {
   // Opt-in chat tab: presence of data-chat enables it; data-chat="false" disables.
   const chat = tag?.dataset.chat !== undefined && tag?.dataset.chat !== "false";
 
+  // Opt-in session destination (order-box). Both halves are required, and the
+  // id must be a full UUID: the daemon rejects the short form, so a clear
+  // warning here beats a 400 on the first send.
+  const orderBox = tag?.dataset.orderBox?.trim().replace(/\/+$/, "") || undefined;
+  const orderSession = tag?.dataset.orderSession?.trim().toLowerCase() || undefined;
+  const orderToken = tag?.dataset.orderToken?.trim() || undefined;
+  const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+  if (orderBox && orderSession && !SESSION_ID.test(orderSession)) {
+    console.warn(
+      `[emergent.feedback] data-order-session "${orderSession}" is not a full session UUID; the session destination is disabled.`
+    );
+  } else if (!orderBox !== !orderSession) {
+    console.warn(
+      "[emergent.feedback] data-order-box and data-order-session must both be set; the session destination is disabled."
+    );
+  }
+
   const badgeUrlMode: NonNullable<OverlayConfig["badgeUrlMode"]> =
     tag?.dataset.badgeUrlMode?.trim().toLowerCase() === "path" ? "path" : "exact";
   const dashboardUrl = tag?.dataset.dashboardUrl?.trim() || `${apiBase}/panel`;
@@ -148,5 +182,12 @@ export function readConfig(): OverlayConfig {
     chat,
     badgeUrlMode,
     dashboardUrl,
+    ...(orderBox && orderSession && SESSION_ID.test(orderSession)
+      ? {
+          orderBox,
+          orderSession,
+          ...(orderToken ? { orderToken } : {}),
+        }
+      : {}),
   };
 }

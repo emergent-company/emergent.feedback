@@ -88,8 +88,17 @@ const STYLE_ID = "__ef_styles__";
 const DOCKED_KEY = "__ef_dialog_docked__";
 const DESTINATION_KEY = "__ef_report_destination__";
 
-/** Where the primary report action sends the feedback. */
-type ReportDestination = "github" | "memory";
+/**
+ * Where the primary report action sends the feedback: GitHub (issue export),
+ * Memory (the connected project), or Session (an order-box-fronted coding
+ * agent session).
+ */
+type ReportDestination = "github" | "memory" | "session";
+
+/** Narrows an arbitrary string (a dataset value) to a destination. */
+function isReportDestination(value: string | undefined): value is ReportDestination {
+  return value === "github" || value === "memory" || value === "session";
+}
 
 /** Persisted dock preference. Defaults to docked (true). */
 function readDockedPref(): boolean {
@@ -111,17 +120,24 @@ function writeDockedPref(docked: boolean): void {
 }
 
 /**
- * Persisted report destination. Memory is only a valid remembered value while
- * the repository's destination is in Ask mode; otherwise fall back to GitHub.
+ * Persisted report destination. Memory and Session are only valid remembered
+ * values while each is configured for this host; otherwise fall back to
+ * `fallback` — which is Session on a host that has one but no signed-in
+ * reporter, and GitHub everywhere else.
  */
-function readDestinationPref(allowMemory: boolean): ReportDestination {
+function readDestinationPref(
+  allowMemory: boolean,
+  allowSession = false,
+  fallback: ReportDestination = "github"
+): ReportDestination {
   try {
     const v = localStorage.getItem(DESTINATION_KEY);
     if (v === "memory" && allowMemory) return "memory";
+    if (v === "session" && allowSession) return "session";
   } catch {
     // Storage may be unavailable (private mode / sandboxed iframe).
   }
-  return "github";
+  return fallback;
 }
 
 function writeDestinationPref(destination: ReportDestination): void {
@@ -325,6 +341,7 @@ function injectStyles(): void {
       font-size: 13px;
       font-family: inherit;
       color: var(--ef-text-strong);
+      background: var(--ef-surface);
       resize: vertical;
       min-height: 80px;
       outline: none;
@@ -2368,6 +2385,9 @@ function injectStyles(): void {
       margin-right: 2px;
     }
     #__ef_dialog__ .ef-destination[hidden] { display: none; }
+    /* A session-only host opens without a GitHub account, so the Save action
+       (which needs one) is hidden rather than offering a dead end. */
+    #__ef_dialog__ #__ef_submit__[hidden] { display: none; }
     #__ef_dialog__ .ef-destination-trigger {
       display: inline-flex;
       align-items: center;
@@ -2616,7 +2636,11 @@ export interface SubmitFeedbackOptions {
   selector: string;
   existingComments: FeedbackComment[];
   context: Record<string, unknown>;
-  user: { login: string; avatarUrl: string };
+  /**
+   * Signed-in GitHub reporter, when there is one. Absent on hosts that only
+   * offer the Session destination (order-box), which needs no GitHub login.
+   */
+  user?: { login: string; avatarUrl: string };
   defaultIssueTopic: string;
   repo: string;
   branch?: string;
@@ -2664,6 +2688,24 @@ export interface SubmitFeedbackOptions {
    * `data-chat`; the pane then shows Feedback · Changes · Chat.
    */
   chat?: { api: APIClient };
+  /**
+   * Session destination: the order-box-fronted coding-agent session this
+   * report can be delivered into. Present only when the host sets both
+   * `data-order-box` and `data-order-session`.
+   */
+  session?: { id: string };
+  /**
+   * Delivers the report into `session` (order-box). Called instead of
+   * `onSubmit`/`onExport` when the Session destination is chosen; the message
+   * carries the reporter's note plus the captured element, the edits they made
+   * and the console errors.
+   */
+  onSendOrder?: (
+    comment: string,
+    type: FeedbackType,
+    intent: FeedbackIntent,
+    title: string
+  ) => Promise<{ at: string; screenshot?: string; note?: string }>;
 }
 
 /** Default action verb for a feedback type (bug → fix, enhancement → change). */
@@ -2839,14 +2881,34 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
   // without a control; "off"/absent shows nothing.
   const memoryAsk = !!opts.memory && opts.memory.connected && opts.memory.mode === "ask";
 
+  // Session destination (`data-order-box` + `data-order-session`): the report
+  // becomes one message in a coding-agent session instead of an issue.
+  const sessionAsk = !!opts.session && !!opts.onSendOrder;
+  const sessionShort = opts.session ? opts.session.id.slice(0, 8) : "";
+
   // The dropdown is the single choice for where the primary action sends the
-  // report: GitHub (issue export) or Memory (the connected destination). The
-  // last choice is remembered per browser; Memory is only offered in Ask mode.
-  let destination: ReportDestination = readDestinationPref(memoryAsk);
-  const destinationLabel = (value: ReportDestination): string =>
-    value === "memory" ? "Memory" : "GitHub";
-  const primaryLabel = (): string =>
-    destination === "memory" ? "Send to Memory" : "Create issue";
+  // report: GitHub (issue export), Memory (the connected destination) or a
+  // Session (order-box). The last choice is remembered per browser; Memory is
+  // only offered in Ask mode. With no signed-in reporter the Session is the
+  // only destination that can be used without a login, so it is the default —
+  // otherwise the primary button would read "Create issue" and hide the channel.
+  const destinationFallback: ReportDestination =
+    !opts.user && sessionAsk ? "session" : "github";
+  let destination: ReportDestination = readDestinationPref(
+    memoryAsk,
+    sessionAsk,
+    destinationFallback
+  );
+  const destinationLabel = (value: ReportDestination): string => {
+    if (value === "memory") return "Memory";
+    if (value === "session") return `Session ${sessionShort}`;
+    return "GitHub";
+  };
+  const primaryLabel = (): string => {
+    if (destination === "memory") return "Send to Memory";
+    if (destination === "session") return "Send to session";
+    return "Create issue";
+  };
 
   // The Chat tab is opt-in per host (`data-chat`). Without it the pane keeps the
   // two tabs it always had: Feedback and Changes.
@@ -2866,10 +2928,12 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
         <div class="ef-header-top">
           <h2 id="__ef_title__">${title}</h2>
           <span class="ef-change-chip" id="__ef_change_count__" hidden></span>
-          <div class="ef-user-pill">
+          ${opts.user
+            ? `<div class="ef-user-pill">
             <img src="${escapeHtml(opts.user.avatarUrl)}" alt="">
             <span>${escapeHtml(opts.user.login)}</span>
-          </div>
+          </div>`
+            : ""}
           <button class="ef-dock-btn" id="__ef_dock__" type="button" title="Dock to the side" aria-label="Dock to the side"></button>
         </div>
       </div>
@@ -2918,15 +2982,16 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
             <div class="ef-issue-foot">
               <button type="button" class="ef-btn-secondary" id="__ef_issue_cancel__">Cancel</button>
               <div class="ef-footer-spacer"></div>
-              <button type="button" class="ef-btn-secondary" id="__ef_submit__">Save</button>
-              <div class="ef-destination" id="__ef_destination__" ${memoryAsk ? "" : "hidden"}>
+              <button type="button" class="ef-btn-secondary" id="__ef_submit__"${opts.user || !sessionAsk ? "" : " hidden"}>Save</button>
+              <div class="ef-destination" id="__ef_destination__" ${memoryAsk || sessionAsk ? "" : "hidden"}>
                 <button type="button" class="ef-btn-secondary ef-destination-trigger" id="__ef_destination_trigger__" aria-haspopup="listbox" aria-expanded="false" aria-label="Report destination">
                   <span class="ef-destination-value">${destinationLabel(destination)}</span>
                   <span class="ef-destination-caret" aria-hidden="true">▾</span>
                 </button>
                 <ul class="ef-destination-menu" id="__ef_destination_menu__" role="listbox" aria-label="Report destination" hidden>
                   <li role="option" data-destination="github" aria-selected="${destination === "github"}" tabindex="-1">GitHub</li>
-                  <li role="option" data-destination="memory" aria-selected="${destination === "memory"}" tabindex="-1">Memory</li>
+                  ${memoryAsk ? `<li role="option" data-destination="memory" aria-selected="${destination === "memory"}" tabindex="-1">Memory</li>` : ""}
+                  ${sessionAsk ? `<li role="option" data-destination="session" aria-selected="${destination === "session"}" tabindex="-1" title="Deliver this report to session ${escapeHtml(opts.session!.id)}">Session ${escapeHtml(sessionShort)}</li>` : ""}
                 </ul>
               </div>
               <button type="button" class="ef-btn-primary" id="__ef_issue_submit__">${primaryLabel()}</button>
@@ -3058,7 +3123,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
       const option = (event.target as Element).closest<HTMLElement>('[role="option"]');
       if (!option || !destinationMenu.contains(option)) return;
       const next = option.dataset.destination;
-      if (next === "github" || next === "memory") setDestination(next);
+      if (isReportDestination(next)) setDestination(next);
     });
     destinationMenu.addEventListener("keydown", (event) => {
       const options = destinationOptions();
@@ -3073,7 +3138,7 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
         const active = document.activeElement as HTMLElement | null;
         if (!active || active.getAttribute("role") !== "option") return;
         const next = active.dataset.destination;
-        if (next === "github" || next === "memory") setDestination(next);
+        if (isReportDestination(next)) setDestination(next);
       } else if (event.key === "Escape") {
         event.preventDefault();
         closeDestinationMenu(true);
@@ -4296,6 +4361,39 @@ export function showSubmitDialog(opts: SubmitFeedbackOptions): void {
         } else {
           errDiv.textContent = describeAPIError(err);
         }
+        issueSubmitBtn.disabled = false;
+        submitBtn.disabled = false;
+        issueSubmitBtn.textContent = primaryLabel();
+      }
+      return;
+    }
+
+    // Session is a third destination, not a mirror: the report becomes one
+    // message in a coding-agent session and nothing is created here. It needs
+    // no GitHub sign-in — the box carries its own token.
+    if (destination === "session") {
+      const comment = collectComment();
+      if (!comment) {
+        errDiv.textContent = "Add a note describing the problem.";
+        return;
+      }
+      issueSubmitBtn.disabled = true;
+      submitBtn.disabled = true;
+      issueSubmitBtn.textContent = "Sending…";
+      errDiv.textContent = "";
+      try {
+        const delivery = await opts.onSendOrder!(comment, getType(), buildIntent(), getIssueTopic());
+        finishReport();
+        showToast(
+          delivery.at
+            ? `Sent to session ${sessionShort} at ${delivery.at}.`
+            : `Sent to session ${sessionShort}.`
+        );
+        opts.onComplete?.();
+      } catch (err) {
+        // The box's refusal is the useful message (missing token, dead session);
+        // show it verbatim rather than a generic failure.
+        errDiv.textContent = err instanceof Error ? err.message : String(err);
         issueSubmitBtn.disabled = false;
         submitBtn.disabled = false;
         issueSubmitBtn.textContent = primaryLabel();

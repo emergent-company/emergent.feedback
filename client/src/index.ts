@@ -46,6 +46,7 @@ import {
 import { computeDrop, moveElement, type DropTarget } from "./structure";
 import { redactText, redactAttributes, redactElementHTML } from "./redact";
 import { startConsoleCapture, getConsoleErrors } from "./console";
+import { buildOrderPayload, sendOrder } from "./order";
 import { startVerifyLoop, stopVerifyLoop } from "./verify";
 import { startReplay, getReplayPayloadAsync } from "./replay";
 import { startReporterNotify, stopReporterNotify } from "./notify";
@@ -451,14 +452,19 @@ function elementLabel(el: Element): string {
     // dialog's Edit view asks for it (see onEditingChange below).
     detachEditingListeners();
 
-    // Ensure authenticated.
-    if (!(await ensureAuthenticated())) {
-      forceMode("idle");
-      return;
+    // GitHub sign-in is only needed for a destination that writes to GitHub or
+    // Memory. A session destination (order-box) carries its own token and needs
+    // no reporter account, so the pane must open without prompting for one.
+    const hasSessionDestination = !!(config.orderBox && config.orderSession);
+    if (!hasSessionDestination) {
+      if (!(await ensureAuthenticated())) {
+        forceMode("idle");
+        return;
+      }
+      if (!auth.isAuthenticated()) return;
     }
-    if (!auth.isAuthenticated()) return;
 
-    const user = auth.getUser()!;
+    const user = auth.getUser() ?? undefined;
 
     // Fetch existing comments for the primary element.
     const allComments = await api.listComments(api.pageUrl()).catch(() => []);
@@ -488,6 +494,53 @@ function elementLabel(el: Element): string {
       selector,
       existingComments.length
     );
+
+    /**
+     * Builds the full capture both destinations ship: screenshot, DOM snapshot,
+     * optional replay, the target set, and the intent merged into the
+     * capture-time context (intent, provenance and verification are only known
+     * at submit time).
+     */
+    async function captureReport(comment: string, intent: FeedbackIntent) {
+      // The capture reports failure instead of swallowing it, so a missing
+      // screenshot is visible in the order and in the console.
+      const capture = await captureElement(target);
+      const screenshot = capture.dataUrl;
+      const snapshot = captureSnapshot();
+      const replay = config.replay ? await getReplayPayloadAsync() : undefined;
+      // All targets ride along in the context; applied edits ride in intent.changes.
+      const targets: SelectionTarget[] = getSelectionTargets().map((t) => ({
+        selector: t.selector,
+        tagName: t.el.tagName.toLowerCase(),
+        ...(t.dataComponent ? { dataComponent: t.dataComponent } : {}),
+      }));
+      const contextWithIntent = {
+        ...context,
+        intent,
+        targets,
+        explanation: scoreExplanation(comment, intent),
+        provenance: computeProvenance({
+          intent,
+          hasScreenshot: !!screenshot,
+          hasSnapshot: !!snapshot,
+          cssFrameworks: context["cssFramework"] as string[] | undefined,
+          source: context["source"] as SourceRef | undefined,
+        }),
+        verification: buildVerification(
+          selector,
+          context["fingerprint"] as ElementFingerprint | undefined,
+          intent
+        ),
+      };
+      return {
+        screenshot,
+        screenshotError: capture.error,
+        snapshot,
+        replay,
+        targets,
+        context: contextWithIntent,
+      };
+    }
 
     showSubmitDialog({
       selector,
@@ -534,46 +587,55 @@ function elementLabel(el: Element): string {
         void openEditor(el);
       },
       ensureAuth,
+      // Order-box destination (data-order-box + data-order-session): the report
+      // is delivered as one message to the named coding-agent session, carrying
+      // the reporter's note, the element's source, the edits they made and the
+      // console errors. No feedback record is created.
+      ...(config.orderBox && config.orderSession
+        ? {
+            session: { id: config.orderSession },
+            onSendOrder: async (
+              comment: string,
+              type: FeedbackType,
+              intent: FeedbackIntent,
+              title: string
+            ) => {
+              const cap = await captureReport(comment, intent);
+              const delivery = await sendOrder(
+                config.orderBox!,
+                config.orderSession!,
+                config.orderToken,
+                buildOrderPayload({
+                  text: comment,
+                  title,
+                  type,
+                  repo: config.repo,
+                  selector,
+                  url: api.pageUrl(),
+                  screenshot: cap.screenshot,
+                  screenshotError: cap.screenshotError,
+                  context: cap.context,
+                })
+              );
+              // The reporter's live edits are now part of the delivered report,
+              // so they stop being pending (same contract as issue/Memory).
+              markSent();
+              return delivery;
+            },
+          }
+        : {}),
       onSubmit: async (comment, type: FeedbackType, intent: FeedbackIntent, memorySync?: boolean) => {
-        const screenshot = await captureElement(target);
-        const snapshot = captureSnapshot();
-        const replay = config.replay ? await getReplayPayloadAsync() : undefined;
-        // All targets ride along in the context; applied edits ride in intent.changes.
-        const targets: SelectionTarget[] = getSelectionTargets().map((t) => ({
-          selector: t.selector,
-          tagName: t.el.tagName.toLowerCase(),
-          ...(t.dataComponent ? { dataComponent: t.dataComponent } : {}),
-        }));
-        // intent/explanation/provenance are only known at submit time — merge
-        // them into the capture-time context before shipping.
-        const contextWithIntent = {
-          ...context,
-          intent,
-          targets,
-          explanation: scoreExplanation(comment, intent),
-          provenance: computeProvenance({
-            intent,
-            hasScreenshot: !!screenshot,
-            hasSnapshot: !!snapshot,
-            cssFrameworks: context["cssFramework"] as string[] | undefined,
-            source: context["source"] as SourceRef | undefined,
-          }),
-          verification: buildVerification(
-            selector,
-            context["fingerprint"] as ElementFingerprint | undefined,
-            intent
-          ),
-        };
+        const cap = await captureReport(comment, intent);
         const result = await api.createFeedback({
           url: api.pageUrl(),
           selector,
           comment,
-          context: contextWithIntent,
+          context: cap.context,
           repo: config.repo,
           label: config.label,
-          screenshot,
-          snapshot,
-          ...(replay ? { replay } : {}),
+          screenshot: cap.screenshot,
+          snapshot: cap.snapshot,
+          ...(cap.replay ? { replay: cap.replay } : {}),
           ...(memorySync ? { memory_sync: true } : {}),
         });
         // Promote the applied edits to committed; stop tracking them as pending.

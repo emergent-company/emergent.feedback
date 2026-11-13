@@ -14,6 +14,7 @@ A lightweight, drop-in feedback tool for any web app. Users hold `Alt+Shift` (co
 - **GitHub OAuth** — users sign in with GitHub; session persists across page reloads (30-day JWT in `localStorage`)
 - **Export to GitHub Issues** — creates a well-structured issue with comments, selector, position, CSS framework, computed styles, and pretty-printed HTML
 - **Memory destinations** — optionally mirror reports into an `emergent.memory` project per repository, with an OAuth connect flow, token fallback and ask/auto/off modes
+- **Session destinations** — optionally deliver a report into a running coding-agent session (via `order-box`), carrying the reporter's note plus the element, its source location, the live style edits they made and the console errors
 - **Badge overlays** — elements with existing feedback show count badges (one per selector, plus open GitHub issues) that stay aligned while the page or an ancestor scrolls. After the first activation badges persist across reloads; the top-bar switch hides or shows them, and clicking a badge reopens the dialog for that element.
 
 ---
@@ -48,6 +49,9 @@ Add the following snippet to your HTML, just before `</body>`:
 | `data-theme` | No | Overlay theme: `auto` (default), `light` or `dark`. `auto` detects the host page theme, then falls back to the OS `prefers-color-scheme`. |
 | `data-theme-url` | No | Absolute or same-origin URL of a JSON theme manifest (design-token groups) that powers the live style editor. See [Live style editing](#live-style-editing). When omitted, the overlay reads daisyUI color variables from the page and uses a built-in Tailwind/daisyUI utility set (spacing, layout, typography, colors, borders/effects, daisyUI components). |
 | `data-chat` | No | Adds the **Chat** tab to the pane: a report composer backed by the repository's connected Memory project. Off unless the attribute is present; `data-chat="false"` disables it. See [Chat tab](#chat-tab). |
+| `data-order-box` | No | Base URL of an `order-box` instance: the small front door that delivers one captured report into a coding-agent session. Together with `data-order-session` it adds a **Session** destination to the pane. See [Session destinations](#session-destinations). |
+| `data-order-session` | No | Session id orders are delivered to: the full dashed UUID (the daemon rejects the short form). Lowercased on read; an invalid id disables the destination with a console warning. |
+| `data-order-token` | No | Optional shared `order-box` token, sent as a bearer header. On the same host the box's own cookie is used instead, so leave this unset unless the box is on another host. |
 
 The overlay dialog, activation bar, badges and toasts follow the resolved theme. The server-rendered
 landing page and API-key panel share a persisted Light/Dark/System toggle (localStorage key
@@ -288,6 +292,70 @@ host (for example behind a reverse proxy), so OAuth callbacks and report links
 use the correct origin. Memory API URLs must resolve to public addresses; for a
 Memory instance on localhost or a private network, set
 `ALLOW_PRIVATE_MEMORY_URLS=true` in development.
+
+### Session destinations
+
+A third destination sits beside GitHub and Memory: **Session**. Instead of filing
+an issue or writing a Memory object, the report becomes **one message in a
+running coding-agent session** (a Paseo session, fronted by `order-box`). Nothing
+is stored on this service and no GitHub sign-in is needed — the reporter's note
+and everything the overlay captured arrive where the work is happening.
+
+```
+GitHub              → creates an issue
+Memory              → writes an Issue object in the connected project
+Session a1b2c3d4    → sends the report into that coding-agent session
+```
+
+Configure it per host on the `<script>` tag:
+
+```html
+<script
+  src="https://feedback.emergent-company.ai/emergent-feedback.js"
+  data-api="https://feedback.emergent-company.ai"
+  data-repo="acme/my-app"
+  data-order-box="http://box.example:8101"
+  data-order-session="13e9fff6-dff0-4ec9-bcef-26aa2cb7ba28"
+  async
+></script>
+```
+
+Both `data-order-box` and `data-order-session` are required; a single one logs a
+warning and leaves the destination off. The last choice is remembered per
+browser, like the GitHub/Memory dropdown.
+
+On a host that configures a session destination but has no signed-in reporter —
+the common case, since the pane opens without asking for GitHub — **Session is
+the default**: the primary button reads "Send to session" rather than hiding the
+channel behind a "Create issue" label. **Save** is hidden there as well, because
+it writes to this service and needs an account; choosing GitHub explicitly still
+prompts for the sign-in it needs.
+
+The order is deliberately richer than an issue body — it carries what a
+follow-up question would otherwise have to ask for:
+
+| Part | Source |
+|---|---|
+| The reporter's sentence, verbatim | the composer note |
+| The element: selector, component name, tag, visible text | capture |
+| The source file and line, when the build stamped it | `data-fo-src` / framework metadata |
+| The live style edits they already made on the page | the Edit element tab |
+| Console errors and warnings, errors first | console ring buffer |
+| Page URL, viewport and device pixel ratio | capture |
+| The element screenshot, written to a file | capture |
+| The checkout's branch, changed paths, diffstat, recent commits | `order-box`, read from the session's cwd |
+
+Delivery is best-effort by design: a screenshot that is too large, or a checkout
+that cannot be read, is noted and dropped rather than failing the report. A
+refused delivery (bad token, dead session) is shown in the dialog verbatim, and
+the draft is kept so nothing is lost.
+
+Cross-origin posting is expected — the overlay runs on the app's origin, the box
+usually on another host or port — so `order-box` answers the preflight for
+configured origins with credentials. The browser authenticates with the box's own
+cookie (visit `http://box.example:8101/o/<session>/` once and enter its token) or
+with `data-order-token` as a bearer header. `order-box` lives in the rig repo
+(`cmd/order-box`); see its README for the flags and the full prompt format.
 
 ### Live style editing
 
